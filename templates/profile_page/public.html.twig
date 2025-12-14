@@ -1,0 +1,25 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Hello ProfilePageController!{% endblock %}
+
+{% block body %}
+    {% if app.user.pfp %}
+        <img src="{{ asset('uploads/profile_picture/' ~ app.user.pfp) }}"
+             alt="Profile picture"
+             style="width:120px;height:120px;object-fit:cover;border-radius:50%;">
+    {% else %}
+        <div class="avatar-placeholder">no profile picture</div>
+    {% endif %}
+
+    {#    <ul>#}
+{#        <li>{{ user.username }}</li>#}
+{#        <li>{{ user.pfp }}</li>#}
+{#        <li>{{ user.email }}</li>#}
+{#        <li>{{ user.password}}</li>#}
+{#    </ul>#}
+    {{ form_start(form) }}
+    {{ form_widget(form) }}
+    {{ form_end(form) }}
+
+    <a href="{{ path('app_logout') }}">Logout</a>
+{% endblock %}

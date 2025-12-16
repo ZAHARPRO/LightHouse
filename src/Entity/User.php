@@ -71,6 +71,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'my_sub_user', targetEntity: mySubcribers::class, orphanRemoval: true)]
     private Collection $my_subs;
 
+    #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
+    private ?Feed $feed = null;
+
+    /**
+     * @var Collection<int, Video>
+     */
+    #[ORM\OneToMany(mappedBy: 'user', targetEntity: Video::class, orphanRemoval: true)]
+    private Collection $videos;
+
 
 
     public function __construct()
@@ -79,12 +88,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->sub_user = new ArrayCollection();
         $this->my_sub_user = new ArrayCollection();
         $this->my_subs = new ArrayCollection();
+        $this->videos = new ArrayCollection();
     }
-
-
-
-
-
 
 
     public function getId(): ?int
@@ -327,10 +332,51 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    public function getFeed(): ?Feed
+    {
+        return $this->feed;
+    }
 
+    public function setFeed(Feed $feed): static
+    {
+        // set the owning side of the relation if necessary
+        if ($feed->getUser() !== $this) {
+            $feed->setUser($this);
+        }
 
+        $this->feed = $feed;
 
+        return $this;
+    }
 
+    /**
+     * @return Collection<int, Video>
+     */
+    public function getVideos(): Collection
+    {
+        return $this->videos;
+    }
 
+    public function addVideo(Video $video): static
+    {
+        if (!$this->videos->contains($video)) {
+            $this->videos->add($video);
+            $video->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeVideo(Video $video): static
+    {
+        if ($this->videos->removeElement($video)) {
+            // set the owning side to null (unless already changed)
+            if ($video->getUser() === $this) {
+                $video->setUser(null);
+            }
+        }
+
+        return $this;
+    }
 
 }

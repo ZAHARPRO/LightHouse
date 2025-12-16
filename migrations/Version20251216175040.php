@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+/**
+ * Auto-generated Migration: Please modify to your needs!
+ */
+final class Version20251216175040 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return '';
+    }
+
+    public function up(Schema $schema): void
+    {
+        // this up() migration is auto-generated, please modify it to your needs
+        $this->addSql('ALTER TABLE feed DROP FOREIGN KEY FK_234044ABA76ED395');
+        $this->addSql('ALTER TABLE feed_video DROP FOREIGN KEY FK_8948899029C1004E');
+        $this->addSql('ALTER TABLE feed_video DROP FOREIGN KEY FK_8948899051A5BC03');
+        $this->addSql('ALTER TABLE video_feed DROP FOREIGN KEY FK_24D7197729C1004E');
+        $this->addSql('ALTER TABLE video_feed DROP FOREIGN KEY FK_24D7197751A5BC03');
+        $this->addSql('DROP TABLE feed');
+        $this->addSql('DROP TABLE feed_video');
+        $this->addSql('DROP TABLE video_feed');
+    }
+
+    public function down(Schema $schema): void
+    {
+        // this down() migration is auto-generated, please modify it to your needs
+        $this->addSql('CREATE TABLE feed (id INT AUTO_INCREMENT NOT NULL, user_id INT NOT NULL, UNIQUE INDEX UNIQ_234044ABA76ED395 (user_id), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB COMMENT = \'\' ');
+        $this->addSql('CREATE TABLE feed_video (feed_id INT NOT NULL, video_id INT NOT NULL, INDEX IDX_8948899051A5BC03 (feed_id), INDEX IDX_8948899029C1004E (video_id), PRIMARY KEY(feed_id, video_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB COMMENT = \'\' ');
+        $this->addSql('CREATE TABLE video_feed (video_id INT NOT NULL, feed_id INT NOT NULL, INDEX IDX_24D7197729C1004E (video_id), INDEX IDX_24D7197751A5BC03 (feed_id), PRIMARY KEY(video_id, feed_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB COMMENT = \'\' ');
+        $this->addSql('ALTER TABLE feed ADD CONSTRAINT FK_234044ABA76ED395 FOREIGN KEY (user_id) REFERENCES user (id)');
+        $this->addSql('ALTER TABLE feed_video ADD CONSTRAINT FK_8948899029C1004E FOREIGN KEY (video_id) REFERENCES video (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE feed_video ADD CONSTRAINT FK_8948899051A5BC03 FOREIGN KEY (feed_id) REFERENCES feed (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE video_feed ADD CONSTRAINT FK_24D7197729C1004E FOREIGN KEY (video_id) REFERENCES video (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE video_feed ADD CONSTRAINT FK_24D7197751A5BC03 FOREIGN KEY (feed_id) REFERENCES feed (id) ON DELETE CASCADE');
+    }
+}

@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Feed;
 use App\Entity\User;
 use App\Form\RegistrationFormType;
 use App\Repository\UserRepository;
@@ -39,6 +40,13 @@ class RegistrationController extends AbstractController
 
             $entityManager->persist($user);
             $entityManager->flush();
+
+            $feed = new Feed();
+            $feed->setUser($user);
+
+            $entityManager->persist($feed);
+            $entityManager->flush();
+
 
             // generate a signed url and email it to the user
             $this->emailVerifier->sendEmailConfirmation('app_verify_email', $user,

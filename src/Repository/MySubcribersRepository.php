@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\mySubcribers;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -16,7 +17,26 @@ class MySubcribersRepository extends ServiceEntityRepository
         parent::__construct($registry, mySubcribers::class);
     }
 
-    //    /**
+    /**
+     * Подписчики пользователя $user (сущности mySubcribers).
+     *
+     * @return mySubcribers[]
+     */
+    public function findSubscribersOf(User $user): array
+    {
+        return $this->createQueryBuilder('s')
+            ->andWhere('s.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('s.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+
+
+
+
+//    /**
     //     * @return mySubcribers[] Returns an array of mySubcribers objects
     //     */
     //    public function findByExampleField($value): array

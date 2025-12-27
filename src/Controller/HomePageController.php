@@ -2,7 +2,7 @@
 
 namespace App\Controller;
 
-use App\Entity\subscriptions;
+use App\Entity\User;
 use App\Repository\FeedRepository;
 use App\Repository\SubscriptionsRepository;
 use App\Repository\VideoRepository;
@@ -13,27 +13,26 @@ use Symfony\Component\Routing\Attribute\Route;
 final class HomePageController extends AbstractController
 {
     #[Route('/', name: 'app_home_page')]
-    public function index(FeedRepository $feedRepository, VideoRepository $videoRepository, SubscriptionsRepository $subscriptionsRepository): Response {
+    public function index(FeedRepository $feedRepository,VideoRepository $videoRepository,SubscriptionsRepository $subscriptionsRepository
+    ): Response {
+
         $user = $this->getUser();
 
         if ($user !== null) {
+
+            
+            $following = $subscriptionsRepository->getFollowingUsers($user->getId());
+
+           
             $feed = $feedRepository->findOneByUserIdWithItemsAndVideos($user->getId());
-
-            $subscriptions = $subscriptionsRepository->findBy(
-                ['user' => $user],
-                ['id' => 'DESC']
-
-            );
-
 
             return $this->render('home_page/index.html.twig', [
                 'mode' => 'feed',
                 'feed' => $feed,
                 'videos' => [],
-                'subscriptions' => $subscriptions,
+                'following' => $following, 
             ]);
         }
-
 
         $videos = $videoRepository->findBy([], ['viewsCount' => 'DESC']);
 

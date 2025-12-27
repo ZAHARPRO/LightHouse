@@ -1,25 +1,58 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Hello ProfilePageController!{% endblock %}
+{% block title %}{{ user.username }}'s Profile{% endblock %}
 
 {% block body %}
-    {% if app.user.pfp %}
-        <img src="{{ asset('uploads/profile_picture/' ~ app.user.pfp) }}"
-             alt="Profile picture"
-             style="width:120px;height:120px;object-fit:cover;border-radius:50%;">
-    {% else %}
-        <div class="avatar-placeholder">no profile picture</div>
-    {% endif %}
+<div class="container-fluid">
+    <div class="row">
+        <aside class="col-12 col-md-3 col-lg-2 mb-3">
+            <div class="card">
+                <div class="card-header">{{ user.username }}'s Profile</div>
 
-    {#    <ul>#}
-{#        <li>{{ user.username }}</li>#}
-{#        <li>{{ user.pfp }}</li>#}
-{#        <li>{{ user.email }}</li>#}
-{#        <li>{{ user.password}}</li>#}
-{#    </ul>#}
-    {{ form_start(form) }}
-    {{ form_widget(form) }}
-    {{ form_end(form) }}
+                <div class="card-body">
+                    <p>Email: {{ user.email }}</p>
 
-    <a href="{{ path('app_logout') }}">Logout</a>
+                    <p>
+                        Profile Picture:
+                        <img src="{{ user.pfp }}" alt="Profile Picture" width="100">
+                    </p>
+
+                    {% if app.user and app.user.id != user.id %}
+                        <form method="post" action="{{ path('app_public_profile', { id: user.id }) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('subscribe' ~ user.id) }}">
+                            {% if isSubscribed %}
+                                <button type="submit" class="btn btn-secondary">Отписаться</button>
+                            {% else %}
+                                <button type="submit" class="btn btn-primary">Подписаться</button>
+                            {% endif %}
+                        </form>
+                    {% endif %}
+
+                    <h5>Videos:</h5>
+
+                    {% for v in user.videos %}
+                        <div class="card mb-3" style="width: 18rem;">
+                            <img src="..." class="card-img-top" alt="...">
+
+                            <div class="card-body">
+                                <div>
+                                    {% if app.user and app.user.id == v.user.id %}
+                                        <a href="{{ path('app_profile', { id: v.user.id }) }}">Author</a>
+                                    {% else %}
+                                        <a href="{{ path('app_public_profile', { id: v.user.id }) }}">Author</a>
+                                    {% endif %}
+
+                                    <h5 class="card-title">{{ v.title }}</h5>
+                                </div>
+
+                                <p class="card-text">{{ v.description }}</p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+        </aside>
+    </div>
+</div>
 {% endblock %}

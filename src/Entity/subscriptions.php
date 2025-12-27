@@ -6,47 +6,63 @@ use App\Repository\SubscriptionsRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: SubscriptionsRepository::class)]
-class subscriptions
+#[ORM\Table(name: 'subscriptions')]
+#[ORM\UniqueConstraint(name: 'unique_subscription', columns: ['follower_id', 'following_id'])]
+class Subscriptions
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(inversedBy: 'user')]
-    #[ORM\JoinColumn(nullable: false)]
-    private ?User $user = null;
+    #[ORM\Column]
+    private ?\DateTimeImmutable $createdAt = null;
 
-    #[ORM\ManyToOne(inversedBy: 'sub_user')]
+    #[ORM\ManyToOne(inversedBy: 'following')]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $sub_user = null;
+    private ?User $follower = null;
+
+    #[ORM\ManyToOne(inversedBy: 'followers')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?User $following = null;
+
+    public function __construct()
+    {
+        $this->createdAt = new \DateTimeImmutable();
+    }
 
     public function getId(): ?int
     {
         return $this->id;
     }
 
-    public function getUser(): ?User
+    public function getCreatedAt(): ?\DateTimeImmutable
     {
-        return $this->user;
+        return $this->createdAt;
     }
 
-    public function setUser(?User $user): static
+    public function getFollower(): ?User
     {
-        $this->user = $user;
+        return $this->follower;
+    }
 
+    public function setFollower(?User $follower): static
+    {
+        if ($follower === $this->following) 
+            { throw new \LogicException('User cannot follow himself.'); 
+        }
+        $this->follower = $follower;
         return $this;
     }
 
-    public function getSubUser(): ?User
+    public function getFollowing(): ?User
     {
-        return $this->sub_user;
+        return $this->following;
     }
 
-    public function setSubUser(?User $sub_user): static
+    public function setFollowing(?User $following): static
     {
-        $this->sub_user = $sub_user;
-
+        $this->following = $following;
         return $this;
     }
 }

@@ -22,8 +22,8 @@
                 <ul class="list-group list-group-flush">
                     {% for s in subscribers %}
                         <li class="list-group-item">
-                            <a href="{{ path('app_profile', { id: s.mySubUser.id }) }}">
-                                {{ s.mySubUser.username }}
+                            <a href="{{ path('app_profile', { id: s.follower.id }) }}">
+                                {{ s.follower.username }}
                             </a>
                         </li>
                     {% else %}

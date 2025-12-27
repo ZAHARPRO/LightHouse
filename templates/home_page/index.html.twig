@@ -40,7 +40,9 @@
                                         <img src="..." class="card-img-top" alt="...">
                                         <div class="card-body">
                                             <div>
-                                                <a href="{{ path('app_profile', { id: item.video.user.id }) }}">Author</a>
+                                                <a href="
+{% if app.user.id !== item.video.user.id
+                                                %}{{ path('app_profile', { id: item.video.user.id }) }}">Author</a>
                                                 <h5 class="card-title">{{ item.video.title }}</h5>
                                             </div>
                                             <p class="card-text">{{ item.video.description }}</p>

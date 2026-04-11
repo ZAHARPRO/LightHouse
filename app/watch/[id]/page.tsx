@@ -1,12 +1,15 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { isGDriveEmbed } from "@/lib/videoUrl";
 import Link from "next/link";
 import {
   ArrowLeft, Eye, Clock, Play, Lock,
-  Calendar, TrendingUp, Users,
+  Calendar, Users,
 } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
+import LikeButtons from "@/components/LikeButtons";
+import CommentsSection from "@/components/CommentsSection";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -86,6 +89,56 @@ export default async function WatchPage({
     } catch { /* ignore */ }
   }
 
+  // Increment view count — skip for the video's own author
+  if (!isMe) {
+    await prisma.video.update({
+      where: { id },
+      data: { views: { increment: 1 } },
+    });
+  }
+
+  // Like/dislike counts + user's reaction
+  const likesCount    = await prisma.like.count({ where: { videoId: id, type: "LIKE" } });
+  const dislikesCount = await prisma.like.count({ where: { videoId: id, type: "DISLIKE" } });
+  let userReaction: "LIKE" | "DISLIKE" | null = null;
+  if (session?.user?.id) {
+    const row = await prisma.like.findUnique({
+      where: { userId_videoId: { userId: session.user.id, videoId: id } },
+    });
+    userReaction = (row?.type as "LIKE" | "DISLIKE") ?? null;
+  }
+
+  // Comments with replies and like data
+  const rawComments = await prisma.comment.findMany({
+    where: { videoId: id, parentId: null },
+    include: {
+      author: { select: { id: true, name: true } },
+      likes:  { select: { userId: true } },
+      replies: {
+        include: {
+          author: { select: { id: true, name: true } },
+          likes:  { select: { userId: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  const uid = session?.user?.id ?? null;
+  const comments = rawComments.map(c => ({
+    id: c.id, content: c.content, createdAt: c.createdAt, isPinned: c.isPinned,
+    author: c.author,
+    likeCount: c.likes.length,
+    userLiked: uid ? c.likes.some(l => l.userId === uid) : false,
+    replies: c.replies.map(r => ({
+      id: r.id, content: r.content, createdAt: r.createdAt,
+      author: r.author,
+      likeCount: r.likes.length,
+      userLiked: uid ? r.likes.some(l => l.userId === uid) : false,
+      replyToName: r.replyToName,
+    })),
+  }));
+
   // Suggested: other videos, excluding current
   let suggested: typeof video[] = [];
   try {
@@ -148,15 +201,21 @@ export default async function WatchPage({
                 View Plans
               </Link>
             </div>
+          ) : isGDriveEmbed(video.url) ? (
+            /* Google Drive embed */
+            <iframe
+              src={video.url}
+              allow="autoplay"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            />
           ) : (
-            /* Placeholder player */
+            /* Native player */
             <>
               <video
                 src={video.url}
                 controls
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
               />
-              {/* Gradient title overlay (shown when video can't load) */}
               <div style={{
                 position: "absolute", inset: 0, display: "flex",
                 flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -220,9 +279,6 @@ export default async function WatchPage({
             <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
               <Calendar size={14} /> {formatDate(video.createdAt)}
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-              <TrendingUp size={14} /> {video._count.likes} likes
-            </span>
             {video.category && (
               <span style={{
                 fontSize: "0.75rem", fontWeight: 600, padding: "0.1875rem 0.625rem", borderRadius: 100,
@@ -232,6 +288,14 @@ export default async function WatchPage({
                 {video.category.name}
               </span>
             )}
+            <LikeButtons
+              videoId={id}
+              initialLikes={likesCount}
+              initialDislikes={dislikesCount}
+              initialUserReaction={userReaction}
+              isOwner={isMe}
+              isLoggedIn={!!session?.user}
+            />
           </div>
 
           {/* Divider */}
@@ -284,6 +348,14 @@ export default async function WatchPage({
               </p>
             </div>
           )}
+
+          {/* Comments */}
+          <CommentsSection
+            videoId={id}
+            videoAuthorId={video.author.id}
+            currentUserId={uid}
+            initialComments={comments}
+          />
         </div>
       </div>
 

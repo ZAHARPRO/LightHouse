@@ -31,6 +31,8 @@ model User {
   subscribers   Subscription[]   @relation("Creator")
   rewards       Reward[]
   likes         Like[]
+  posts         Post[]
+  commentLikes  CommentLike[]
 }
 
 model Account {
@@ -98,16 +100,37 @@ model Category {
 model Comment {
   id        String   @id @default(cuid())
   content   String   @db.Text
+  isPinned  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   authorId String
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   videoId  String
   video    Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  parentId    String?
+  parent      Comment?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[] @relation("Replies")
+  replyToName String?
+
+  likes    CommentLike[]
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
 }
 
 model Like {
   id        String   @id @default(cuid())
+  type      LikeType @default(LIKE)
   createdAt DateTime @default(now())
 
   userId  String
@@ -116,6 +139,18 @@ model Like {
   video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
   @@unique([userId, videoId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  isPremium Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model ChatMessage {
@@ -194,4 +229,9 @@ enum ContactStatus {
   PENDING
   READ
   REPLIED
+}
+
+enum LikeType {
+  LIKE
+  DISLIKE
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X,
+  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
@@ -34,6 +34,19 @@ export default function Navbar() {
     setChatOpen(true);
   }
   function closeChat() { setChatOpen(false); }
+
+  // Create dropdown state
+  const [createOpen, setCreateOpen] = useState(false);
+  const createRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!createRef.current?.contains(e.target as Node)) setCreateOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [createOpen]);
 
   // Notifications state
   const [notifOpen, setNotifOpen]       = useState(false);
@@ -216,6 +229,70 @@ export default function Navbar() {
                 </Link>
               ))}
             </div>
+
+            {/* Create button — only for logged-in users */}
+            {session && (
+              <div ref={createRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setCreateOpen((o) => !o)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.375rem",
+                    height: 38, padding: "0 0.75rem", borderRadius: 8,
+                    background: createOpen ? "rgba(249,115,22,0.1)" : "var(--bg-elevated)",
+                    border: createOpen ? "1px solid rgba(249,115,22,0.35)" : "1px solid var(--border-subtle)",
+                    color: createOpen ? "var(--accent-orange)" : "var(--text-secondary)",
+                    cursor: "pointer", fontFamily: "var(--font-display)", fontWeight: 600,
+                    fontSize: "0.8125rem", whiteSpace: "nowrap",
+                    transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                  }}
+                >
+                  <Plus size={15} />
+                  Create
+                </button>
+
+                {createOpen && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 8px)", right: 0,
+                    width: 180, zIndex: 200,
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 10,
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+                    overflow: "hidden",
+                    animation: "slideDownIn 0.15s ease both",
+                  }}>
+                    {[
+                      { href: "/upload",    icon: Video,    label: "Upload Video" },
+                      { href: "/post/new",  icon: FileText, label: "Write Post"   },
+                    ].map(({ href, icon: Icon, label }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setCreateOpen(false)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "0.625rem",
+                          padding: "0.75rem 1rem", textDecoration: "none",
+                          color: "var(--text-secondary)", fontSize: "0.875rem",
+                          fontFamily: "var(--font-display)", fontWeight: 500,
+                          transition: "background 0.12s, color 0.12s",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLAnchorElement).style.background = "var(--bg-elevated)";
+                          (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                          (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)";
+                        }}
+                      >
+                        <Icon size={15} color="var(--accent-orange)" />
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Notifications bell — only for logged-in users */}
             {session && (

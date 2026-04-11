@@ -218,7 +218,16 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
                     aspectRatio: "16/9",
                     background: `linear-gradient(135deg, ${bg} 0%, ${accent}33 100%)`,
                     position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden",
                   }}>
+                    {(video as {thumbnail?: string|null}).thumbnail && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={(video as {thumbnail?: string|null}).thumbnail!}
+                        alt=""
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    )}
                     {locked ? (
                       <Lock size={24} color={accent} />
                     ) : (
@@ -227,12 +236,13 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
                         background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
                         border: "1.5px solid rgba(255,255,255,0.15)",
                         display: "flex", alignItems: "center", justifyContent: "center",
+                        position: "relative", zIndex: 1,
                       }}>
                         <Play size={17} color="white" fill="white" style={{ marginLeft: 2 }} />
                       </div>
                     )}
                     <div style={{
-                      position: "absolute", bottom: 7, right: 7,
+                      position: "absolute", bottom: 7, right: 7, zIndex: 1,
                       background: "rgba(0,0,0,0.72)", borderRadius: 4,
                       padding: "0.125rem 0.4rem", display: "flex", alignItems: "center", gap: "0.2rem",
                     }}>
@@ -243,7 +253,7 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
                     </div>
                     {video.isPremium && (
                       <div style={{
-                        position: "absolute", top: 7, left: 7,
+                        position: "absolute", top: 7, left: 7, zIndex: 1,
                         background: "linear-gradient(90deg,#f97316,#fbbf24)",
                         borderRadius: 4, padding: "0.1rem 0.4rem",
                       }}>

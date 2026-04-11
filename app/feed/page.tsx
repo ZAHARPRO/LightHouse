@@ -29,7 +29,9 @@ export default async function FeedPage() {
     const dbVideos = await prisma.video.findMany({
       take: 10,
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true, title: true, thumbnail: true, views: true,
+        isPremium: true, duration: true,
         author: { select: { id: true, name: true, image: true } },
         _count: { select: { likes: true, comments: true } },
       },

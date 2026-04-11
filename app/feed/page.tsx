@@ -13,11 +13,7 @@ const MOCK_VIDEOS = [
   { id: "8", title: "Tokyo Night Walk 4K", author: { name: "Marco Visuals", image: null }, views: 89500, isPremium: true, duration: 1240, _count: { likes: 3200, comments: 156 } },
 ];
 
-const MOCK_SUBS = [
-  { id: "1", name: "Orcistanchik", initials: "O", color: "#f97316" },
-  { id: "2", name: "Charlie Penguin", initials: "C", color: "#6366f1" },
-  { id: "3", name: "SuperFreak", initials: "S", color: "#10b981" },
-];
+const SUB_COLORS = ["#f97316", "#6366f1", "#10b981", "#fbbf24", "#ef4444", "#818cf8", "#ec4899", "#14b8a6"];
 
 const MOCK_POST = {
   user: { name: "Shovel Knight", initials: "SK", color: "#fbbf24" },
@@ -43,12 +39,48 @@ export default async function FeedPage() {
     videos = MOCK_VIDEOS;
   }
 
+  // Sidebar subscriptions — real data for logged-in user, empty otherwise
+  type Sub = { id: string; name: string; initials: string; color: string };
+  let subs: Sub[] = [];
+  if (session?.user?.id) {
+    try {
+      const rows = await prisma.subscription.findMany({
+        where: {
+          subscriberId: session.user.id,
+          status: "ACTIVE",
+          // exclude self-subscriptions (platform plan)
+          NOT: { creatorId: session.user.id },
+        },
+        orderBy: { startedAt: "desc" },
+        take: 10,
+        include: { creator: { select: { id: true, name: true } } },
+      });
+      subs = rows.map((row, i) => {
+        const name = row.creator.name ?? "Unknown";
+        const initials = name
+          .split(" ")
+          .map((w) => w[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
+        return {
+          id: row.creator.id,
+          name,
+          initials,
+          color: SUB_COLORS[i % SUB_COLORS.length],
+        };
+      });
+    } catch {
+      // DB unavailable — show empty
+    }
+  }
+
   return (
     <FeedLayout
       videos={videos}
       userTier={session ? "FREE" : null}
       featuredVideo={videos[3] ?? MOCK_VIDEOS[3]}
-      subs={MOCK_SUBS}
+      subs={subs}
       post={MOCK_POST}
       isLoggedIn={!!session}
     />

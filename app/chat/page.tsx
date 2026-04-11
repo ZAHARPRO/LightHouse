@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
-import { Send, MessageSquare, Users, Zap } from "lucide-react";
+import { Send, MessageSquare, Users, Zap, ArrowLeft } from "lucide-react";
 
 type Message = {
   id: string;
@@ -107,6 +107,31 @@ export default function ChatPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
         <div>
+          {/* Back to feed */}
+          <Link
+            href="/feed"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "0.375rem",
+              textDecoration: "none", color: "var(--text-muted)", fontSize: "0.8125rem",
+              marginBottom: "0.75rem",
+              padding: "0.3rem 0.625rem", borderRadius: 7,
+              border: "1px solid var(--border-subtle)",
+              background: "var(--bg-elevated)",
+              transition: "color 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
+              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border-default)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-muted)";
+              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border-subtle)";
+            }}
+          >
+            <ArrowLeft size={13} />
+            Back to Feed
+          </Link>
+
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
             <MessageSquare size={18} color="var(--accent-orange)" />
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.75rem", letterSpacing: "-0.03em" }}>

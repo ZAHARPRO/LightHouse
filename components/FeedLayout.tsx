@@ -6,6 +6,7 @@ import {
   Play, Heart, MessageCircle, Eye, Lock, Clock,
   MessageSquare, ChevronRight, ChevronLeft, BarChart2,
 } from "lucide-react";
+import ChatPopup from "./ChatPopup";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -58,10 +59,12 @@ interface Props {
 export default function FeedLayout({ videos, userTier, featuredVideo, subs, post, isLoggedIn }: Props) {
   const [showRight, setShowRight] = useState(true);
   const [leftExpanded, setLeftExpanded] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const leftW = leftExpanded ? 130 : 52;
 
   return (
+    <>
     <div
       style={{
         maxWidth: 1440,
@@ -87,45 +90,50 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
         }}
       >
         {/* Chat button */}
-        <Link
-          href="/chat"
+        <button
+          onClick={() => setChatOpen((v) => !v)}
           className="sidebar-chat-link"
           style={{
             display: "flex", flexDirection: "column", alignItems: "center",
             gap: leftExpanded ? "0.5rem" : 0,
-            textDecoration: "none",
             padding: leftExpanded ? "0.75rem 0.5rem" : "0.5rem",
-            borderRadius: 12, background: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            transition: "border-color 0.2s, padding 0.3s ease, gap 0.3s ease",
+            borderRadius: 12,
+            background: chatOpen ? "rgba(249,115,22,0.08)" : "var(--bg-card)",
+            border: chatOpen ? "1px solid rgba(249,115,22,0.35)" : "1px solid var(--border-subtle)",
+            cursor: "pointer",
+            transition: "border-color 0.2s, background 0.2s, padding 0.3s ease, gap 0.3s ease",
             overflow: "hidden",
+            width: "100%",
           }}
         >
           <div style={{
             width: leftExpanded ? 52 : 34,
             height: leftExpanded ? 52 : 34,
             borderRadius: "50%",
-            background: "rgba(249,115,22,0.12)", border: "2px solid rgba(249,115,22,0.3)",
+            background: chatOpen ? "rgba(249,115,22,0.2)" : "rgba(249,115,22,0.12)",
+            border: "2px solid rgba(249,115,22,0.3)",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0,
-            transition: "width 0.3s ease, height 0.3s ease",
+            transition: "width 0.3s ease, height 0.3s ease, background 0.2s",
           }}>
             <MessageSquare size={leftExpanded ? 22 : 15} color="var(--accent-orange)" />
           </div>
           <span style={{
             fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.75rem",
-            color: "var(--text-secondary)", letterSpacing: "0.05em", textTransform: "uppercase",
+            color: chatOpen ? "var(--accent-orange)" : "var(--text-secondary)",
+            letterSpacing: "0.05em", textTransform: "uppercase",
             maxHeight: leftExpanded ? 24 : 0,
             opacity: leftExpanded ? 1 : 0,
             overflow: "hidden",
-            transition: "max-height 0.3s ease, opacity 0.3s ease",
+            transition: "max-height 0.3s ease, opacity 0.3s ease, color 0.2s",
             whiteSpace: "nowrap",
           }}>
-            The Chat
+            {chatOpen ? "Close" : "The Chat"}
           </span>
-        </Link>
+        </button>
 
-        {/* Subscriptions */}
+        {/* Subscriptions — only when there are any */}
+        {subs.length > 0 && (
         <div>
           <p style={{
             fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.7rem",
@@ -176,6 +184,7 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
             ))}
           </div>
         </div>
+        )}
       </aside>
 
       {/* ── CENTER: VIDEOS ── */}
@@ -198,7 +207,8 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
               const isFeatured = i === 0;
 
               return (
-                <div key={video.id} style={{
+                <Link key={video.id} href={`/watch/${video.id}`} style={{
+                  display: "block", textDecoration: "none",
                   borderRadius: 12, overflow: "hidden", background: "var(--bg-card)",
                   border: isFeatured ? "2px solid var(--accent-orange)" : "1px solid var(--border-subtle)",
                   cursor: "pointer", transition: "border-color 0.2s",
@@ -270,7 +280,7 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
                       </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -371,5 +381,11 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
         </>)}
       </aside>
     </div>
+
+    {/* Chat popup — rendered outside the grid to escape stacking context issues */}
+    {chatOpen && (
+      <ChatPopup onClose={() => setChatOpen(false)} />
+    )}
+    </>
   );
 }

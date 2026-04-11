@@ -3,45 +3,9 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import type { PlanType } from "@/lib/plans";
 
-export type PlanType = "BASIC" | "PRO" | "ELITE";
-
-export const PLANS = {
-  BASIC: {
-    name: "Basic",
-    price: 4.99,
-    features: [
-      "HD video quality",
-      "5 creator subscriptions",
-      "Standard chat access",
-      "10 reward points / month",
-    ],
-  },
-  PRO: {
-    name: "Pro",
-    price: 12.99,
-    features: [
-      "4K video quality",
-      "Unlimited subscriptions",
-      "Priority chat badge",
-      "50 reward points / month",
-      "Early access to content",
-      "Download videos",
-    ],
-  },
-  ELITE: {
-    name: "Elite",
-    price: 24.99,
-    features: [
-      "Everything in Pro",
-      "Exclusive Elite badge",
-      "150 reward points / month",
-      "Direct creator messaging",
-      "Monthly merchandise discount",
-      "Ad-free experience",
-    ],
-  },
-};
+export type { PlanType };
 
 export async function subscribeToPlan(plan: PlanType) {
   const session = await auth();
@@ -101,6 +65,49 @@ export async function subscribeToPlan(plan: PlanType) {
 
   revalidatePath("/subscriptions");
   return { success: true };
+}
+
+// ── Creator follow / unfollow ────────────────────────────────────────────────
+
+export async function followCreator(creatorId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  if (session.user.id === creatorId) return { error: "Cannot subscribe to yourself" };
+
+  const existing = await prisma.subscription.findUnique({
+    where: { subscriberId_creatorId: { subscriberId: session.user.id, creatorId } },
+  });
+  if (existing) return { error: "Already subscribed" };
+
+  await prisma.subscription.create({
+    data: { subscriberId: session.user.id, creatorId, plan: "BASIC", status: "ACTIVE" },
+  });
+
+  revalidatePath(`/profile/${creatorId}`);
+  return { success: true };
+}
+
+export async function unfollowCreator(creatorId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  if (session.user.id === creatorId) return { error: "Cannot unsubscribe from yourself" };
+
+  await prisma.subscription.deleteMany({
+    where: { subscriberId: session.user.id, creatorId },
+  });
+
+  revalidatePath(`/profile/${creatorId}`);
+  return { success: true };
+}
+
+export async function getFollowStatus(creatorId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return false;
+
+  const sub = await prisma.subscription.findUnique({
+    where: { subscriberId_creatorId: { subscriberId: session.user.id, creatorId } },
+  });
+  return !!sub;
 }
 
 export async function getUserSubscription() {

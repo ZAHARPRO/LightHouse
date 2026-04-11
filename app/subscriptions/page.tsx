@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { subscribeToPlan, PLANS } from "@/actions/subscriptions";
+import { subscribeToPlan } from "@/actions/subscriptions";
+import { PLANS } from "@/lib/plans";
 import { Check, Crown, Zap, Star, Sparkles } from "lucide-react";
 
 type PlanKey = "BASIC" | "PRO" | "ELITE";

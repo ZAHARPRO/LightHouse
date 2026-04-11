@@ -193,6 +193,7 @@ body {
 /* Feed sidebar hover states */
 .sidebar-chat-link:hover  { border-color: var(--accent-orange) !important; }
 .sidebar-sub-link:hover   { background: var(--bg-elevated) !important; }
+.suggested-link:hover     { background: var(--bg-elevated) !important; border-color: var(--border-subtle) !important; }
 .sidebar-cta-link:hover   { background: rgba(249,115,22,0.14) !important; }
 
 /* Animate in */
@@ -203,4 +204,39 @@ body {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideOutLeft {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-16px); }
+}
+
+@keyframes slideDownIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1); }
+}
+
+@keyframes slideUpOut {
+  from { opacity: 1; transform: translateY(0)     scale(1); }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.97); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes fadeInBg {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }

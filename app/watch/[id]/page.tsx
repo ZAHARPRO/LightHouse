@@ -124,17 +124,29 @@ export default async function WatchPage({
     },
   });
 
+  type RawReply = {
+    id: string; content: string; createdAt: Date; replyToName: string | null;
+    author: { id: string; name: string | null };
+    likes: { userId: string }[];
+  };
+  type RawComment = {
+    id: string; content: string; createdAt: Date; isPinned: boolean;
+    author: { id: string; name: string | null };
+    likes: { userId: string }[];
+    replies: RawReply[];
+  };
+
   const uid = session?.user?.id ?? null;
-  const comments = rawComments.map(c => ({
+  const comments = (rawComments as RawComment[]).map((c) => ({
     id: c.id, content: c.content, createdAt: c.createdAt, isPinned: c.isPinned,
     author: c.author,
     likeCount: c.likes.length,
-    userLiked: uid ? c.likes.some(l => l.userId === uid) : false,
-    replies: c.replies.map(r => ({
+    userLiked: uid ? c.likes.some((l) => l.userId === uid) : false,
+    replies: c.replies.map((r) => ({
       id: r.id, content: r.content, createdAt: r.createdAt,
       author: r.author,
       likeCount: r.likes.length,
-      userLiked: uid ? r.likes.some(l => l.userId === uid) : false,
+      userLiked: uid ? r.likes.some((l) => l.userId === uid) : false,
       replyToName: r.replyToName,
     })),
   }));

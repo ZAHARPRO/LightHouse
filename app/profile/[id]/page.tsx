@@ -38,15 +38,6 @@ function formatViews(n: number) {
   return String(n);
 }
 
-type VideoWithCount = {
-  id: string;
-  title: string;
-  views: number | null;
-  isPremium: boolean;
-  duration: number | null;
-  _count: { likes: number; comments: number };
-};
-
 export default async function PublicProfilePage({
   params,
 }: {
@@ -75,6 +66,7 @@ export default async function PublicProfilePage({
 
   const isMe = session?.user?.id === user.id;
 
+  // Check if the logged-in user is already subscribed to this creator
   let isFollowing = false;
   if (session?.user?.id && !isMe) {
     try {
@@ -93,8 +85,7 @@ export default async function PublicProfilePage({
   const tierColor = TIER_COLORS[user.tier] ?? "#888";
   const level = Math.floor((user.points ?? 0) / 100) + 1;
   const pctToNext = (((user.points ?? 0) % 100) / 100) * 100;
-  const videos = user.videos as VideoWithCount[];
-  const totalViews = videos.reduce((sum: number, v: VideoWithCount) => sum + (v.views ?? 0), 0);
+  const totalViews = user.videos.reduce((sum, v) => sum + (v.views ?? 0), 0);
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "2.5rem 1.5rem" }}>
@@ -228,14 +219,14 @@ export default async function PublicProfilePage({
         <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>({user._count.videos})</span>
       </div>
 
-      {videos.length === 0 ? (
+      {user.videos.length === 0 ? (
         <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
           <Zap size={32} color="var(--text-muted)" style={{ margin: "0 auto 1rem" }} />
           <p style={{ color: "var(--text-secondary)" }}>No videos yet.</p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
-          {videos.map((video: VideoWithCount, i: number) => {
+          {user.videos.map((video, i) => {
             const [bg, accent] = THUMB_COLORS[i % THUMB_COLORS.length];
             const locked = video.isPremium && !session;
             return (
@@ -251,61 +242,61 @@ export default async function PublicProfilePage({
                     position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
                     {locked ? (
-                      <Lock size={22} color={accent} />
-                    ) : (
-                      <div style={{
-                        width: 40, height: 40, borderRadius: "50%",
-                        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
-                        border: "1.5px solid rgba(255,255,255,0.15)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <Play size={15} color="white" fill="white" style={{ marginLeft: 2 }} />
-                      </div>
-                    )}
-                    {video.duration && (
-                      <div style={{
-                        position: "absolute", bottom: 7, right: 7,
-                        background: "rgba(0,0,0,0.72)", borderRadius: 4,
-                        padding: "0.125rem 0.375rem", display: "flex", alignItems: "center", gap: "0.2rem",
-                      }}>
-                        <Clock size={10} color="#aaa" />
-                        <span style={{ fontSize: "0.6875rem", color: "#ddd" }}>
-                          {formatDuration(video.duration)}
-                        </span>
-                      </div>
-                    )}
-                    {video.isPremium && (
-                      <div style={{
-                        position: "absolute", top: 7, left: 7,
-                        background: "linear-gradient(90deg,#f97316,#fbbf24)",
-                        borderRadius: 4, padding: "0.1rem 0.375rem",
-                      }}>
-                        <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)", letterSpacing: "0.04em" }}>PRO</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ padding: "0.875rem" }}>
-                    <h3 style={{
-                      fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem",
-                      color: "var(--text-primary)", lineHeight: 1.3, marginBottom: "0.5rem",
-                      display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                    <Lock size={22} color={accent} />
+                  ) : (
+                    <div style={{
+                      width: 40, height: 40, borderRadius: "50%",
+                      background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
+                      border: "1.5px solid rgba(255,255,255,0.15)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
-                      {video.title}
-                    </h3>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          <Eye size={11} /> {formatViews(video.views ?? 0)}
-                        </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          <Award size={11} /> {video._count.likes}
-                        </span>
-                      </div>
+                      <Play size={15} color="white" fill="white" style={{ marginLeft: 2 }} />
+                    </div>
+                  )}
+                  {video.duration && (
+                    <div style={{
+                      position: "absolute", bottom: 7, right: 7,
+                      background: "rgba(0,0,0,0.72)", borderRadius: 4,
+                      padding: "0.125rem 0.375rem", display: "flex", alignItems: "center", gap: "0.2rem",
+                    }}>
+                      <Clock size={10} color="#aaa" />
+                      <span style={{ fontSize: "0.6875rem", color: "#ddd" }}>
+                        {formatDuration(video.duration)}
+                      </span>
+                    </div>
+                  )}
+                  {video.isPremium && (
+                    <div style={{
+                      position: "absolute", top: 7, left: 7,
+                      background: "linear-gradient(90deg,#f97316,#fbbf24)",
+                      borderRadius: 4, padding: "0.1rem 0.375rem",
+                    }}>
+                      <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)", letterSpacing: "0.04em" }}>PRO</span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ padding: "0.875rem" }}>
+                  <h3 style={{
+                    fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem",
+                    color: "var(--text-primary)", lineHeight: 1.3, marginBottom: "0.5rem",
+                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                  }}>
+                    {video.title}
+                  </h3>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                        <Eye size={11} /> {formatViews(video.views ?? 0)}
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                        <Award size={11} /> {video._count.likes}
+                      </span>
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
+            </Link>
             );
           })}
         </div>

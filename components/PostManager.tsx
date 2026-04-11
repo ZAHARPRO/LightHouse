@@ -28,7 +28,7 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await updatePost(postId, fd);
-      if (res && "error" in res) { flash(res.error, "err"); return; }
+      if (res && "error" in res) { flash(res.error ?? "Unknown error", "err"); return; }
       setPosts(ps => ps.map(p =>
         p.id !== postId ? p : {
           ...p,
@@ -45,7 +45,7 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
   function handleDelete(postId: string) {
     startTransition(async () => {
       const res = await deletePost(postId);
-      if (res && "error" in res) { flash(res.error, "err"); return; }
+      if (res && "error" in res) { flash(res.error ?? "Unknown error", "err"); return; }
       setPosts(ps => ps.filter(p => p.id !== postId));
       setConfirmDel(null);
       flash("Post deleted", "ok");

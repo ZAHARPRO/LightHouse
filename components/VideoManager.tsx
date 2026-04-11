@@ -56,7 +56,7 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await updateVideo(videoId, fd);
-      if (res && "error" in res) { flash(res.error, "err"); return; }
+      if (res && "error" in res) { flash(res.error ?? "Unknown error", "err"); return; }
       setVideos(vs => vs.map(v =>
         v.id !== videoId ? v : {
           ...v,
@@ -74,7 +74,7 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
   function handleDelete(videoId: string) {
     startTransition(async () => {
       const res = await deleteVideo(videoId);
-      if (res && "error" in res) { flash(res.error, "err"); return; }
+      if (res && "error" in res) { flash(res.error ?? "Unknown error", "err"); return; }
       setVideos(vs => vs.filter(v => v.id !== videoId));
       setConfirmDelete(null);
       flash("Video deleted", "ok");
@@ -87,7 +87,7 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
     if (!url) return;
     startTransition(async () => {
       const res = await reuploadVideo(videoId, url);
-      if (res && "error" in res) { flash(res.error, "err"); return; }
+      if (res && "error" in res) { flash(res.error ?? "Unknown error", "err"); return; }
       setVideos(vs => vs.map(v =>
         v.id !== videoId ? v : { ...v, url, views: 0, duration: null, _count: { likes: 0 } }
       ));

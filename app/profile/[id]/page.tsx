@@ -85,7 +85,7 @@ export default async function PublicProfilePage({
   const tierColor = TIER_COLORS[user.tier] ?? "#888";
   const level = Math.floor((user.points ?? 0) / 100) + 1;
   const pctToNext = (((user.points ?? 0) % 100) / 100) * 100;
-const totalViews = user.videos.reduce((sum: number, v) => sum + (v.views ?? 0), 0);
+const totalViews = user.videos.reduce((sum: number, v: { views: number | null }) => sum + (v.views ?? 0), 0);
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "2.5rem 1.5rem" }}>

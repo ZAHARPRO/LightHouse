@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PROTECTED = ["/profile", "/feed", "/chat", "/upload", "/post/new"];
+const PROTECTED = ["/profile", "/feed", "/chat"];
 
-export function middleware(request: NextRequest) {
-  const isProtected = PROTECTED.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  if (!isProtected) return NextResponse.next();
+  const isProtected = PROTECTED.some((path) => pathname.startsWith(path));
 
-  // Check for any next-auth session cookie (works for both http and https)
-  const sessionCookie =
-    request.cookies.get("next-auth.session-token") ??
-    request.cookies.get("__Secure-next-auth.session-token");
+  if (isProtected) {
+    const token =
+      req.cookies.get("authjs.session-token") ??
+      req.cookies.get("__Secure-authjs.session-token");
 
-  if (!sessionCookie) {
-    const signInUrl = new URL("/auth/signin", request.nextUrl);
-    signInUrl.searchParams.set("callbackUrl", request.nextUrl.pathname);
-    return NextResponse.redirect(signInUrl);
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth/signin", req.url));
+    }
   }
 
   return NextResponse.next();

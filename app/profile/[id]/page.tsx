@@ -226,7 +226,7 @@ export default async function PublicProfilePage({
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
-          {user.videos.map((video, i) => {
+          {(user.videos as Array<{ id: string; title: string; views: number | null; isPremium: boolean; duration: number | null; _count: { likes: number; comments: number } }>).map((video, i) => {
             const [bg, accent] = THUMB_COLORS[i % THUMB_COLORS.length];
             const locked = video.isPremium && !session;
             return (

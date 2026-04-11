@@ -9,12 +9,11 @@ const nextConfig = {
       { protocol: "https", hostname: "drive.google.com" },
     ],
   },
-  // Prevent jose / next-auth from being bundled into the Edge runtime
-  serverExternalPackages: ["@node-rs/argon2", "@node-rs/bcrypt"],
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000"],
     },
+    serverComponentsExternalPackages: ["@node-rs/argon2", "@node-rs/bcrypt"],
   },
 };
 

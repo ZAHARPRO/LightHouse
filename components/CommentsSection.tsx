@@ -61,7 +61,7 @@ export default function CommentsSection({ videoId, videoAuthorId, currentUserId,
     setText("");
     start(async () => {
       const res = await addComment(videoId, content);
-      if (res && "error" in res) { setError(res.error); return; }
+      if (res && "error" in res) { setError(res.error ?? null); return; }
       if (res.comment) {
         const c = res.comment as typeof res.comment & { id: string; content: string; createdAt: Date; author: Author };
         setComments(prev => sortComments([...prev, {

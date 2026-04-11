@@ -8,6 +8,15 @@ import {
 } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
 
+type VideoItem = {
+  id: string;
+  title: string;
+  views: number | null;
+  isPremium: boolean;
+  duration: number | null;
+  _count: { likes: number; comments: number };
+};
+
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
 };
@@ -226,7 +235,7 @@ const totalViews = user.videos.reduce((sum: number, v: { views: number | null })
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
-          {user.videos.map((video, i) => {
+{user.videos.map((video: VideoItem, i: number) => {
             const [bg, accent] = THUMB_COLORS[i % THUMB_COLORS.length];
             const locked = video.isPremium && !session;
             return (

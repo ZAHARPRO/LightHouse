@@ -11,7 +11,11 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
+      allowedOrigins: [
+        "localhost:3000",
+        "light-house-6w9nqaief-gleb302596555s-projects.vercel.app",
+        "*.vercel.app",
+      ],
     },
     serverComponentsExternalPackages: ["@node-rs/argon2", "@node-rs/bcrypt"],
   },

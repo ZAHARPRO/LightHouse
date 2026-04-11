@@ -57,7 +57,7 @@ export default async function FeedPage() {
         take: 10,
         include: { creator: { select: { id: true, name: true } } },
       });
-      subs = rows.map((row, i) => {
+      subs = rows.map((row: { creator: { id: string; name: string | null } }, i: number) => {
         const name = row.creator.name ?? "Unknown";
         const initials = name
           .split(" ")

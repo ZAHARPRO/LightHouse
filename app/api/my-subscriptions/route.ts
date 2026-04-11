@@ -19,7 +19,7 @@ export async function GET() {
     });
 
     return NextResponse.json(
-      rows.map((r) => ({
+      rows.map((r: { creator: { id: string; name: string | null; tier: string } }) => ({
         id:   r.creator.id,
         name: r.creator.name ?? "Unknown",
         tier: r.creator.tier,

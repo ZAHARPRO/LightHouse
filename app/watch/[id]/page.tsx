@@ -151,8 +151,15 @@ export default async function WatchPage({
     })),
   }));
 
+  type SuggestedVideo = {
+    id: string; title: string; isPremium: boolean;
+    duration: number | null; views: number | null; thumbnail: string | null;
+    author: { id: string; name: string | null };
+    _count: { likes: number };
+  };
+
   // Suggested: other videos, excluding current
-  let suggested: typeof video[] = [];
+  let suggested: SuggestedVideo[] = [];
   try {
     suggested = await prisma.video.findMany({
       where: { id: { not: id } },
@@ -162,7 +169,7 @@ export default async function WatchPage({
         author: { select: { id: true, name: true } },
         _count: { select: { likes: true } },
       },
-    }) as typeof video[];
+    }) as SuggestedVideo[];
   } catch { /* show empty */ }
 
   const authorColor = TIER_COLORS[video.author.tier] ?? "#888";

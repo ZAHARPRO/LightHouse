@@ -12,25 +12,61 @@ export function isGDriveEmbed(url: string): boolean {
   return url.includes("drive.google.com") && url.includes("/preview");
 }
 
-/**
- * Converts a Google Drive share URL to an embeddable preview URL.
- * Returns the original URL unchanged for non-Drive links.
- */
-export function normalizeVideoUrl(url: string): string {
-  if (!url.includes("drive.google.com")) return url;
-  const id = getGDriveId(url);
-  if (!id) return url;
-  return `https://drive.google.com/file/d/${id}/preview`;
+/** Extracts YouTube video ID from watch, short, embed, and youtu.be URLs */
+function getYouTubeId(url: string): string | null {
+  // youtu.be/ID
+  const m1 = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (m1) return m1[1];
+  // youtube.com/shorts/ID
+  const m2 = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (m2) return m2[1];
+  // youtube.com/embed/ID
+  const m3 = url.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+  if (m3) return m3[1];
+  // youtube.com/watch?v=ID or /v/ID
+  const m4 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
+  if (m4) return m4[1];
+  return null;
+}
+
+export function isYouTubeEmbed(url: string): boolean {
+  return (url.includes("youtube.com") || url.includes("youtu.be")) &&
+    url.includes("/embed/");
 }
 
 /**
- * Converts a Google Drive share/view URL to a direct image thumbnail URL.
- * Returns the original URL unchanged for non-Drive links.
+ * Converts Google Drive and YouTube share URLs to embeddable URLs.
+ * Returns the original URL unchanged for other links.
+ */
+export function normalizeVideoUrl(url: string): string {
+  if (url.includes("drive.google.com")) {
+    const id = getGDriveId(url);
+    if (!id) return url;
+    return `https://drive.google.com/file/d/${id}/preview`;
+  }
+  if (url.includes("youtube.com") || url.includes("youtu.be")) {
+    const id = getYouTubeId(url);
+    if (!id) return url;
+    return `https://www.youtube.com/embed/${id}`;
+  }
+  return url;
+}
+
+/**
+ * Converts Google Drive and YouTube URLs to thumbnail image URLs.
+ * Returns the original URL unchanged for other links.
  */
 export function normalizeThumbnailUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (!url.includes("drive.google.com")) return url;
-  const id = getGDriveId(url);
-  if (!id) return url;
-  return `https://drive.google.com/thumbnail?id=${id}&sz=w640`;
+  if (url.includes("drive.google.com")) {
+    const id = getGDriveId(url);
+    if (!id) return url;
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w640`;
+  }
+  if (url.includes("youtube.com") || url.includes("youtu.be")) {
+    const id = getYouTubeId(url);
+    if (!id) return url;
+    return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  }
+  return url;
 }

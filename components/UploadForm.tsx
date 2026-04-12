@@ -20,7 +20,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
     const url = e.target.value.trim();
     if (urlTimeout.current) clearTimeout(urlTimeout.current);
     if (!url) return;
-    if (url.includes("drive.google.com")) return;
+    if (url.includes("drive.google.com") || url.includes("youtube.com") || url.includes("youtu.be")) return;
     urlTimeout.current = setTimeout(() => {
       setDetecting(true);
       const vid = videoRef.current!;

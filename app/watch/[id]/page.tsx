@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { isGDriveEmbed } from "@/lib/videoUrl";
+import { isGDriveEmbed, isYouTubeEmbed } from "@/lib/videoUrl";
 import Link from "next/link";
 import {
   ArrowLeft, Eye, Clock, Play, Lock,
@@ -203,10 +203,11 @@ export default async function WatchPage({
                 View Plans
               </Link>
             </div>
-          ) : isGDriveEmbed(video.url) ? (
+          ) : isGDriveEmbed(video.url) || isYouTubeEmbed(video.url) ? (
             <iframe
               src={video.url}
-              allow="autoplay"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
               className="absolute inset-0 w-full h-full border-none"
             />
           ) : (

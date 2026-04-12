@@ -12,8 +12,10 @@ export async function createVideo(formData: FormData) {
 
   const title       = (formData.get("title") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
-  const url         = normalizeVideoUrl((formData.get("url") as string)?.trim());
-  const thumbnail   = normalizeThumbnailUrl((formData.get("thumbnail") as string)?.trim());
+  const rawUrl      = (formData.get("url") as string)?.trim();
+  const url         = normalizeVideoUrl(rawUrl);
+  const thumbnail   = normalizeThumbnailUrl((formData.get("thumbnail") as string)?.trim())
+                   ?? normalizeThumbnailUrl(rawUrl);
   const isPremium   = formData.get("isPremium") === "on";
   const categoryId  = (formData.get("categoryId") as string)?.trim() || null;
   const durationRaw = formData.get("duration") as string;

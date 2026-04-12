@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Play, Eye, ThumbsUp, Edit2, Trash2, Upload, X, Check,
@@ -97,88 +97,87 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
   }
 
   if (videos.length === 0) return (
-    <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
-      <Play size={32} color="var(--text-muted)" style={{ margin: "0 auto 1rem" }} />
-      <p style={{ color: "var(--text-secondary)", marginBottom: "1.25rem" }}>No videos yet</p>
-      <Link href="/upload" className="btn-primary" style={{ textDecoration: "none", padding: "0.5rem 1.25rem" }}>
+    <div className="card p-12 text-center">
+      <Play size={32} color="var(--text-muted)" className="mx-auto mb-4" />
+      <p className="text-[var(--text-secondary)] mb-5">No videos yet</p>
+      <Link href="/upload" className="btn-primary no-underline py-2 px-5">
         Upload First Video
       </Link>
     </div>
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <div className="flex flex-col gap-3">
 
       {/* Flash messages */}
       {success && (
-        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.75rem 1rem", borderRadius:8, background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", color:"#10b981", fontSize:"0.875rem" }}>
+        <div className="flex items-center gap-2 py-3 px-4 rounded-lg bg-emerald-500/[0.08] border border-emerald-500/25 text-emerald-500 text-sm">
           <Check size={14}/> {success}
         </div>
       )}
       {error && (
-        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.75rem 1rem", borderRadius:8, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", fontSize:"0.875rem" }}>
+        <div className="flex items-center gap-2 py-3 px-4 rounded-lg bg-red-500/[0.08] border border-red-500/25 text-red-500 text-sm">
           <X size={14}/> {error}
         </div>
       )}
 
       {videos.map((video, i) => {
         const [bg, accent] = THUMB_COLORS[i % THUMB_COLORS.length];
-        const isOpen    = expanded === video.id;
-        const isReup    = reuploadId === video.id;
-        const isDel     = confirmDelete === video.id;
+        const isOpen = expanded === video.id;
+        const isReup = reuploadId === video.id;
+        const isDel  = confirmDelete === video.id;
 
         return (
-          <div key={video.id} style={{ background:"var(--bg-card)", border:"1px solid var(--border-subtle)", borderRadius:12, overflow:"hidden" }}>
+          <div key={video.id} className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl overflow-hidden">
             {/* Row */}
-            <div style={{ display:"flex", alignItems:"center", gap:"0.875rem", padding:"0.875rem 1rem" }}>
+            <div className="flex items-center gap-3.5 py-3.5 px-4">
               {/* Thumb */}
-              <Link href={`/watch/${video.id}`} style={{ flexShrink:0, textDecoration:"none" }}>
-                <div style={{
-                  width:88, height:50, borderRadius:7, overflow:"hidden",
-                  background:`linear-gradient(135deg,${bg},${accent}33)`,
-                  display:"flex", alignItems:"center", justifyContent:"center", position:"relative",
-                }}>
-                  <div style={{ width:24, height:24, borderRadius:"50%", background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <Play size={10} color="white" fill="white" style={{ marginLeft:1 }}/>
+              <Link href={`/watch/${video.id}`} className="shrink-0 no-underline">
+                <div
+                  style={{ background: `linear-gradient(135deg,${bg},${accent}33)` }}
+                  className="w-[88px] h-[50px] rounded-[7px] overflow-hidden flex items-center justify-center relative"
+                >
+                  <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
+                    <Play size={10} color="white" fill="white" className="ml-px"/>
                   </div>
                   {video.duration && (
-                    <span style={{ position:"absolute", bottom:3, right:4, background:"rgba(0,0,0,0.7)", borderRadius:3, padding:"0 3px", fontSize:"0.5625rem", color:"#ddd" }}>
+                    <span className="absolute bottom-[3px] right-1 bg-black/70 rounded-[3px] px-[3px] text-[0.5625rem] text-[#ddd]">
                       {fmt(video.duration)}
                     </span>
                   )}
                   {video.isPremium && (
-                    <Crown size={9} color="#fbbf24" style={{ position:"absolute", top:4, left:4 }}/>
+                    <Crown size={9} color="#fbbf24" className="absolute top-1 left-1"/>
                   )}
                 </div>
               </Link>
 
               {/* Info */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <p style={{ fontFamily:"var(--font-display)", fontWeight:700, fontSize:"0.875rem", color:"var(--text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+              <div className="flex-1 min-w-0">
+                <p className="font-[var(--font-display)] font-bold text-sm text-[var(--text-primary)] truncate">
                   {video.title}
                 </p>
-                <div style={{ display:"flex", gap:"0.75rem", marginTop:"0.25rem" }}>
-                  <span style={{ display:"flex", alignItems:"center", gap:"0.25rem", fontSize:"0.75rem", color:"var(--text-muted)" }}>
+                <div className="flex gap-3 mt-1">
+                  <span className="flex items-center gap-1 text-[0.75rem] text-[var(--text-muted)]">
                     <Eye size={11}/> {fmtViews(video.views)}
                   </span>
-                  <span style={{ display:"flex", alignItems:"center", gap:"0.25rem", fontSize:"0.75rem", color:"var(--text-muted)" }}>
+                  <span className="flex items-center gap-1 text-[0.75rem] text-[var(--text-muted)]">
                     <ThumbsUp size={11}/> {video._count.likes}
                   </span>
                 </div>
               </div>
 
               {/* Actions */}
-              <div style={{ display:"flex", alignItems:"center", gap:"0.375rem", flexShrink:0 }}>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => { handleEdit(video.id); setReuploadId(null); setConfirmDelete(null); }}
-                  style={btnStyle(isOpen ? "orange" : "default")} title="Edit">
+                  className={btnClass(isOpen ? "orange" : "default")} title="Edit">
                   {isOpen ? <ChevronUp size={14}/> : <Edit2 size={14}/>}
                 </button>
                 <button onClick={() => { setReuploadId(r => r===video.id ? null : video.id); setExpanded(null); setConfirmDelete(null); }}
-                  style={btnStyle(isReup ? "orange" : "default")} title="Re-upload">
+                  className={btnClass(isReup ? "orange" : "default")} title="Re-upload">
                   <Upload size={14}/>
                 </button>
                 <button onClick={() => { setConfirmDelete(d => d===video.id ? null : video.id); setExpanded(null); setReuploadId(null); }}
-                  style={btnStyle(isDel ? "red" : "default")} title="Delete">
+                  className={btnClass(isDel ? "red" : "default")} title="Delete">
                   <Trash2 size={14}/>
                 </button>
               </div>
@@ -187,31 +186,31 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
             {/* Edit form */}
             {isOpen && (
               <form onSubmit={(e) => handleSave(video.id, e)}
-                style={{ borderTop:"1px solid var(--border-subtle)", padding:"1.25rem 1rem", display:"flex", flexDirection:"column", gap:"0.875rem", background:"var(--bg-elevated)" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.875rem" }}>
+                className="border-t border-[var(--border-subtle)] py-5 px-4 flex flex-col gap-3.5 bg-[var(--bg-elevated)]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <FieldLabel>Title *</FieldLabel>
-                    <input name="title" defaultValue={video.title} required className="input-field" style={{ height:38 }}/>
+                    <input name="title" defaultValue={video.title} required className="input-field h-[38px]"/>
                   </div>
                   <div>
                     <FieldLabel>Thumbnail URL</FieldLabel>
-                    <input name="thumbnail" type="url" defaultValue={video.thumbnail ?? ""} className="input-field" style={{ height:38 }} placeholder="https://..."/>
+                    <input name="thumbnail" type="url" defaultValue={video.thumbnail ?? ""} className="input-field h-[38px]" placeholder="https://..."/>
                   </div>
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
-                  <textarea name="description" defaultValue={video.description ?? ""} rows={3} className="input-field" style={{ resize:"vertical" }}/>
+                  <textarea name="description" defaultValue={video.description ?? ""} rows={3} className="input-field resize-y"/>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:"0.625rem" }}>
-                  <label style={{ display:"flex", alignItems:"center", gap:"0.5rem", cursor:"pointer", fontSize:"0.875rem", color:"var(--text-secondary)" }}>
-                    <input type="checkbox" name="isPremium" defaultChecked={video.isPremium} style={{ accentColor:"var(--accent-orange)", width:15, height:15 }}/>
+                <div className="flex items-center gap-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-secondary)]">
+                    <input type="checkbox" name="isPremium" defaultChecked={video.isPremium} className="w-[15px] h-[15px] accent-[var(--accent-orange)]"/>
                     <Crown size={13} color="var(--accent-orange)"/> Premium
                   </label>
-                  <div style={{ marginLeft:"auto", display:"flex", gap:"0.5rem" }}>
-                    <button type="button" onClick={() => setExpanded(null)} style={btnStyle("default")}>
+                  <div className="ml-auto flex gap-2">
+                    <button type="button" onClick={() => setExpanded(null)} className={btnClass("default")}>
                       <X size={13}/> Cancel
                     </button>
-                    <button type="submit" disabled={pending} style={btnStyle("orange")}>
+                    <button type="submit" disabled={pending} className={btnClass("orange")}>
                       <Check size={13}/> {pending ? "Saving…" : "Save"}
                     </button>
                   </div>
@@ -222,14 +221,14 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
             {/* Re-upload form */}
             {isReup && (
               <form onSubmit={(e) => handleReupload(video.id, e)}
-                style={{ borderTop:"1px solid var(--border-subtle)", padding:"1.25rem 1rem", background:"rgba(249,115,22,0.04)" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.75rem", color:"#f97316", fontSize:"0.8125rem", fontFamily:"var(--font-display)", fontWeight:700 }}>
+                className="border-t border-[var(--border-subtle)] py-5 px-4 bg-orange-500/[0.04]">
+                <div className="flex items-center gap-2 mb-3 text-[#f97316] text-[0.8125rem] font-[var(--font-display)] font-bold">
                   <AlertTriangle size={14}/> Re-uploading will reset views &amp; likes to zero
                 </div>
-                <div style={{ display:"flex", gap:"0.5rem" }}>
-                  <input name="newUrl" type="url" required placeholder="New video URL…" className="input-field" style={{ height:38, flex:1 }}/>
-                  <button type="button" onClick={() => setReuploadId(null)} style={btnStyle("default")}><X size={13}/></button>
-                  <button type="submit" disabled={pending} style={btnStyle("orange")}>
+                <div className="flex gap-2">
+                  <input name="newUrl" type="url" required placeholder="New video URL…" className="input-field h-[38px] flex-1"/>
+                  <button type="button" onClick={() => setReuploadId(null)} className={btnClass("default")}><X size={13}/></button>
+                  <button type="submit" disabled={pending} className={btnClass("orange")}>
                     <Upload size={13}/> {pending ? "…" : "Replace"}
                   </button>
                 </div>
@@ -238,11 +237,13 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
 
             {/* Delete confirm */}
             {isDel && (
-              <div style={{ borderTop:"1px solid var(--border-subtle)", padding:"1rem", display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(239,68,68,0.05)" }}>
-                <span style={{ fontSize:"0.875rem", color:"var(--text-secondary)" }}>Delete <b style={{ color:"var(--text-primary)" }}>{video.title}</b>? This can't be undone.</span>
-                <div style={{ display:"flex", gap:"0.5rem" }}>
-                  <button onClick={() => setConfirmDelete(null)} style={btnStyle("default")}><X size={13}/> Cancel</button>
-                  <button onClick={() => handleDelete(video.id)} disabled={pending} style={btnStyle("red")}><Trash2 size={13}/> {pending ? "…" : "Delete"}</button>
+              <div className="border-t border-[var(--border-subtle)] py-4 px-4 flex items-center justify-between bg-red-500/[0.05]">
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Delete <b className="text-[var(--text-primary)]">{video.title}</b>? This can&apos;t be undone.
+                </span>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmDelete(null)} className={btnClass("default")}><X size={13}/> Cancel</button>
+                  <button onClick={() => handleDelete(video.id)} disabled={pending} className={btnClass("red")}><Trash2 size={13}/> {pending ? "…" : "Delete"}</button>
                 </div>
               </div>
             )}
@@ -255,20 +256,15 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:"0.75rem", color:"var(--text-muted)", marginBottom:"0.375rem" }}>
+    <p className="font-[var(--font-display)] font-semibold text-[0.75rem] text-[var(--text-muted)] mb-1.5">
       {children}
     </p>
   );
 }
 
-function btnStyle(variant: "default"|"orange"|"red"): React.CSSProperties {
-  const base: React.CSSProperties = {
-    display:"flex", alignItems:"center", gap:"0.3rem",
-    padding:"0.375rem 0.625rem", borderRadius:7, cursor:"pointer",
-    fontFamily:"var(--font-display)", fontWeight:600, fontSize:"0.8rem",
-    transition:"all 0.15s", border:"1px solid",
-  };
-  if (variant==="orange") return { ...base, background:"rgba(249,115,22,0.12)", borderColor:"rgba(249,115,22,0.35)", color:"var(--accent-orange)" };
-  if (variant==="red")    return { ...base, background:"rgba(239,68,68,0.1)",    borderColor:"rgba(239,68,68,0.3)",    color:"#ef4444" };
-  return { ...base, background:"var(--bg-elevated)", borderColor:"var(--border-subtle)", color:"var(--text-secondary)" };
+function btnClass(variant: "default" | "orange" | "red"): string {
+  const base = "flex items-center gap-[0.3rem] py-1.5 px-2.5 rounded-[7px] cursor-pointer font-[var(--font-display)] font-semibold text-[0.8rem] transition-all duration-150 border";
+  if (variant === "orange") return `${base} bg-orange-500/[0.12] border-orange-500/35 text-[var(--accent-orange)]`;
+  if (variant === "red")    return `${base} bg-red-500/10 border-red-500/30 text-red-500`;
+  return `${base} bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]`;
 }

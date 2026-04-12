@@ -14,7 +14,7 @@ export default function Navbar() {
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Side drawer state
+  // Side drawer
   const [drawerOpen, setDrawerOpen]       = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
 
@@ -26,16 +26,32 @@ export default function Navbar() {
   }
   function toggleDrawer() { drawerOpen ? closeDrawer() : openDrawer(); }
 
-  // Chat popup state (opened from drawer)
-  const [chatOpen, setChatOpen] = useState(false);
+  // Chat popup
+  const [chatOpen, setChatOpen]       = useState(false);
+  const [chatClosing, setChatClosing] = useState(false);
+  const chatRef = useRef<HTMLDivElement>(null);
 
   function openChat() {
-    closeDrawer();          // close drawer first
+    closeDrawer();
     setChatOpen(true);
   }
-  function closeChat() { setChatOpen(false); }
+  function closeChat() {
+    if (!chatOpen) return;
+    setChatClosing(true);
+    setTimeout(() => { setChatOpen(false); setChatClosing(false); }, 180);
+  }
 
-  // Create dropdown state
+  useEffect(() => {
+    if (!chatOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (chatRef.current?.contains(e.target as Node)) return;
+      closeChat();
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [chatOpen]);
+
+  // Create dropdown
   const [createOpen, setCreateOpen] = useState(false);
   const createRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +64,7 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [createOpen]);
 
-  // Notifications state
+  // Notifications
   const [notifOpen, setNotifOpen]       = useState(false);
   const [notifClosing, setNotifClosing] = useState(false);
   const [hasNew, setHasNew]             = useState(false);
@@ -57,14 +73,11 @@ export default function Navbar() {
 
   const storageKey = `lh_last_seen_commit_${session?.user?.id ?? "guest"}`;
 
-  // Re-check dot whenever the logged-in user changes
   useEffect(() => {
     const seen = localStorage.getItem(storageKey);
-    if (!seen) setHasNew(true);
-    else setHasNew(false);
+    setHasNew(!seen);
   }, [storageKey]);
 
-  // Close on click outside
   useEffect(() => {
     if (!notifOpen) return;
     function handleClickOutside(e: MouseEvent) {
@@ -78,125 +91,74 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notifOpen]);
 
-  // Called by panel once commits are loaded — sha of the newest commit
   function handleCommitsLoaded(latestSha: string | null) {
     if (!latestSha) return;
     const seen = localStorage.getItem(storageKey);
     if (seen !== latestSha) setHasNew(true);
   }
 
-  function openNotif() {
-    if (notifClosing) return;
-    setNotifOpen(true);
-    // Mark as seen immediately when panel opens
-    setHasNew(false);
-  }
-
+  function openNotif()  { if (!notifClosing) { setNotifOpen(true); setHasNew(false); } }
   function closeNotif() {
     if (!notifOpen) return;
     setNotifClosing(true);
-    setTimeout(() => {
-      setNotifOpen(false);
-      setNotifClosing(false);
-    }, 180);
+    setTimeout(() => { setNotifOpen(false); setNotifClosing(false); }, 180);
   }
+  function toggleNotif() { notifOpen ? closeNotif() : openNotif(); }
 
-  function toggleNotif() {
-    notifOpen ? closeNotif() : openNotif();
-  }
-
-  // Anchor panel to the right side of the bell button
   function getAnchorRight() {
     if (!bellRef.current) return 16;
     const rect = bellRef.current.getBoundingClientRect();
     return window.innerWidth - rect.right;
   }
 
+  const iconBtn = (active: boolean) => [
+    "flex items-center justify-center w-[38px] h-[38px] rounded-lg cursor-pointer transition-[background,border-color] duration-150",
+    "border",
+    active
+      ? "bg-orange-500/10 border-orange-500/35 text-[var(--accent-orange)]"
+      : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
+  ].join(" ");
+
   return (
     <>
-      <nav
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          background: "rgba(10,10,10,0.95)",
-          backdropFilter: "blur(20px)",
-          borderBottom: "1px solid var(--border-subtle)",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1440,
-            margin: "0 auto",
-            padding: "0 1.5rem",
-            height: 64,
-            display: "grid",
-            gridTemplateColumns: "220px 1fr auto",
-            alignItems: "center",
-            gap: "1.5rem",
-          }}
-        >
-          {/* Logo column: hamburger + logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-          <button
-            onClick={toggleDrawer}
-            title="Menu"
-            style={{
-              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-              background: drawerOpen ? "rgba(249,115,22,0.1)" : "var(--bg-elevated)",
-              border: drawerOpen ? "1px solid rgba(249,115,22,0.35)" : "1px solid var(--border-subtle)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-              transition: "background 0.15s, border-color 0.15s",
-              color: drawerOpen ? "var(--accent-orange)" : "var(--text-secondary)",
-            }}
-          >
-            <Menu size={17} />
-          </button>
-          <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <div
-              style={{
-                width: 32, height: 32,
-                background: "var(--accent-orange)",
-                borderRadius: 8,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <Zap size={18} color="white" strokeWidth={2.5} />
-            </div>
-            <span
-              style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: "1.25rem",
-                color: "var(--text-primary)",
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Light<span style={{ color: "var(--accent-orange)" }}>House</span>
-            </span>
-          </Link>
+      <nav className="sticky top-0 z-[100] bg-[rgba(10,10,10,0.95)] backdrop-blur-[20px] border-b border-[var(--border-subtle)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 grid items-center gap-4 sm:gap-6"
+          style={{ gridTemplateColumns: "auto 1fr auto" }}>
+
+          {/* Left: hamburger + logo */}
+          <div className="flex items-center gap-[0.625rem]">
+            <button onClick={toggleDrawer} title="Menu" className={iconBtn(drawerOpen)}>
+              <Menu size={17} />
+            </button>
+
+            <Link href="/" className="flex items-center gap-2 no-underline">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--accent-orange)] shrink-0">
+                <Zap size={18} color="white" strokeWidth={2.5} />
+              </div>
+              <span className="hidden sm:block font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">
+                Light<span className="text-[var(--accent-orange)]">House</span>
+              </span>
+            </Link>
           </div>
 
           {/* Search */}
-          <div style={{ position: "relative" }}>
+          <div className="relative">
             <Search
               size={15}
-              color="var(--text-muted)"
-              style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+              className="absolute left-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
             />
             <input
               type="text"
               placeholder="Search"
-              className="input-field"
-              style={{ paddingLeft: 40, height: 42, borderRadius: 10 }}
+              className="input-field w-full pl-10 h-[42px] rounded-[10px]"
             />
           </div>
 
-          {/* Right side */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-            {/* Nav links */}
-            <div className="hidden md:flex" style={{ display: "flex", alignItems: "center", gap: "0.125rem" }}>
+          {/* Right */}
+          <div className="flex items-center gap-[0.625rem]">
+
+            {/* Nav links — hidden on mobile */}
+            <div className="hidden md:flex items-center gap-0.5">
               {[
                 { href: "/feed",          label: "Feed" },
                 { href: "/subscriptions", label: "Plans" },
@@ -205,87 +167,47 @@ export default function Navbar() {
                 <Link
                   key={href}
                   href={href}
-                  style={{
-                    padding: "0.4rem 0.875rem",
-                    borderRadius: 8,
-                    textDecoration: "none",
-                    color: "var(--text-secondary)",
-                    fontFamily: "var(--font-display)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                    transition: "all 0.2s",
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
-                    (e.currentTarget as HTMLAnchorElement).style.background = "var(--bg-elevated)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)";
-                    (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                  }}
+                  className="px-[0.875rem] py-[0.4rem] rounded-lg no-underline text-[var(--text-secondary)] font-display font-medium text-sm whitespace-nowrap transition-all duration-200 hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                 >
                   {label}
                 </Link>
               ))}
             </div>
 
-            {/* Create button — only for logged-in users */}
+            {/* Create dropdown — logged-in only */}
             {session && (
-              <div ref={createRef} style={{ position: "relative" }}>
+              <div ref={createRef} className="relative">
                 <button
                   onClick={() => setCreateOpen((o) => !o)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "0.375rem",
-                    height: 38, padding: "0 0.75rem", borderRadius: 8,
-                    background: createOpen ? "rgba(249,115,22,0.1)" : "var(--bg-elevated)",
-                    border: createOpen ? "1px solid rgba(249,115,22,0.35)" : "1px solid var(--border-subtle)",
-                    color: createOpen ? "var(--accent-orange)" : "var(--text-secondary)",
-                    cursor: "pointer", fontFamily: "var(--font-display)", fontWeight: 600,
-                    fontSize: "0.8125rem", whiteSpace: "nowrap",
-                    transition: "background 0.15s, border-color 0.15s, color 0.15s",
-                  }}
+                  className={[
+                    "flex items-center gap-[0.375rem] h-[38px] px-3 rounded-lg cursor-pointer",
+                    "font-display font-semibold text-[0.8125rem] whitespace-nowrap",
+                    "border transition-[background,border-color,color] duration-150",
+                    createOpen
+                      ? "bg-orange-500/10 border-orange-500/35 text-[var(--accent-orange)]"
+                      : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
+                  ].join(" ")}
                 >
                   <Plus size={15} />
-                  Create
+                  <span className="hidden sm:inline">Create</span>
                 </button>
 
                 {createOpen && (
-                  <div style={{
-                    position: "absolute", top: "calc(100% + 8px)", right: 0,
-                    width: 180, zIndex: 200,
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: 10,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-                    overflow: "hidden",
-                    animation: "slideDownIn 0.15s ease both",
-                  }}>
+                  <div
+                    className="absolute top-[calc(100%+8px)] right-0 w-[180px] z-[200] bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.45)] overflow-hidden"
+                    style={{ animation: "slideDownIn 0.15s ease both" }}
+                  >
                     {[
-                      { href: "/upload",    icon: Video,    label: "Upload Video" },
-                      { href: "/post/new",  icon: FileText, label: "Write Post"   },
+                      { href: "/upload",   icon: Video,    label: "Upload Video" },
+                      { href: "/post/new", icon: FileText, label: "Write Post"   },
                     ].map(({ href, icon: Icon, label }) => (
                       <Link
                         key={href}
                         href={href}
                         onClick={() => setCreateOpen(false)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "0.625rem",
-                          padding: "0.75rem 1rem", textDecoration: "none",
-                          color: "var(--text-secondary)", fontSize: "0.875rem",
-                          fontFamily: "var(--font-display)", fontWeight: 500,
-                          transition: "background 0.12s, color 0.12s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLAnchorElement).style.background = "var(--bg-elevated)";
-                          (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                          (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)";
-                        }}
+                        className="flex items-center gap-[0.625rem] px-4 py-3 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
                       >
-                        <Icon size={15} color="var(--accent-orange)" />
+                        <Icon size={15} className="text-[var(--accent-orange)]" />
                         {label}
                       </Link>
                     ))}
@@ -294,32 +216,16 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Notifications bell — only for logged-in users */}
+            {/* Bell — logged-in only */}
             {session && (
               <button
                 ref={bellRef}
                 onClick={toggleNotif}
-                style={{
-                  width: 38, height: 38,
-                  borderRadius: 8,
-                  background: notifOpen ? "rgba(249,115,22,0.1)" : "var(--bg-elevated)",
-                  border: notifOpen
-                    ? "1px solid rgba(249,115,22,0.35)"
-                    : "1px solid var(--border-subtle)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer",
-                  position: "relative",
-                  transition: "background 0.15s, border-color 0.05s",
-                }}
+                className={[iconBtn(notifOpen), "relative"].join(" ")}
               >
-                <Bell size={16} color={notifOpen ? "var(--accent-orange)" : "var(--text-secondary)"} />
+                <Bell size={16} />
                 {hasNew && (
-                  <span style={{
-                    position: "absolute", top: 6, right: 6,
-                    width: 7, height: 7, borderRadius: "50%",
-                    background: "var(--accent-orange)",
-                    border: "1.5px solid var(--bg-primary)",
-                  }} />
+                  <span className="absolute top-[6px] right-[6px] w-[7px] h-[7px] rounded-full bg-[var(--accent-orange)] border-[1.5px] border-[var(--bg-primary)]" />
                 )}
               </button>
             )}
@@ -329,32 +235,19 @@ export default function Navbar() {
               <>
                 <Link
                   href="/profile"
-                  style={{
-                    width: 38, height: 38,
-                    borderRadius: 8,
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-subtle)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    textDecoration: "none",
-                    overflow: "hidden",
-                  }}
+                  className="w-[38px] h-[38px] rounded-lg flex items-center justify-center no-underline bg-[var(--bg-elevated)] border border-[var(--border-subtle)] overflow-hidden"
                   title={session.user?.name ?? "Profile"}
                 >
                   {session.user?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={session.user.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={session.user.image} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <User size={16} color="var(--accent-orange)" />
+                    <User size={16} className="text-[var(--accent-orange)]" />
                   )}
                 </Link>
                 <button
                   onClick={() => signOut()}
-                  style={{
-                    background: "transparent", border: "none", cursor: "pointer",
-                    color: "var(--text-muted)",
-                    display: "flex", alignItems: "center",
-                    padding: "0.375rem", borderRadius: 6,
-                  }}
+                  className="flex items-center p-[0.375rem] rounded-md bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-red-500 transition-colors duration-150"
                   title="Sign out"
                 >
                   <LogOut size={15} />
@@ -362,29 +255,28 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link href="/auth/signin" className="btn-ghost" style={{ padding: "0.4rem 1rem", fontSize: "0.875rem", textDecoration: "none", whiteSpace: "nowrap" }}>
+                <Link href="/auth/signin" className="btn-ghost hidden sm:inline-flex no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
                   Sign In
                 </Link>
-                <Link href="/auth/register" className="btn-primary" style={{ padding: "0.4rem 1rem", fontSize: "0.875rem", textDecoration: "none", whiteSpace: "nowrap" }}>
+                <Link href="/auth/register" className="btn-primary no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
                   Join Free
                 </Link>
               </>
             )}
 
-            {/* Mobile toggle */}
+            {/* Mobile menu toggle */}
             <button
-              className="flex md:hidden"
+              className="flex md:hidden items-center justify-center bg-transparent border-none cursor-pointer text-[var(--text-secondary)]"
               onClick={() => setMobileOpen(!mobileOpen)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
             >
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
 
-        {/* Mobile drawer */}
+        {/* Mobile menu */}
         {mobileOpen && (
-          <div style={{ background: "var(--bg-secondary)", borderTop: "1px solid var(--border-subtle)", padding: "1rem" }}>
+          <div className="md:hidden bg-[var(--bg-secondary)] border-t border-[var(--border-subtle)] px-4 py-3">
             {[
               { href: "/feed",          label: "Feed" },
               { href: "/chat",          label: "Chat" },
@@ -395,20 +287,17 @@ export default function Navbar() {
                 key={href}
                 href={href}
                 onClick={() => setMobileOpen(false)}
-                style={{
-                  display: "flex",
-                  padding: "0.75rem 1rem",
-                  borderRadius: 8,
-                  textDecoration: "none",
-                  color: "var(--text-secondary)",
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 500,
-                  fontSize: "0.95rem",
-                }}
+                className="flex px-4 py-3 rounded-lg no-underline text-[var(--text-secondary)] font-display font-medium text-[0.95rem] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors duration-150"
               >
                 {label}
               </Link>
             ))}
+            {!session && (
+              <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                <Link href="/auth/signin" className="btn-ghost no-underline flex-1 text-center py-2 text-sm">Sign In</Link>
+                <Link href="/auth/register" className="btn-primary no-underline flex-1 text-center py-2 text-sm">Join Free</Link>
+              </div>
+            )}
           </div>
         )}
       </nav>
@@ -418,10 +307,12 @@ export default function Navbar() {
         <SideDrawer onClose={closeDrawer} isClosing={drawerClosing} onOpenChat={openChat} />
       )}
 
-      {/* Chat popup — opened from drawer */}
-      {chatOpen && <ChatPopup onClose={closeChat} />}
+      {/* Chat popup */}
+      {(chatOpen || chatClosing) && (
+        <ChatPopup ref={chatRef} onClose={closeChat} isClosing={chatClosing} />
+      )}
 
-      {/* Notifications panel — outside <nav> to escape stacking context */}
+      {/* Notifications panel */}
       {notifOpen && (
         <NotificationsPanel
           ref={panelRef}

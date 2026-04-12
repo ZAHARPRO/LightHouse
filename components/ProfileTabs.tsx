@@ -43,63 +43,67 @@ export default function ProfileTabs({
   return (
     <div>
       {/* Tab bar */}
-      <div style={{ display:"flex", alignItems:"center", gap:"0.25rem", marginBottom:"1.5rem", borderBottom:"1px solid var(--border-subtle)", paddingBottom:"0" }}>
+      <div className="flex items-center gap-1 mb-6 border-b border-[var(--border-subtle)]">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            style={{
-              display:"flex", alignItems:"center", gap:"0.4rem",
-              padding:"0.625rem 1rem",
-              background:"transparent", border:"none", cursor:"pointer",
-              fontFamily:"var(--font-display)", fontWeight:700, fontSize:"0.875rem",
-              color: tab === id ? "var(--accent-orange)" : "var(--text-muted)",
-              borderBottom: tab === id ? "2px solid var(--accent-orange)" : "2px solid transparent",
-              marginBottom:"-1px", transition:"color 0.15s",
-            }}
+            className={[
+              "flex items-center gap-[0.4rem] px-4 py-[0.625rem] -mb-px",
+              "bg-transparent border-none cursor-pointer",
+              "font-display font-bold text-sm transition-colors duration-150",
+              "border-b-2",
+              tab === id
+                ? "text-[var(--accent-orange)] border-[var(--accent-orange)]"
+                : "text-[var(--text-muted)] border-transparent",
+            ].join(" ")}
           >
-            <Icon size={14}/> {label}
-            <span style={{ marginLeft:2, fontSize:"0.75rem", opacity:0.7 }}>
+            <Icon size={14} /> {label}
+            <span className="ml-0.5 text-xs opacity-70">
               ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
             </span>
           </button>
         ))}
 
         {/* Quick create buttons */}
-        <div style={{ marginLeft:"auto", display:"flex", gap:"0.5rem" }}>
-          <Link href="/upload" style={quickBtn}>
-            <Upload size={13}/> Video
+        <div className="ml-auto flex gap-2">
+          <Link href="/upload" className={quickBtn}>
+            <Upload size={13} /> Video
           </Link>
-          <Link href="/post/new" style={quickBtn}>
-            <Plus size={13}/> Post
+          <Link href="/post/new" className={quickBtn}>
+            <Plus size={13} /> Post
           </Link>
         </div>
       </div>
 
       {/* Video tab */}
-      {tab === "videos" && <VideoManager initialVideos={videos}/>}
+      {tab === "videos" && <VideoManager initialVideos={videos} />}
 
       {/* Community tab */}
-      {tab === "community" && <PostManager initialPosts={posts}/>}
+      {tab === "community" && <PostManager initialPosts={posts} />}
 
       {/* Badges tab */}
       {tab === "badges" && (
         rewards.length === 0 ? (
-          <div className="card" style={{ padding:"3rem", textAlign:"center" }}>
-            <Zap size={32} color="var(--text-muted)" style={{ margin:"0 auto 1rem" }}/>
-            <p style={{ color:"var(--text-secondary)" }}>No badges yet — watch videos, comment, and engage to earn rewards!</p>
+          <div className="card p-12 text-center">
+            <Zap size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
+            <p className="text-[var(--text-secondary)]">No badges yet — watch videos, comment, and engage to earn rewards!</p>
           </div>
         ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:"1rem" }}>
+          <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
             {rewards.map((r) => {
-              const meta = REWARD_META[r.type] ?? { icon:"🎖️", color:"#888", label:r.type };
+              const meta = REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
               return (
-                <div key={r.id} className="card" style={{ padding:"1.25rem 1.5rem", display:"flex", gap:"0.875rem", alignItems:"center", borderColor:`${meta.color}30` }}>
-                  <div style={{ fontSize:"1.75rem", flexShrink:0 }}>{meta.icon}</div>
+                <div
+                  key={r.id}
+                  className="card flex items-center gap-[0.875rem] px-6 py-5"
+                  style={{ borderColor: `${meta.color}30` }}
+                >
+                  <div className="text-[1.75rem] shrink-0">{meta.icon}</div>
                   <div>
-                    <p style={{ fontFamily:"var(--font-display)", fontWeight:700, fontSize:"0.9rem", marginBottom:"0.125rem" }}>{meta.label}</p>
-                    <p style={{ color:"var(--text-secondary)", fontSize:"0.8125rem", marginBottom:"0.25rem" }}>{r.description}</p>
-                    <span style={{ fontSize:"0.75rem", fontWeight:700, color:meta.color }}>+{r.pointsValue} pts</span>
+                    <p className="font-display font-bold text-[0.9rem] mb-0.5">{meta.label}</p>
+                    <p className="text-[var(--text-secondary)] text-[0.8125rem] mb-1">{r.description}</p>
+                    <span className="text-xs font-bold" style={{ color: meta.color }}>+{r.pointsValue} pts</span>
                   </div>
                 </div>
               );
@@ -111,10 +115,11 @@ export default function ProfileTabs({
   );
 }
 
-const quickBtn: React.CSSProperties = {
-  display:"flex", alignItems:"center", gap:"0.3rem",
-  padding:"0.375rem 0.75rem", borderRadius:7, textDecoration:"none",
-  background:"var(--bg-elevated)", border:"1px solid var(--border-subtle)",
-  color:"var(--text-secondary)", fontFamily:"var(--font-display)",
-  fontWeight:600, fontSize:"0.8rem", transition:"all 0.15s",
-};
+const quickBtn = [
+  "flex items-center gap-[0.3rem]",
+  "py-[0.375rem] px-[0.75rem] rounded-[7px]",
+  "no-underline bg-[var(--bg-elevated)]",
+  "border border-[var(--border-subtle)]",
+  "text-[var(--text-secondary)] font-display font-semibold text-[0.8rem]",
+  "transition-all duration-150",
+].join(" ");

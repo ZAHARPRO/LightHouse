@@ -29,16 +29,7 @@ export default async function RootLayout({
           <div className="min-h-screen flex flex-col">
             <Navbar />
             <main className="flex-1">{children}</main>
-            <footer
-              style={{
-                borderTop: "1px solid var(--border-subtle)",
-                padding: "2rem",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.875rem",
-              }}
-            >
+            <footer className="border-t border-[var(--border-subtle)] py-8 text-center text-[var(--text-muted)] font-[var(--font-body)] text-sm">
               © {new Date().getFullYear()} LightHouse — All rights reserved.
             </footer>
           </div>

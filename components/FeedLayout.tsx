@@ -40,7 +40,7 @@ type Video = {
   _count: { likes: number; comments: number };
 };
 
-type Sub = { id: string; name: string; initials: string; color: string };
+type Sub  = { id: string; name: string; initials: string; color: string };
 type Post = {
   user: { name: string; initials: string; color: string };
   text: string;
@@ -56,346 +56,347 @@ interface Props {
   isLoggedIn: boolean;
 }
 
+/* ── Shared video card ── */
+function VideoCard({ video, index, userTier, featured = false }: {
+  video: Video;
+  index: number;
+  userTier: string | null;
+  featured?: boolean;
+}) {
+  const [bg, accent] = THUMB_COLORS[index % THUMB_COLORS.length];
+  const locked = video.isPremium && userTier === "FREE";
+
+  return (
+    <Link
+      href={`/watch/${video.id}`}
+      className={[
+        "block no-underline rounded-xl overflow-hidden bg-[var(--bg-card)] cursor-pointer transition-[border-color] duration-200",
+        featured
+          ? "border-2 border-[var(--accent-orange)] shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+          : "border border-[var(--border-subtle)]",
+      ].join(" ")}
+    >
+      {/* Thumbnail */}
+      <div
+        className="relative flex items-center justify-center overflow-hidden"
+        style={{ aspectRatio: "16/9", background: `linear-gradient(135deg, ${bg} 0%, ${accent}33 100%)` }}
+      >
+        {(video as { thumbnail?: string | null }).thumbnail && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={(video as { thumbnail?: string | null }).thumbnail!}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+
+        {locked ? (
+          <Lock size={24} style={{ color: accent }} />
+        ) : (
+          <div className="relative z-[1] w-11 h-11 rounded-full flex items-center justify-center bg-black/55 backdrop-blur-[6px] border border-white/15">
+            <Play size={17} color="white" fill="white" className="ml-0.5" />
+          </div>
+        )}
+
+        {/* Duration */}
+        <div className="absolute bottom-[7px] right-[7px] z-[1] flex items-center gap-[0.2rem] bg-black/72 rounded px-[0.4rem] py-[0.125rem]">
+          <Clock size={10} color="#aaa" />
+          <span className="text-[0.6875rem] text-[#ddd] font-body">
+            {formatDuration(video.duration ?? 600)}
+          </span>
+        </div>
+
+        {/* Premium badge */}
+        {video.isPremium && (
+          <div
+            className="absolute top-[7px] left-[7px] z-[1] rounded px-[0.4rem] py-[0.1rem]"
+            style={{ background: "linear-gradient(90deg,#f97316,#fbbf24)" }}
+          >
+            <span className="text-[0.625rem] font-bold text-white font-display tracking-[0.04em]">PRO</span>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-[0.875rem]">
+        <h3
+          className="font-display font-bold text-sm text-[var(--text-primary)] leading-[1.3] mb-2 overflow-hidden"
+          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+        >
+          {video.title}
+        </h3>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-[0.375rem] min-w-0">
+            <div
+              className="w-[22px] h-[22px] shrink-0 rounded-full flex items-center justify-center text-[0.5625rem] font-bold font-display"
+              style={{
+                background: `${accent}22`,
+                border: `1px solid ${accent}40`,
+                color: accent,
+              }}
+            >
+              {(video.author?.name ?? "?")[0]}
+            </div>
+            <span className="text-xs text-[var(--text-secondary)] font-body truncate">
+              {video.author?.name}
+            </span>
+          </div>
+          <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] shrink-0 ml-2">
+            <Eye size={11} /> {formatViews(video.views ?? 0)}
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* ── Main layout ── */
 export default function FeedLayout({ videos, userTier, featuredVideo, subs, post, isLoggedIn }: Props) {
-  const [showRight, setShowRight] = useState(true);
+  const [showRight, setShowRight]       = useState(true);
   const [leftExpanded, setLeftExpanded] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen]         = useState(false);
+  const [chatClosing, setChatClosing]   = useState(false);
+
+  function closeChat() {
+    setChatClosing(true);
+    setTimeout(() => { setChatOpen(false); setChatClosing(false); }, 180);
+  }
 
   const leftW = leftExpanded ? 130 : 52;
 
   return (
     <>
-    <div
-      style={{
-        maxWidth: 1440,
-        margin: "0 auto",
-        padding: "1.5rem",
-        display: "grid",
-        gridTemplateColumns: `${leftW}px 1fr ${showRight ? "270px" : "36px"}`,
-        gap: "1.5rem",
-        alignItems: "start",
-        transition: "grid-template-columns 0.3s ease",
-      }}
-    >
-      {/* ── LEFT SIDEBAR ── */}
-      <aside
-        onMouseEnter={() => setLeftExpanded(true)}
-        onMouseLeave={() => setLeftExpanded(false)}
-        style={{
-          display: "flex", flexDirection: "column", gap: "1rem",
-          overflowY: "auto", overflowX: "hidden",
-          width: leftW, transition: "width 0.3s ease",
-          position: "sticky", top: "calc(64px + 1.5rem)",
-          maxHeight: "calc(100vh - 64px - 3rem)",
-        }}
-      >
-        {/* Chat button */}
-        <button
-          onClick={() => setChatOpen((v) => !v)}
-          className="sidebar-chat-link"
-          style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            gap: leftExpanded ? "0.5rem" : 0,
-            padding: leftExpanded ? "0.75rem 0.5rem" : "0.5rem",
-            borderRadius: 12,
-            background: chatOpen ? "rgba(249,115,22,0.08)" : "var(--bg-card)",
-            border: chatOpen ? "1px solid rgba(249,115,22,0.35)" : "1px solid var(--border-subtle)",
-            cursor: "pointer",
-            transition: "border-color 0.2s, background 0.2s, padding 0.3s ease, gap 0.3s ease",
-            overflow: "hidden",
-            width: "100%",
-          }}
-        >
-          <div style={{
-            width: leftExpanded ? 52 : 34,
-            height: leftExpanded ? 52 : 34,
-            borderRadius: "50%",
-            background: chatOpen ? "rgba(249,115,22,0.2)" : "rgba(249,115,22,0.12)",
-            border: "2px solid rgba(249,115,22,0.3)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-            transition: "width 0.3s ease, height 0.3s ease, background 0.2s",
-          }}>
-            <MessageSquare size={leftExpanded ? 22 : 15} color="var(--accent-orange)" />
-          </div>
-          <span style={{
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.75rem",
-            color: chatOpen ? "var(--accent-orange)" : "var(--text-secondary)",
-            letterSpacing: "0.05em", textTransform: "uppercase",
-            maxHeight: leftExpanded ? 24 : 0,
-            opacity: leftExpanded ? 1 : 0,
-            overflow: "hidden",
-            transition: "max-height 0.3s ease, opacity 0.3s ease, color 0.2s",
-            whiteSpace: "nowrap",
-          }}>
-            {chatOpen ? "Close" : "The Chat"}
-          </span>
-        </button>
-
-        {/* Subscriptions — only when there are any */}
-        {subs.length > 0 && (
-        <div>
-          <p style={{
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.7rem",
-            color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase",
-            marginBottom: "0.5rem", paddingLeft: 4,
-            maxHeight: leftExpanded ? 24 : 0,
-            opacity: leftExpanded ? 1 : 0,
-            overflow: "hidden",
-            transition: "max-height 0.3s ease, opacity 0.25s ease",
-            whiteSpace: "nowrap",
-          }}>
-            Subscriptions
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            {subs.map((sub) => (
-              <Link
-                key={sub.id}
-                href={`/profile/${sub.id}`}
-                className="sidebar-sub-link"
-                style={{
-                  display: "flex", alignItems: "center",
-                  gap: leftExpanded ? "0.625rem" : 0,
-                  padding: "0.3rem 0.25rem", borderRadius: 8,
-                  textDecoration: "none", transition: "background 0.15s, gap 0.3s ease",
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{
-                  width: 30, height: 30, borderRadius: "50%",
-                  background: `${sub.color}22`, border: `1.5px solid ${sub.color}50`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, fontSize: "0.6875rem", fontWeight: 700,
-                  color: sub.color, fontFamily: "var(--font-display)",
-                }}>
-                  {sub.initials}
-                </div>
-                <span style={{
-                  fontFamily: "var(--font-body)", fontSize: "0.75rem",
-                  color: "var(--text-secondary)",
-                  whiteSpace: "nowrap", overflow: "hidden",
-                  maxWidth: leftExpanded ? 90 : 0,
-                  opacity: leftExpanded ? 1 : 0,
-                  transition: "max-width 0.3s ease, opacity 0.25s ease",
-                }}>
-                  {sub.name}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-        )}
-      </aside>
-
-      {/* ── CENTER: VIDEOS ── */}
-      <main>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
-          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.125rem", letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
-            Videos
-          </h2>
+      {/* ── MOBILE layout (< lg): single column, no sidebars ── */}
+      <div className="lg:hidden px-4 sm:px-6 py-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)]">Videos</h2>
           {!isLoggedIn && (
-            <Link href="/auth/register" className="btn-primary" style={{ textDecoration: "none", fontSize: "0.8125rem", padding: "0.375rem 1rem" }}>
+            <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4">
               Join Free
             </Link>
           )}
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {videos.map((video, i) => (
+            <VideoCard key={video.id} video={video} index={i} userTier={userTier} featured={i === 0} />
+          ))}
+        </div>
+      </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${showRight ? 3 : 4}, 1fr)`, gap: "1rem" }}>
-            {videos.map((video, i) => {
-              const [bg, accent] = THUMB_COLORS[i % THUMB_COLORS.length];
-              const locked = video.isPremium && userTier === "FREE";
-              const isFeatured = i === 0;
-
-              return (
-                <Link key={video.id} href={`/watch/${video.id}`} style={{
-                  display: "block", textDecoration: "none",
-                  borderRadius: 12, overflow: "hidden", background: "var(--bg-card)",
-                  border: isFeatured ? "2px solid var(--accent-orange)" : "1px solid var(--border-subtle)",
-                  cursor: "pointer", transition: "border-color 0.2s",
-                  boxShadow: isFeatured ? "0 0 20px rgba(249,115,22,0.15)" : "none",
-                }}>
-                  <div style={{
-                    aspectRatio: "16/9",
-                    background: `linear-gradient(135deg, ${bg} 0%, ${accent}33 100%)`,
-                    position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
-                    overflow: "hidden",
-                  }}>
-                    {(video as {thumbnail?: string|null}).thumbnail && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={(video as {thumbnail?: string|null}).thumbnail!}
-                        alt=""
-                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    )}
-                    {locked ? (
-                      <Lock size={24} color={accent} />
-                    ) : (
-                      <div style={{
-                        width: 44, height: 44, borderRadius: "50%",
-                        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
-                        border: "1.5px solid rgba(255,255,255,0.15)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        position: "relative", zIndex: 1,
-                      }}>
-                        <Play size={17} color="white" fill="white" style={{ marginLeft: 2 }} />
-                      </div>
-                    )}
-                    <div style={{
-                      position: "absolute", bottom: 7, right: 7, zIndex: 1,
-                      background: "rgba(0,0,0,0.72)", borderRadius: 4,
-                      padding: "0.125rem 0.4rem", display: "flex", alignItems: "center", gap: "0.2rem",
-                    }}>
-                      <Clock size={10} color="#aaa" />
-                      <span style={{ fontSize: "0.6875rem", color: "#ddd", fontFamily: "var(--font-body)" }}>
-                        {formatDuration(video.duration ?? 600)}
-                      </span>
-                    </div>
-                    {video.isPremium && (
-                      <div style={{
-                        position: "absolute", top: 7, left: 7, zIndex: 1,
-                        background: "linear-gradient(90deg,#f97316,#fbbf24)",
-                        borderRadius: 4, padding: "0.1rem 0.4rem",
-                      }}>
-                        <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)", letterSpacing: "0.04em" }}>PRO</span>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ padding: "0.875rem" }}>
-                    <h3 style={{
-                      fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem",
-                      color: "var(--text-primary)", lineHeight: 1.3, marginBottom: "0.5rem",
-                      display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-                    }}>
-                      {video.title}
-                    </h3>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: "50%",
-                          background: `${THUMB_COLORS[i % THUMB_COLORS.length][1]}22`,
-                          border: `1px solid ${THUMB_COLORS[i % THUMB_COLORS.length][1]}40`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: "0.5625rem", fontWeight: 700,
-                          color: THUMB_COLORS[i % THUMB_COLORS.length][1], fontFamily: "var(--font-display)",
-                        }}>
-                          {(video.author?.name ?? "?")[0]}
-                        </div>
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontFamily: "var(--font-body)" }}>
-                          {video.author?.name}
-                        </span>
-                      </div>
-                      <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        <Eye size={11} /> {formatViews(video.views ?? 0)}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-      </main>
-
-      {/* ── RIGHT SIDEBAR ── */}
-      <aside style={{
-        display: "flex", flexDirection: "column", gap: "1rem",
-        overflowY: showRight ? "auto" : "hidden",
-        overflowX: "hidden",
-        position: "sticky", top: "calc(64px + 1.5rem)",
-        maxHeight: "calc(100vh - 64px - 3rem)",
-        transition: "opacity 0.3s ease",
-      }}>
-        {/* Toggle button — always at the top */}
-        <button
-          onClick={() => setShowRight((v) => !v)}
-          title={showRight ? "Hide panel" : "Show panel"}
+      {/* ── DESKTOP layout (≥ lg): 3-column grid with sidebars ── */}
+      <div
+        className="hidden lg:grid max-w-[1440px] mx-auto px-6 py-6 items-start"
+        style={{
+          gridTemplateColumns: `${leftW}px 1fr ${showRight ? "270px" : "36px"}`,
+          gap: "1.5rem",
+          transition: "grid-template-columns 0.3s ease",
+        }}
+      >
+        {/* ── LEFT SIDEBAR ── */}
+        <aside
+          onMouseEnter={() => setLeftExpanded(true)}
+          onMouseLeave={() => setLeftExpanded(false)}
+          className="flex flex-col gap-4 overflow-y-auto overflow-x-hidden sticky"
           style={{
-            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            background: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "var(--accent-orange)",
-            alignSelf: "flex-start",
+            width: leftW,
+            transition: "width 0.3s ease",
+            top: "calc(64px + 1.5rem)",
+            maxHeight: "calc(100vh - 64px - 3rem)",
           }}
         >
-          {showRight ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
-
-        {showRight && (<>
-          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border-subtle)", background: "var(--bg-card)" }}>
-            <div style={{
-              aspectRatio: "16/9",
-              background: "linear-gradient(135deg, #0a0a1a 0%, #1a1040 100%)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <div style={{
-                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.125rem",
-                color: "#fbbf24", letterSpacing: "0.04em", textShadow: "0 0 20px rgba(251,191,36,0.4)",
-                textAlign: "center", padding: "0 1rem",
-              }}>
-                {featuredVideo.title.split(" ").slice(0, 2).join(" ")}
-              </div>
-            </div>
-            <div style={{ padding: "0.625rem 0.875rem" }}>
-              <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8125rem", color: "var(--text-primary)" }}>
-                {featuredVideo.title}
-              </p>
-            </div>
-          </div>
-
-          <div style={{ borderRadius: 12, background: "var(--bg-card)", border: "1px solid var(--border-subtle)", padding: "1rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.75rem" }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: "50%",
-                background: `${post.user.color}22`, border: `1.5px solid ${post.user.color}50`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.6875rem", color: post.user.color,
-              }}>
-                {post.user.initials}
-              </div>
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem", color: "var(--text-primary)" }}>
-                {post.user.name}
-              </span>
-            </div>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "0.875rem" }}>
-              {post.text}
-            </p>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                <Heart size={13} color="#ef4444" fill="#ef4444" /> {post.likes}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                <MessageCircle size={13} /> {post.comments}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                <Eye size={13} /> {post.views}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                <BarChart2 size={13} /> {post.reach}
-              </span>
-            </div>
-          </div>
-
-          <Link
-            href="/subscriptions"
-            className="sidebar-cta-link"
+          {/* Chat button */}
+          <button
+            onClick={() => setChatOpen((v) => !v)}
+            className="sidebar-chat-link flex flex-col items-center cursor-pointer overflow-hidden w-full rounded-xl border transition-[border-color,background] duration-200"
             style={{
-              display: "block", textAlign: "center", padding: "0.75rem", borderRadius: 10,
-              background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)",
-              textDecoration: "none", fontFamily: "var(--font-display)", fontWeight: 600,
-              fontSize: "0.8125rem", color: "var(--accent-orange)", lineHeight: 1.4, transition: "background 0.2s",
+              gap: leftExpanded ? "0.5rem" : 0,
+              padding: leftExpanded ? "0.75rem 0.5rem" : "0.5rem",
+              background: chatOpen ? "rgba(249,115,22,0.08)" : "var(--bg-card)",
+              borderColor: chatOpen ? "rgba(249,115,22,0.35)" : "var(--border-subtle)",
+              transition: "border-color 0.2s, background 0.2s, padding 0.3s ease, gap 0.3s ease",
             }}
           >
-            watch more<br />pictures and posts
-          </Link>
-        </>)}
-      </aside>
-    </div>
+            <div
+              className="rounded-full flex items-center justify-center shrink-0 border-2 border-orange-500/30"
+              style={{
+                width: leftExpanded ? 52 : 34,
+                height: leftExpanded ? 52 : 34,
+                background: chatOpen ? "rgba(249,115,22,0.2)" : "rgba(249,115,22,0.12)",
+                transition: "width 0.3s ease, height 0.3s ease, background 0.2s",
+              }}
+            >
+              <MessageSquare size={leftExpanded ? 22 : 15} className="text-[var(--accent-orange)]" />
+            </div>
+            <span
+              className="font-display font-bold text-xs tracking-[0.05em] uppercase overflow-hidden whitespace-nowrap"
+              style={{
+                color: chatOpen ? "var(--accent-orange)" : "var(--text-secondary)",
+                maxHeight: leftExpanded ? 24 : 0,
+                opacity: leftExpanded ? 1 : 0,
+                transition: "max-height 0.3s ease, opacity 0.3s ease, color 0.2s",
+              }}
+            >
+              {chatOpen ? "Close" : "The Chat"}
+            </span>
+          </button>
 
-    {/* Chat popup — rendered outside the grid to escape stacking context issues */}
-    {chatOpen && (
-      <ChatPopup onClose={() => setChatOpen(false)} />
-    )}
+          {/* Subscriptions */}
+          {subs.length > 0 && (
+            <div>
+              <p
+                className="font-display font-bold text-[0.7rem] text-[var(--text-muted)] tracking-[0.08em] uppercase mb-2 pl-1 overflow-hidden whitespace-nowrap"
+                style={{
+                  maxHeight: leftExpanded ? 24 : 0,
+                  opacity: leftExpanded ? 1 : 0,
+                  transition: "max-height 0.3s ease, opacity 0.25s ease",
+                }}
+              >
+                Subscriptions
+              </p>
+              <div className="flex flex-col gap-[0.375rem]">
+                {subs.map((sub) => (
+                  <Link
+                    key={sub.id}
+                    href={`/profile/${sub.id}`}
+                    className="sidebar-sub-link flex items-center px-[0.25rem] py-[0.3rem] rounded-lg no-underline overflow-hidden"
+                    style={{
+                      gap: leftExpanded ? "0.625rem" : 0,
+                      transition: "background 0.15s, gap 0.3s ease",
+                    }}
+                  >
+                    <div
+                      className="w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center text-[0.6875rem] font-bold font-display"
+                      style={{ background: `${sub.color}22`, border: `1.5px solid ${sub.color}50`, color: sub.color }}
+                    >
+                      {sub.initials}
+                    </div>
+                    <span
+                      className="font-body text-xs text-[var(--text-secondary)] whitespace-nowrap overflow-hidden"
+                      style={{
+                        maxWidth: leftExpanded ? 90 : 0,
+                        opacity: leftExpanded ? 1 : 0,
+                        transition: "max-width 0.3s ease, opacity 0.25s ease",
+                      }}
+                    >
+                      {sub.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* ── CENTER: VIDEOS ── */}
+        <main>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)]">
+              Videos
+            </h2>
+            {!isLoggedIn && (
+              <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4">
+                Join Free
+              </Link>
+            )}
+          </div>
+
+          {/* Responsive video grid: 2 cols normally, 3 when right panel is visible */}
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: `repeat(${showRight ? 3 : 4}, 1fr)` }}
+          >
+            {videos.map((video, i) => (
+              <VideoCard key={video.id} video={video} index={i} userTier={userTier} featured={i === 0} />
+            ))}
+          </div>
+        </main>
+
+        {/* ── RIGHT SIDEBAR ── */}
+        <aside
+          className="flex flex-col gap-4 overflow-x-hidden sticky transition-opacity duration-300"
+          style={{
+            overflowY: showRight ? "auto" : "hidden",
+            top: "calc(64px + 1.5rem)",
+            maxHeight: "calc(100vh - 64px - 3rem)",
+          }}
+        >
+          {/* Toggle */}
+          <button
+            onClick={() => setShowRight((v) => !v)}
+            title={showRight ? "Hide panel" : "Show panel"}
+            className="self-start w-8 h-8 rounded-lg shrink-0 flex items-center justify-center cursor-pointer bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--accent-orange)]"
+          >
+            {showRight ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+
+          {showRight && (
+            <>
+              {/* Featured video card */}
+              <div className="rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+                <div
+                  className="flex items-center justify-center"
+                  style={{ aspectRatio: "16/9", background: "linear-gradient(135deg, #0a0a1a 0%, #1a1040 100%)" }}
+                >
+                  <div
+                    className="font-display font-extrabold text-lg text-center px-4"
+                    style={{ color: "#fbbf24", letterSpacing: "0.04em", textShadow: "0 0 20px rgba(251,191,36,0.4)" }}
+                  >
+                    {featuredVideo.title.split(" ").slice(0, 2).join(" ")}
+                  </div>
+                </div>
+                <div className="px-[0.875rem] py-[0.625rem]">
+                  <p className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)]">
+                    {featuredVideo.title}
+                  </p>
+                </div>
+              </div>
+
+              {/* Post card */}
+              <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4">
+                <div className="flex items-center gap-[0.625rem] mb-3">
+                  <div
+                    className="w-[34px] h-[34px] rounded-full flex items-center justify-center font-display font-bold text-[0.6875rem] shrink-0"
+                    style={{ background: `${post.user.color}22`, border: `1.5px solid ${post.user.color}50`, color: post.user.color }}
+                  >
+                    {post.user.initials}
+                  </div>
+                  <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)]">
+                    {post.user.name}
+                  </span>
+                </div>
+                <p className="text-[0.8125rem] text-[var(--text-secondary)] leading-snug mb-[0.875rem]">
+                  {post.text}
+                </p>
+                <div className="flex items-center gap-[0.875rem]">
+                  {[
+                    { icon: <Heart size={13} className="text-red-500 fill-red-500" />, val: post.likes },
+                    { icon: <MessageCircle size={13} />, val: post.comments },
+                    { icon: <Eye size={13} />, val: post.views },
+                    { icon: <BarChart2 size={13} />, val: post.reach },
+                  ].map(({ icon, val }, idx) => (
+                    <span key={idx} className="flex items-center gap-[0.3rem] text-xs text-[var(--text-muted)]">
+                      {icon} {val}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* CTA */}
+              <Link
+                href="/subscriptions"
+                className="sidebar-cta-link block text-center px-4 py-3 rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] leading-[1.4] transition-colors duration-200 hover:bg-orange-500/[0.12]"
+              >
+                watch more<br />pictures and posts
+              </Link>
+            </>
+          )}
+        </aside>
+      </div>
+
+      {/* Chat popup */}
+      {(chatOpen || chatClosing) && (
+        <ChatPopup onClose={closeChat} isClosing={chatClosing} />
+      )}
     </>
   );
 }

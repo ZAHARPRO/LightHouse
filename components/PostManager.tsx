@@ -11,12 +11,12 @@ type Post = {
 };
 
 export default function PostManager({ initialPosts }: { initialPosts: Post[] }) {
-  const [posts, setPosts]         = useState(initialPosts);
-  const [expanded, setExpanded]   = useState<string | null>(null);
+  const [posts, setPosts]           = useState(initialPosts);
+  const [expanded, setExpanded]     = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const [success, setSuccess]     = useState<string | null>(null);
-  const [error, setError]         = useState<string | null>(null);
+  const [pending, startTransition]  = useTransition();
+  const [success, setSuccess]       = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
 
   function flash(msg: string, type: "ok" | "err") {
     if (type === "ok") { setSuccess(msg); setTimeout(() => setSuccess(null), 2500); }
@@ -53,26 +53,26 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
   }
 
   if (posts.length === 0) return (
-    <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
-      <FileText size={32} color="var(--text-muted)" style={{ margin: "0 auto 1rem" }} />
-      <p style={{ color: "var(--text-secondary)", marginBottom: "1.25rem" }}>No posts yet</p>
-      <Link href="/post/new" className="btn-primary" style={{ textDecoration: "none", padding: "0.5rem 1.25rem" }}>
+    <div className="card p-12 text-center">
+      <FileText size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
+      <p className="text-[var(--text-secondary)] mb-5">No posts yet</p>
+      <Link href="/post/new" className="btn-primary no-underline py-2 px-5">
         Write First Post
       </Link>
     </div>
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <div className="flex flex-col gap-3">
 
       {success && (
-        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.75rem 1rem", borderRadius:8, background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", color:"#10b981", fontSize:"0.875rem" }}>
-          <Check size={14}/> {success}
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-500 text-sm">
+          <Check size={14} /> {success}
         </div>
       )}
       {error && (
-        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.75rem 1rem", borderRadius:8, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", fontSize:"0.875rem" }}>
-          <X size={14}/> {error}
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-500 text-sm">
+          <X size={14} /> {error}
         </div>
       )}
 
@@ -81,59 +81,75 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
         const isDel  = confirmDel === post.id;
 
         return (
-          <div key={post.id} style={{ background:"var(--bg-card)", border:"1px solid var(--border-subtle)", borderRadius:12, overflow:"hidden" }}>
+          <div key={post.id} className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl overflow-hidden">
+
             {/* Row */}
-            <div style={{ display:"flex", alignItems:"center", gap:"0.875rem", padding:"1rem" }}>
-              <div style={{ width:38, height:38, borderRadius:8, flexShrink:0, background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.15)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <FileText size={16} color="var(--accent-orange)"/>
+            <div className="flex items-center gap-[0.875rem] p-4">
+              <div className="w-[38px] h-[38px] rounded-lg shrink-0 flex items-center justify-center bg-orange-500/[0.08] border border-orange-500/15">
+                <FileText size={16} className="text-[var(--accent-orange)]" />
               </div>
 
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
-                  <Link href={`/post/${post.id}`} style={{ fontFamily:"var(--font-display)", fontWeight:700, fontSize:"0.9rem", color:"var(--text-primary)", textDecoration:"none", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:360 }}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/post/${post.id}`}
+                    className="font-display font-bold text-[0.9rem] text-[var(--text-primary)] no-underline truncate max-w-[280px] sm:max-w-[360px]"
+                  >
                     {post.title}
                   </Link>
-                  {post.isPremium && <Crown size={12} color="#fbbf24"/>}
+                  {post.isPremium && <Crown size={12} className="text-amber-400 shrink-0" />}
                 </div>
-                <p style={{ fontSize:"0.75rem", color:"var(--text-muted)", marginTop:"0.2rem" }}>
-                  {new Date(post.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                <p className="text-xs text-[var(--text-muted)] mt-[0.2rem]">
+                  {new Date(post.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   {" · "}
                   {post.content.slice(0, 60)}{post.content.length > 60 ? "…" : ""}
                 </p>
               </div>
 
-              <div style={{ display:"flex", gap:"0.375rem", flexShrink:0 }}>
-                <button onClick={() => { setExpanded(e => e===post.id ? null : post.id); setConfirmDel(null); }}
-                  style={btnStyle(isOpen ? "orange" : "default")} title="Edit">
-                  {isOpen ? <ChevronUp size={14}/> : <Edit2 size={14}/>}
+              <div className="flex gap-[0.375rem] shrink-0">
+                <button
+                  onClick={() => { setExpanded(e => e === post.id ? null : post.id); setConfirmDel(null); }}
+                  className={actionBtn(isOpen ? "orange" : "default")}
+                  title="Edit"
+                >
+                  {isOpen ? <ChevronUp size={14} /> : <Edit2 size={14} />}
                 </button>
-                <button onClick={() => { setConfirmDel(d => d===post.id ? null : post.id); setExpanded(null); }}
-                  style={btnStyle(isDel ? "red" : "default")} title="Delete">
-                  <Trash2 size={14}/>
+                <button
+                  onClick={() => { setConfirmDel(d => d === post.id ? null : post.id); setExpanded(null); }}
+                  className={actionBtn(isDel ? "red" : "default")}
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>
 
             {/* Edit form */}
             {isOpen && (
-              <form onSubmit={(e) => handleSave(post.id, e)}
-                style={{ borderTop:"1px solid var(--border-subtle)", padding:"1.25rem 1rem", display:"flex", flexDirection:"column", gap:"0.875rem", background:"var(--bg-elevated)" }}>
+              <form
+                onSubmit={(e) => handleSave(post.id, e)}
+                className="border-t border-[var(--border-subtle)] px-4 py-5 flex flex-col gap-[0.875rem] bg-[var(--bg-elevated)]"
+              >
                 <div>
                   <Label>Title *</Label>
-                  <input name="title" defaultValue={post.title} required className="input-field" style={{ height:38 }}/>
+                  <input name="title" defaultValue={post.title} required className="input-field h-[38px]" />
                 </div>
                 <div>
                   <Label>Content *</Label>
-                  <textarea name="content" defaultValue={post.content} required rows={6} className="input-field" style={{ resize:"vertical", lineHeight:1.65 }}/>
+                  <textarea name="content" defaultValue={post.content} required rows={6} className="input-field leading-[1.65]" style={{ resize: "vertical" }} />
                 </div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <label style={{ display:"flex", alignItems:"center", gap:"0.5rem", cursor:"pointer", fontSize:"0.875rem", color:"var(--text-secondary)" }}>
-                    <input type="checkbox" name="isPremium" defaultChecked={post.isPremium} style={{ accentColor:"var(--accent-orange)", width:15, height:15 }}/>
-                    <Crown size={13} color="var(--accent-orange)"/> Premium
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-secondary)]">
+                    <input type="checkbox" name="isPremium" defaultChecked={post.isPremium} className="w-[15px] h-[15px] accent-[var(--accent-orange)]" />
+                    <Crown size={13} className="text-[var(--accent-orange)]" /> Premium
                   </label>
-                  <div style={{ display:"flex", gap:"0.5rem" }}>
-                    <button type="button" onClick={() => setExpanded(null)} style={btnStyle("default")}><X size={13}/> Cancel</button>
-                    <button type="submit" disabled={pending} style={btnStyle("orange")}><Check size={13}/> {pending ? "Saving…" : "Save"}</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setExpanded(null)} className={actionBtn("default")}>
+                      <X size={13} /> Cancel
+                    </button>
+                    <button type="submit" disabled={pending} className={actionBtn("orange")}>
+                      <Check size={13} /> {pending ? "Saving…" : "Save"}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -141,11 +157,17 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
 
             {/* Delete confirm */}
             {isDel && (
-              <div style={{ borderTop:"1px solid var(--border-subtle)", padding:"1rem", display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(239,68,68,0.05)", flexWrap:"wrap", gap:"0.5rem" }}>
-                <span style={{ fontSize:"0.875rem", color:"var(--text-secondary)" }}>Delete <b style={{ color:"var(--text-primary)" }}>{post.title}</b>? This can't be undone.</span>
-                <div style={{ display:"flex", gap:"0.5rem" }}>
-                  <button onClick={() => setConfirmDel(null)} style={btnStyle("default")}><X size={13}/> Cancel</button>
-                  <button onClick={() => handleDelete(post.id)} disabled={pending} style={btnStyle("red")}><Trash2 size={13}/> {pending ? "…" : "Delete"}</button>
+              <div className="border-t border-[var(--border-subtle)] px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-red-500/[0.05]">
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Delete <b className="text-[var(--text-primary)]">{post.title}</b>? This can&apos;t be undone.
+                </span>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmDel(null)} className={actionBtn("default")}>
+                    <X size={13} /> Cancel
+                  </button>
+                  <button onClick={() => handleDelete(post.id)} disabled={pending} className={actionBtn("red")}>
+                    <Trash2 size={13} /> {pending ? "…" : "Delete"}
+                  </button>
                 </div>
               </div>
             )}
@@ -157,17 +179,16 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:"0.75rem", color:"var(--text-muted)", marginBottom:"0.375rem" }}>{children}</p>;
+  return (
+    <p className="font-display font-semibold text-xs text-[var(--text-muted)] mb-[0.375rem]">
+      {children}
+    </p>
+  );
 }
 
-function btnStyle(variant: "default"|"orange"|"red"): React.CSSProperties {
-  const base: React.CSSProperties = {
-    display:"flex", alignItems:"center", gap:"0.3rem",
-    padding:"0.375rem 0.625rem", borderRadius:7, cursor:"pointer",
-    fontFamily:"var(--font-display)", fontWeight:600, fontSize:"0.8rem",
-    transition:"all 0.15s", border:"1px solid",
-  };
-  if (variant==="orange") return { ...base, background:"rgba(249,115,22,0.12)", borderColor:"rgba(249,115,22,0.35)", color:"var(--accent-orange)" };
-  if (variant==="red")    return { ...base, background:"rgba(239,68,68,0.1)",    borderColor:"rgba(239,68,68,0.3)",    color:"#ef4444" };
-  return { ...base, background:"var(--bg-elevated)", borderColor:"var(--border-subtle)", color:"var(--text-secondary)" };
+function actionBtn(variant: "default" | "orange" | "red") {
+  const base = "flex items-center gap-[0.3rem] px-[0.625rem] py-[0.375rem] rounded-[7px] cursor-pointer font-display font-semibold text-[0.8rem] transition-all duration-150 border";
+  if (variant === "orange") return `${base} bg-orange-500/10 border-orange-500/35 text-[var(--accent-orange)]`;
+  if (variant === "red")    return `${base} bg-red-500/10 border-red-500/30 text-red-500`;
+  return `${base} bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]`;
 }

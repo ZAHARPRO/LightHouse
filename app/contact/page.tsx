@@ -23,86 +23,89 @@ export default function ContactPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "4rem 1.5rem" }}>
+    <div className="max-w-[1100px] mx-auto px-6 py-16">
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: 100, padding: "0.375rem 1rem", marginBottom: "1.5rem" }}>
+      <div className="text-center mb-16">
+        <div className="inline-flex items-center gap-2 bg-orange-500/[0.08] border border-orange-500/20 rounded-full py-1.5 px-4 mb-6">
           <Mail size={14} color="var(--accent-orange)" />
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem", color: "var(--accent-orange)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
             Get in Touch
           </span>
         </div>
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(2rem, 4vw, 3rem)", letterSpacing: "-0.04em", marginBottom: "1rem" }}>
+        <h1 className="font-[var(--font-display)] font-extrabold text-[clamp(2rem,4vw,3rem)] tracking-[-0.04em] mb-4">
           We&apos;d love to <span className="gradient-text">hear from you</span>
         </h1>
-        <p style={{ color: "var(--text-secondary)", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>
+        <p className="text-[var(--text-secondary)] max-w-[480px] mx-auto leading-[1.7]">
           Have a question, idea, or partnership proposal? Drop us a message
           and we&apos;ll get back to you within 24 hours.
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "3rem", alignItems: "start" }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-12 items-start">
         {/* Left: info cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        <div className="flex flex-col gap-5">
           {[
             { icon: Mail, title: "Email Support", desc: "support@lighthouse.io", accent: "#f97316" },
             { icon: MessageSquare, title: "Community Discord", desc: "discord.gg/lighthouse", accent: "#6366f1" },
             { icon: Github, title: "GitHub Issues", desc: "github.com/ZAHARPRO/LightHouse", accent: "#888" },
           ].map(({ icon: Icon, title, desc, accent }) => (
-            <div key={title} className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", gap: "1rem", alignItems: "center" }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: `${accent}18`, border: `1px solid ${accent}30`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <div key={title} className="card flex gap-4 items-center px-6 py-5">
+              <div
+                style={{ background: `${accent}18`, border: `1px solid ${accent}30` }}
+                className="w-11 h-11 rounded-[10px] flex items-center justify-center shrink-0"
+              >
                 <Icon size={20} color={accent} />
               </div>
               <div>
-                <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)", marginBottom: "0.125rem" }}>{title}</p>
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.8125rem" }}>{desc}</p>
+                <p className="font-[var(--font-display)] font-bold text-[0.9rem] text-[var(--text-primary)] mb-0.5">{title}</p>
+                <p className="text-[var(--text-secondary)] text-[0.8125rem]">{desc}</p>
               </div>
             </div>
           ))}
 
-          <div style={{ marginTop: "0.5rem", padding: "1.5rem", background: "linear-gradient(135deg, rgba(249,115,22,0.08), rgba(251,191,36,0.04))", border: "1px solid rgba(249,115,22,0.15)", borderRadius: 12 }}>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.625rem" }}>
+          <div className="mt-2 p-6 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(251,191,36,0.04))] border border-orange-500/15 rounded-xl">
+            <div className="flex gap-2 items-center mb-2.5">
               <Zap size={16} color="var(--accent-orange)" />
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem" }}>Response time</span>
+              <span className="font-[var(--font-display)] font-bold text-[0.875rem]">Response time</span>
             </div>
-            <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", lineHeight: 1.6 }}>
-              We typically respond to all messages within <strong style={{ color: "var(--accent-orange)" }}>24 hours</strong> on business days.
+            <p className="text-[var(--text-secondary)] text-[0.875rem] leading-relaxed">
+              We typically respond to all messages within{" "}
+              <strong className="text-[var(--accent-orange)]">24 hours</strong> on business days.
             </p>
           </div>
         </div>
 
         {/* Right: form */}
-        <div className="card" style={{ padding: "2.5rem" }}>
+        <div className="card p-10">
           {status === "success" ? (
-            <div style={{ textAlign: "center", padding: "2rem 0" }}>
-              <div style={{ width: 64, height: 64, background: "rgba(16,185,129,0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
                 <CheckCircle size={32} color="#10b981" />
               </div>
-              <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.5rem", marginBottom: "0.625rem" }}>
+              <h3 className="font-[var(--font-display)] font-extrabold text-2xl mb-2.5">
                 Message sent!
               </h3>
-              <p style={{ color: "var(--text-secondary)" }}>
+              <p className="text-[var(--text-secondary)]">
                 Thanks for reaching out. We&apos;ll get back to you within 24 hours.
               </p>
               <button
                 onClick={() => setStatus("idle")}
-                className="btn-ghost"
-                style={{ marginTop: "1.5rem" }}
+                className="btn-ghost mt-6"
               >
                 Send Another
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label style={{ display: "block", fontWeight: 500, fontSize: "0.875rem", marginBottom: "0.375rem", color: "var(--text-secondary)" }}>
+                  <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
                     Name *
                   </label>
                   <input name="name" type="text" placeholder="Your name" required className="input-field" />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontWeight: 500, fontSize: "0.875rem", marginBottom: "0.375rem", color: "var(--text-secondary)" }}>
+                  <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
                     Email *
                   </label>
                   <input name="email" type="email" placeholder="you@example.com" required className="input-field" />
@@ -110,7 +113,7 @@ export default function ContactPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontWeight: 500, fontSize: "0.875rem", marginBottom: "0.375rem", color: "var(--text-secondary)" }}>
+                <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
                   Subject *
                 </label>
                 <select name="subject" required className="input-field">
@@ -126,7 +129,7 @@ export default function ContactPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontWeight: 500, fontSize: "0.875rem", marginBottom: "0.375rem", color: "var(--text-secondary)" }}>
+                <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
                   Message *
                 </label>
                 <textarea
@@ -134,22 +137,20 @@ export default function ContactPage() {
                   placeholder="Tell us what's on your mind…"
                   required
                   rows={5}
-                  className="input-field"
-                  style={{ resize: "vertical", minHeight: 120 }}
+                  className="input-field resize-y min-h-[120px]"
                 />
               </div>
 
               {status === "error" && (
-                <p style={{ color: "#ef4444", fontSize: "0.875rem", padding: "0.5rem 0.75rem", background: "rgba(239,68,68,0.08)", borderRadius: 6 }}>
+                <p className="text-red-500 text-sm px-3 py-2 bg-red-500/[0.08] rounded-md">
                   {errorMsg}
                 </p>
               )}
 
               <button
                 type="submit"
-                className="btn-primary"
+                className="btn-primary self-start px-8"
                 disabled={status === "loading"}
-                style={{ alignSelf: "flex-start", paddingLeft: "2rem", paddingRight: "2rem" }}
               >
                 {status === "loading" ? "Sending…" : "Send Message"}
               </button>

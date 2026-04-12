@@ -20,9 +20,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
     const url = e.target.value.trim();
     if (urlTimeout.current) clearTimeout(urlTimeout.current);
     if (!url) return;
-    // Google Drive can't expose metadata via <video> — skip detection
     if (url.includes("drive.google.com")) return;
-
     urlTimeout.current = setTimeout(() => {
       setDetecting(true);
       const vid = videoRef.current!;
@@ -64,26 +62,21 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         preload="metadata"
         onLoadedMetadata={handleMetadata}
         onError={handleVideoError}
-        style={{ display: "none" }}
+        className="hidden"
       />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div className="flex flex-col gap-5">
 
         {/* Error */}
         {error && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: "0.625rem",
-            padding: "0.875rem 1rem", borderRadius: 8,
-            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
-            color: "#ef4444", fontSize: "0.875rem",
-          }}>
+          <div className="flex items-center gap-[0.625rem] px-4 py-[0.875rem] rounded-lg bg-red-500/10 border border-red-500/25 text-red-500 text-sm">
             <AlertCircle size={15} />
             {error}
           </div>
         )}
 
         {/* Title */}
-        <Field label="Title" icon={<FileText size={14} color="var(--accent-orange)" />} required>
+        <Field label="Title" icon={<FileText size={14} className="text-[var(--accent-orange)]" />} required>
           <input
             name="title"
             type="text"
@@ -95,7 +88,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Video URL */}
-        <Field label="Video URL" icon={<Video size={14} color="var(--accent-orange)" />} required>
+        <Field label="Video URL" icon={<Video size={14} className="text-[var(--accent-orange)]" />} required>
           <input
             name="url"
             type="url"
@@ -107,7 +100,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Description */}
-        <Field label="Description" icon={<FileText size={14} color="var(--accent-orange)" />}>
+        <Field label="Description" icon={<FileText size={14} className="text-[var(--accent-orange)]" />}>
           <textarea
             name="description"
             placeholder="Tell viewers what this video is about…"
@@ -119,7 +112,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Thumbnail URL */}
-        <Field label="Thumbnail URL" icon={<Link2 size={14} color="var(--accent-orange)" />}>
+        <Field label="Thumbnail URL" icon={<Link2 size={14} className="text-[var(--accent-orange)]" />}>
           <input
             name="thumbnail"
             type="url"
@@ -129,12 +122,12 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Duration + Category row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+        <div className="grid grid-cols-2 gap-4">
           <Field
             label="Duration (seconds)"
             icon={detecting
-              ? <Loader size={14} color="var(--accent-orange)" style={{ animation: "spin 1s linear infinite" }} />
-              : <Clock size={14} color="var(--accent-orange)" />
+              ? <Loader size={14} className="text-[var(--accent-orange)] animate-spin" />
+              : <Clock size={14} className="text-[var(--accent-orange)]" />
             }
             hint={detecting ? "Detecting…" : duration ? "Auto-detected" : undefined}
           >
@@ -146,13 +139,12 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
               placeholder={detecting ? "Detecting…" : "Will be detected from URL"}
               value={duration}
               readOnly
-              className="input-field"
-              style={{ cursor: "default", opacity: 0.7 }}
+              className="input-field cursor-default opacity-70"
             />
           </Field>
 
-          <Field label="Category" icon={<Tag size={14} color="var(--accent-orange)" />}>
-            <select name="categoryId" className="input-field" style={{ cursor: "pointer" }}>
+          <Field label="Category" icon={<Tag size={14} className="text-[var(--accent-orange)]" />}>
+            <select name="categoryId" className="input-field cursor-pointer">
               <option value="">— None —</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -162,45 +154,42 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </div>
 
         {/* Premium toggle */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "1rem 1.25rem", borderRadius: 10,
-          background: isPremium ? "rgba(249,115,22,0.07)" : "var(--bg-elevated)",
-          border: isPremium ? "1px solid rgba(249,115,22,0.3)" : "1px solid var(--border-subtle)",
-          transition: "background 0.2s, border-color 0.2s",
-          cursor: "pointer",
-        }}
+        <div
           onClick={() => setIsPremium((v) => !v)}
+          className={[
+            "flex items-center justify-between px-5 py-4 rounded-[10px] cursor-pointer",
+            "transition-[background,border-color] duration-200",
+            isPremium
+              ? "bg-orange-500/[0.07] border border-orange-500/30"
+              : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)]",
+          ].join(" ")}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Crown size={17} color={isPremium ? "var(--accent-orange)" : "var(--text-muted)"} />
+          <div className="flex items-center gap-3">
+            <Crown size={17} className={isPremium ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)]"} />
             <div>
-              <p style={{
-                fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.9rem",
-                color: isPremium ? "var(--text-primary)" : "var(--text-secondary)",
-              }}>
+              <p className={[
+                "font-display font-bold text-[0.9rem]",
+                isPremium ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]",
+              ].join(" ")}>
                 Premium Content
               </p>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+              <p className="text-[0.8rem] text-[var(--text-muted)] mt-[0.1rem]">
                 Only subscribers can watch this video
               </p>
             </div>
           </div>
 
           {/* Toggle switch */}
-          <div style={{
-            width: 44, height: 24, borderRadius: 12, flexShrink: 0,
-            background: isPremium ? "var(--accent-orange)" : "var(--bg-card)",
-            border: isPremium ? "none" : "1px solid var(--border-default)",
-            position: "relative", transition: "background 0.2s",
-          }}>
-            <div style={{
-              position: "absolute", top: isPremium ? 3 : 2, left: isPremium ? 23 : 2,
-              width: 18, height: 18, borderRadius: "50%",
-              background: "white",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-              transition: "left 0.2s, top 0.2s",
-            }} />
+          <div className={[
+            "w-11 h-6 rounded-full shrink-0 relative transition-colors duration-200",
+            isPremium
+              ? "bg-[var(--accent-orange)]"
+              : "bg-[var(--bg-card)] border border-[var(--border-default)]",
+          ].join(" ")}>
+            <div className={[
+              "absolute w-[18px] h-[18px] rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.3)] transition-all duration-200",
+              isPremium ? "top-[3px] left-[23px]" : "top-[2px] left-[2px]",
+            ].join(" ")} />
           </div>
         </div>
 
@@ -208,12 +197,11 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         <button
           type="submit"
           disabled={pending}
-          className="btn-primary"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
-            padding: "0.75rem", fontSize: "0.9375rem", borderRadius: 10,
-            opacity: pending ? 0.6 : 1, cursor: pending ? "not-allowed" : "pointer",
-          }}
+          className={[
+            "btn-primary flex items-center justify-center gap-2",
+            "py-3 text-[0.9375rem] rounded-[10px]",
+            pending ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+          ].join(" ")}
         >
           <Upload size={17} />
           {pending ? "Uploading…" : "Publish Video"}
@@ -234,18 +222,12 @@ function Field({
 }) {
   return (
     <div>
-      <label style={{
-        display: "flex", alignItems: "center", gap: "0.375rem",
-        fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem",
-        color: "var(--text-secondary)", marginBottom: "0.5rem",
-      }}>
+      <label className="flex items-center gap-[0.375rem] font-display font-semibold text-[0.8125rem] text-[var(--text-secondary)] mb-2">
         {icon}
         {label}
-        {required && <span style={{ color: "var(--accent-orange)", marginLeft: 2 }}>*</span>}
+        {required && <span className="text-[var(--accent-orange)] ml-0.5">*</span>}
         {hint && (
-          <span style={{ marginLeft: "auto", color: "var(--accent-orange)", fontWeight: 500, fontSize: "0.75rem" }}>
-            {hint}
-          </span>
+          <span className="ml-auto text-[var(--accent-orange)] font-medium text-xs">{hint}</span>
         )}
       </label>
       {children}

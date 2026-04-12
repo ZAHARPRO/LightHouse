@@ -29,26 +29,24 @@ export default function LikeButtons({
   function handleClick(type: "LIKE" | "DISLIKE") {
     if (isOwner || !isLoggedIn) return;
 
-    // Optimistic update
     const prev = reaction;
     setReaction((r) => (r === type ? null : type));
     setLikes((n) => {
-      if (type === "LIKE"    && prev === "LIKE")    return n - 1; // toggle off
-      if (type === "LIKE"    && prev !== "LIKE")    return n + 1; // add / switch to like
-      if (type === "DISLIKE" && prev === "LIKE")    return n - 1; // switch away from like
+      if (type === "LIKE"    && prev === "LIKE")    return n - 1;
+      if (type === "LIKE"    && prev !== "LIKE")    return n + 1;
+      if (type === "DISLIKE" && prev === "LIKE")    return n - 1;
       return n;
     });
     setDislikes((n) => {
-      if (type === "DISLIKE" && prev === "DISLIKE") return n - 1; // toggle off
-      if (type === "DISLIKE" && prev !== "DISLIKE") return n + 1; // add / switch to dislike
-      if (type === "LIKE"    && prev === "DISLIKE") return n - 1; // switch away from dislike
+      if (type === "DISLIKE" && prev === "DISLIKE") return n - 1;
+      if (type === "DISLIKE" && prev !== "DISLIKE") return n + 1;
+      if (type === "LIKE"    && prev === "DISLIKE") return n - 1;
       return n;
     });
 
     startTransition(async () => {
       const res = await toggleLike(videoId, type);
       if ("error" in res) {
-        // Revert on error
         setReaction(prev);
         setLikes(initialLikes);
         setDislikes(initialDislikes);
@@ -63,22 +61,26 @@ export default function LikeButtons({
     ? "Sign in to react"
     : undefined;
 
+  const btnBase = [
+    "flex items-center gap-[0.4rem]",
+    "py-[0.4rem] px-[0.875rem] rounded-lg",
+    "font-display font-semibold text-sm",
+    "transition-all duration-150",
+    disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+  ].join(" ");
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }} title={title}>
+    <div className="flex items-center gap-2" title={title}>
       {/* Like */}
       <button
         onClick={() => handleClick("LIKE")}
         disabled={disabled}
-        style={{
-          display: "flex", alignItems: "center", gap: "0.4rem",
-          padding: "0.4rem 0.875rem", borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer",
-          background: reaction === "LIKE" ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-          border: reaction === "LIKE" ? "1px solid rgba(249,115,22,0.4)" : "1px solid var(--border-subtle)",
-          color: reaction === "LIKE" ? "var(--accent-orange)" : "var(--text-secondary)",
-          fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.875rem",
-          transition: "all 0.15s",
-          opacity: disabled ? 0.5 : 1,
-        }}
+        className={[
+          btnBase,
+          reaction === "LIKE"
+            ? "bg-orange-500/10 border border-orange-500/40 text-[var(--accent-orange)]"
+            : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]",
+        ].join(" ")}
       >
         <ThumbsUp size={15} fill={reaction === "LIKE" ? "currentColor" : "none"} />
         {likes}
@@ -88,16 +90,12 @@ export default function LikeButtons({
       <button
         onClick={() => handleClick("DISLIKE")}
         disabled={disabled}
-        style={{
-          display: "flex", alignItems: "center", gap: "0.4rem",
-          padding: "0.4rem 0.875rem", borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer",
-          background: reaction === "DISLIKE" ? "rgba(239,68,68,0.1)" : "var(--bg-elevated)",
-          border: reaction === "DISLIKE" ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--border-subtle)",
-          color: reaction === "DISLIKE" ? "#ef4444" : "var(--text-secondary)",
-          fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.875rem",
-          transition: "all 0.15s",
-          opacity: disabled ? 0.5 : 1,
-        }}
+        className={[
+          btnBase,
+          reaction === "DISLIKE"
+            ? "bg-red-500/10 border border-red-500/35 text-red-500"
+            : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]",
+        ].join(" ")}
       >
         <ThumbsDown size={15} fill={reaction === "DISLIKE" ? "currentColor" : "none"} />
         {dislikes}

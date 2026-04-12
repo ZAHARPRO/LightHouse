@@ -26,16 +26,11 @@ export default function PostForm() {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div className="flex flex-col gap-5">
 
         {/* Error */}
         {error && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: "0.625rem",
-            padding: "0.875rem 1rem", borderRadius: 8,
-            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
-            color: "#ef4444", fontSize: "0.875rem",
-          }}>
+          <div className="flex items-center gap-[0.625rem] px-4 py-[0.875rem] rounded-lg bg-red-500/10 border border-red-500/25 text-red-500 text-sm">
             <AlertCircle size={15} />
             {error}
           </div>
@@ -43,10 +38,10 @@ export default function PostForm() {
 
         {/* Title */}
         <div>
-          <label style={labelStyle}>
-            <FileText size={14} color="var(--accent-orange)" />
+          <label className={labelClass}>
+            <FileText size={14} className="text-[var(--accent-orange)]" />
             Title
-            <span style={{ color: "var(--accent-orange)" }}>*</span>
+            <span className="text-[var(--accent-orange)]">*</span>
           </label>
           <input
             name="title"
@@ -60,16 +55,14 @@ export default function PostForm() {
 
         {/* Content */}
         <div>
-          <label style={labelStyle}>
-            <AlignLeft size={14} color="var(--accent-orange)" />
+          <label className={labelClass}>
+            <AlignLeft size={14} className="text-[var(--accent-orange)]" />
             Content
-            <span style={{ color: "var(--accent-orange)" }}>*</span>
-            <span style={{
-              marginLeft: "auto",
-              fontSize: "0.75rem",
-              color: content.length > MAX * 0.9 ? "#ef4444" : "var(--text-muted)",
-              fontWeight: 500,
-            }}>
+            <span className="text-[var(--accent-orange)]">*</span>
+            <span className={[
+              "ml-auto text-xs font-medium",
+              content.length > MAX * 0.9 ? "text-red-500" : "text-[var(--text-muted)]",
+            ].join(" ")}>
               {content.length} / {MAX.toLocaleString()}
             </span>
           </label>
@@ -89,40 +82,40 @@ export default function PostForm() {
         {/* Premium toggle */}
         <div
           onClick={() => setIsPremium((v) => !v)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "1rem 1.25rem", borderRadius: 10, cursor: "pointer",
-            background: isPremium ? "rgba(249,115,22,0.07)" : "var(--bg-elevated)",
-            border: isPremium ? "1px solid rgba(249,115,22,0.3)" : "1px solid var(--border-subtle)",
-            transition: "background 0.2s, border-color 0.2s",
-          }}
+          className={[
+            "flex items-center justify-between px-5 py-4 rounded-[10px] cursor-pointer",
+            "transition-[background,border-color] duration-200",
+            isPremium
+              ? "bg-orange-500/[0.07] border border-orange-500/30"
+              : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)]",
+          ].join(" ")}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Crown size={17} color={isPremium ? "var(--accent-orange)" : "var(--text-muted)"} />
+          <div className="flex items-center gap-3">
+            <Crown size={17} className={isPremium ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)]"} />
             <div>
-              <p style={{
-                fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.9rem",
-                color: isPremium ? "var(--text-primary)" : "var(--text-secondary)",
-              }}>
+              <p className={[
+                "font-display font-bold text-[0.9rem]",
+                isPremium ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]",
+              ].join(" ")}>
                 Premium Content
               </p>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+              <p className="text-[0.8rem] text-[var(--text-muted)] mt-[0.1rem]">
                 Only subscribers can read this post
               </p>
             </div>
           </div>
+
           {/* Toggle */}
-          <div style={{
-            width: 44, height: 24, borderRadius: 12, flexShrink: 0, position: "relative",
-            background: isPremium ? "var(--accent-orange)" : "var(--bg-card)",
-            border: isPremium ? "none" : "1px solid var(--border-default)",
-            transition: "background 0.2s",
-          }}>
-            <div style={{
-              position: "absolute", top: isPremium ? 3 : 2, left: isPremium ? 23 : 2,
-              width: 18, height: 18, borderRadius: "50%", background: "white",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.3)", transition: "left 0.2s, top 0.2s",
-            }} />
+          <div className={[
+            "w-11 h-6 rounded-full shrink-0 relative transition-colors duration-200",
+            isPremium
+              ? "bg-[var(--accent-orange)] border-0"
+              : "bg-[var(--bg-card)] border border-[var(--border-default)]",
+          ].join(" ")}>
+            <div className={[
+              "absolute w-[18px] h-[18px] rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.3)] transition-all duration-200",
+              isPremium ? "top-[3px] left-[23px]" : "top-[2px] left-[2px]",
+            ].join(" ")} />
           </div>
         </div>
 
@@ -130,12 +123,11 @@ export default function PostForm() {
         <button
           type="submit"
           disabled={pending}
-          className="btn-primary"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
-            padding: "0.75rem", fontSize: "0.9375rem", borderRadius: 10,
-            opacity: pending ? 0.6 : 1, cursor: pending ? "not-allowed" : "pointer",
-          }}
+          className={[
+            "btn-primary flex items-center justify-center gap-2",
+            "py-3 text-[0.9375rem] rounded-[10px]",
+            pending ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+          ].join(" ")}
         >
           <Send size={16} />
           {pending ? "Publishing…" : "Publish Post"}
@@ -145,8 +137,8 @@ export default function PostForm() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: "0.375rem",
-  fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem",
-  color: "var(--text-secondary)", marginBottom: "0.5rem",
-};
+const labelClass = [
+  "flex items-center gap-[0.375rem]",
+  "font-display font-semibold text-[0.8125rem]",
+  "text-[var(--text-secondary)] mb-2",
+].join(" ");

@@ -36,15 +36,17 @@ function Avatar({ name, tier }: { name: string; tier: string }) {
   const colors: Record<string, string> = {
     ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
   };
+  const color = colors[tier] ?? "#666";
   return (
-    <div style={{
-      width: 34, height: 34, borderRadius: "50%",
-      background: `${colors[tier] ?? "#666"}22`,
-      border: `2px solid ${colors[tier] ?? "#666"}44`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0,
-    }}>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.75rem", color: colors[tier] }}>
+    <div
+      style={{
+        width: 34, height: 34,
+        background: `${color}22`,
+        border: `2px solid ${color}44`,
+      }}
+      className="rounded-full flex items-center justify-center shrink-0"
+    >
+      <span style={{ color }} className="font-[var(--font-display)] font-bold text-[0.75rem]">
         {name?.[0]?.toUpperCase() ?? "?"}
       </span>
     </div>
@@ -103,64 +105,36 @@ export default function ChatPage() {
   );
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "2.5rem 1.5rem", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column" }}>
+    <div className="max-w-[860px] mx-auto px-6 py-10 h-[calc(100vh-64px)] flex flex-col">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+      <div className="flex items-center justify-between mb-6">
         <div>
-          {/* Back to feed */}
           <Link
             href="/feed"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "0.375rem",
-              textDecoration: "none", color: "var(--text-muted)", fontSize: "0.8125rem",
-              marginBottom: "0.75rem",
-              padding: "0.3rem 0.625rem", borderRadius: 7,
-              border: "1px solid var(--border-subtle)",
-              background: "var(--bg-elevated)",
-              transition: "color 0.15s, border-color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border-default)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-muted)";
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border-subtle)";
-            }}
+            className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-3 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors duration-150 hover:text-[var(--text-primary)] hover:border-[var(--border-default)]"
           >
             <ArrowLeft size={13} />
             Back to Feed
           </Link>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+          <div className="flex items-center gap-2 mb-1">
             <MessageSquare size={18} color="var(--accent-orange)" />
-            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.75rem", letterSpacing: "-0.03em" }}>
+            <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] tracking-[-0.03em]">
               Global Chat
             </h1>
           </div>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>Live conversation — everyone can see your messages</p>
+          <p className="text-[var(--text-secondary)] text-sm">Live conversation — everyone can see your messages</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+        <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[0.8125rem]">
           <Users size={14} />
           <span>1,243 online</span>
         </div>
       </div>
 
       {/* Chat window */}
-      <div
-        style={{
-          flex: 1,
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: 12,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
+      <div className="flex-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl overflow-hidden flex flex-col min-h-0">
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
           {sorted.map((msg) => {
             const tier = TIER_LABELS[msg.author.tier] ?? TIER_LABELS.FREE;
             const isMe = msg.author.id === session?.user?.id;
@@ -168,32 +142,41 @@ export default function ChatPage() {
             return (
               <div
                 key={msg.id}
-                className="animate-in"
-                style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}
+                className={[
+                  "animate-in flex gap-3 items-start",
+                  isMe ? "flex-row-reverse" : "flex-row",
+                ].join(" ")}
               >
                 <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
-                <div style={{ maxWidth: "70%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem", flexDirection: isMe ? "row-reverse" : "row" }}>
-                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem", color: "var(--text-primary)" }}>
+                <div className={[
+                  "max-w-[70%] flex flex-col",
+                  isMe ? "items-end" : "items-start",
+                ].join(" ")}>
+                  <div className={[
+                    "flex items-center gap-2 mb-1",
+                    isMe ? "flex-row-reverse" : "flex-row",
+                  ].join(" ")}>
+                    <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--text-primary)]">
                       {isMe ? "You" : msg.author.name}
                     </span>
-                    <span style={{ fontSize: "0.6875rem", fontWeight: 600, padding: "0.125rem 0.375rem", borderRadius: 4, background: `${tier.color}18`, color: tier.color, border: `1px solid ${tier.color}30` }}>
+                    <span
+                      style={{ color: tier.color, background: `${tier.color}18`, border: `1px solid ${tier.color}30` }}
+                      className="text-[0.6875rem] font-semibold py-0.5 px-1.5 rounded"
+                    >
                       {tier.label}
                     </span>
-                    <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>
+                    <span className="text-[0.6875rem] text-[var(--text-muted)]">
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  <div style={{
-                    background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-                    border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
-                    borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px",
-                    padding: "0.625rem 0.875rem",
-                    fontSize: "0.9rem",
-                    color: "var(--text-primary)",
-                    lineHeight: 1.5,
-                    wordBreak: "break-word",
-                  }}>
+                  <div
+                    className={[
+                      "py-[0.625rem] px-[0.875rem] text-[0.9rem] text-[var(--text-primary)] leading-relaxed break-words",
+                      isMe
+                        ? "bg-orange-500/[0.12] border border-orange-500/20 rounded-[12px_4px_12px_12px]"
+                        : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[4px_12px_12px_12px]",
+                    ].join(" ")}
+                  >
                     {msg.content}
                   </div>
                 </div>
@@ -207,51 +190,35 @@ export default function ChatPage() {
         {session ? (
           <form
             onSubmit={handleSend}
-            style={{
-              borderTop: "1px solid var(--border-subtle)",
-              padding: "0.875rem 1.25rem",
-              display: "flex",
-              gap: "0.75rem",
-              background: "var(--bg-secondary)",
-            }}
+            className="border-t border-[var(--border-subtle)] py-[0.875rem] px-5 flex gap-3 bg-[var(--bg-secondary)]"
           >
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Say something to the world…"
               maxLength={500}
-              className="input-field"
-              style={{ flex: 1, background: "var(--bg-elevated)" }}
+              className="input-field flex-1 bg-[var(--bg-elevated)]"
             />
             <button
               type="submit"
               disabled={!input.trim() || sending}
-              style={{
-                background: "var(--accent-orange)",
-                border: "none",
-                borderRadius: 8,
-                padding: "0.75rem",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: !input.trim() || sending ? 0.5 : 1,
-                transition: "opacity 0.2s",
-                flexShrink: 0,
-              }}
+              className={[
+                "bg-[var(--accent-orange)] border-none rounded-lg p-3 cursor-pointer flex items-center justify-center shrink-0 transition-opacity duration-200",
+                !input.trim() || sending ? "opacity-50" : "opacity-100",
+              ].join(" ")}
             >
               <Send size={18} color="white" />
             </button>
           </form>
         ) : (
-          <div style={{ borderTop: "1px solid var(--border-subtle)", padding: "1rem 1.25rem", background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>
-              <Zap size={14} color="var(--accent-orange)" style={{ display: "inline", marginRight: 6 }} />
+          <div className="border-t border-[var(--border-subtle)] py-4 px-5 bg-[var(--bg-secondary)] flex items-center justify-between">
+            <span className="text-[var(--text-secondary)] text-[0.9rem] flex items-center gap-1.5">
+              <Zap size={14} color="var(--accent-orange)" />
               Sign in to join the conversation
             </span>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <Link href="/auth/signin" className="btn-ghost" style={{ textDecoration: "none", padding: "0.375rem 1rem", fontSize: "0.875rem" }}>Sign In</Link>
-              <Link href="/auth/register" className="btn-primary" style={{ textDecoration: "none", padding: "0.375rem 1rem", fontSize: "0.875rem" }}>Join Free</Link>
+            <div className="flex gap-2">
+              <Link href="/auth/signin" className="btn-ghost no-underline py-1.5 px-4 text-sm">Sign In</Link>
+              <Link href="/auth/register" className="btn-primary no-underline py-1.5 px-4 text-sm">Join Free</Link>
             </div>
           </div>
         )}

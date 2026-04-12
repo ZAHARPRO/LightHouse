@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
@@ -31,15 +31,13 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 function Avatar({ name, tier }: { name: string; tier: string }) {
+  const color = TIER_COLORS[tier] ?? "#666";
   return (
-    <div style={{
-      width: 28, height: 28, borderRadius: "50%",
-      background: `${TIER_COLORS[tier] ?? "#666"}22`,
-      border: `2px solid ${TIER_COLORS[tier] ?? "#666"}44`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0,
-    }}>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.6875rem", color: TIER_COLORS[tier] }}>
+    <div
+      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+      style={{ background: `${color}22`, border: `2px solid ${color}44` }}
+    >
+      <span className="font-display font-bold text-[0.6875rem]" style={{ color }}>
         {name?.[0]?.toUpperCase() ?? "?"}
       </span>
     </div>
@@ -48,23 +46,16 @@ function Avatar({ name, tier }: { name: string; tier: string }) {
 
 interface ChatPopupProps {
   onClose: () => void;
-  /** x offset from left edge of viewport in px — used to align with the sidebar */
+  isClosing: boolean;
   leftOffset?: number;
 }
 
-export default function ChatPopup({ onClose, leftOffset = 0 }: ChatPopupProps) {
+const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup({ onClose, isClosing, leftOffset = 0 }, ref) {
   const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function startClose() {
-    setIsClosing(true);
-    setTimeout(onClose, 180);
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,92 +91,41 @@ export default function ChatPopup({ onClose, leftOffset = 0 }: ChatPopupProps) {
     setSending(false);
   }
 
-  function handleMouseLeave(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    // Left buffer: within 10px to the left of the panel — don't close
-    if (e.clientX < rect.left && e.clientX >= rect.left - 10) return;
-    // Right buffer: less than 10px past the right edge — don't close
-    if (e.clientX > rect.right && e.clientX <= rect.right + 10) return;
-    leaveTimer.current = setTimeout(startClose, 120);
-  }
-
-  function handleMouseEnter() {
-    if (leaveTimer.current) {
-      clearTimeout(leaveTimer.current);
-      leaveTimer.current = null;
-    }
-  }
-
   return (
     <div
-      onMouseLeave={handleMouseLeave}
-      onMouseEnter={handleMouseEnter}
+      ref={ref}
+      /* On mobile: full-width, starts below navbar. On sm+: fixed 300px width */
+      className="fixed top-16 flex flex-col w-full sm:w-[300px] bg-[var(--bg-card)] border-r border-[var(--border-subtle)] shadow-[6px_0_40px_rgba(0,0,0,0.45)] z-[3000]"
       style={{
-        position: "fixed",
         left: leftOffset,
-        top: 64,
-        width: 300,
         height: "calc(100vh - 64px)",
-        zIndex: 3000,
-        background: "var(--bg-card)",
-        borderRight: "1px solid var(--border-subtle)",
-        display: "flex",
-        flexDirection: "column",
-        boxShadow: "6px 0 40px rgba(0,0,0,0.45)",
-        animation: isClosing
-          ? "slideOutLeft 0.18s ease both"
-          : "slideInLeft 0.2s ease both",
+        animation: isClosing ? "slideOutLeft 0.18s ease both" : "slideInLeft 0.2s ease both",
       }}
     >
       {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0.75rem 1rem",
-        borderBottom: "1px solid var(--border-subtle)",
-        background: "var(--bg-elevated)",
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <MessageSquare size={14} color="var(--accent-orange)" />
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)" }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)] shrink-0">
+        <div className="flex items-center gap-2">
+          <MessageSquare size={14} className="text-[var(--accent-orange)]" />
+          <span className="font-display font-bold text-sm text-[var(--text-primary)]">
             Global Chat
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          {/* Full-screen button → /chat */}
+        <div className="flex items-center gap-[0.375rem]">
+          {/* Full-screen → /chat */}
           <Link
             href="/chat"
             title="Open full chat"
-            style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: "var(--bg-card)", border: "1px solid var(--border-subtle)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              textDecoration: "none", color: "var(--text-secondary)",
-              transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--accent-orange)";
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(249,115,22,0.4)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)";
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border-subtle)";
-            }}
+            className="w-7 h-7 rounded-md flex items-center justify-center no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150"
           >
             <Maximize2 size={13} />
           </Link>
 
           {/* Close */}
           <button
-            onClick={startClose}
+            onClick={onClose}
             title="Close chat"
-            style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: "var(--bg-card)", border: "1px solid var(--border-subtle)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "var(--text-muted)",
-            }}
+            className="w-7 h-7 rounded-md flex items-center justify-center cursor-pointer bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-muted)]"
           >
             <X size={13} />
           </button>
@@ -193,34 +133,45 @@ export default function ChatPopup({ onClose, leftOffset = 0 }: ChatPopupProps) {
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "0.875rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div className="flex-1 overflow-y-auto p-[0.875rem] flex flex-col gap-3">
         {sorted.map((msg) => {
           const tier = TIER_LABELS[msg.author.tier] ?? TIER_LABELS.FREE;
           const isMe = msg.author.id === session?.user?.id;
           return (
-            <div key={msg.id} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}>
-              <Link href={`/profile/${msg.author.id}`} style={{ textDecoration: "none" }}>
+            <div
+              key={msg.id}
+              className={["flex gap-2 items-start", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}
+            >
+              <Link href={`/profile/${msg.author.id}`} className="no-underline">
                 <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
               </Link>
-              <div style={{ maxWidth: "75%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.2rem", flexDirection: isMe ? "row-reverse" : "row" }}>
-                  <Link href={`/profile/${msg.author.id}`} style={{ textDecoration: "none", color: "var(--text-primary)", fontWeight: 600, fontSize: "0.6875rem" }}>
+
+              <div className={["max-w-[75%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
+                {/* Name + badge */}
+                <div className={["flex items-center gap-[0.375rem] mb-[0.2rem]", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
+                  <Link
+                    href={`/profile/${msg.author.id}`}
+                    className="no-underline text-[var(--text-primary)] font-semibold text-[0.6875rem]"
+                  >
                     {isMe ? "You" : msg.author.name}
                   </Link>
-                  <span style={{ fontSize: "0.5625rem", fontWeight: 600, padding: "0.1rem 0.3rem", borderRadius: 3, background: `${tier.color}18`, color: tier.color, border: `1px solid ${tier.color}30` }}>
+                  <span
+                    className="text-[0.5625rem] font-semibold px-[0.3rem] py-[0.1rem] rounded-[3px]"
+                    style={{ background: `${tier.color}18`, color: tier.color, border: `1px solid ${tier.color}30` }}
+                  >
                     {tier.label}
                   </span>
                 </div>
-                <div style={{
-                  background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-                  border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
-                  borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
-                  padding: "0.5rem 0.625rem",
-                  fontSize: "0.8125rem",
-                  color: "var(--text-primary)",
-                  lineHeight: 1.45,
-                  wordBreak: "break-word",
-                }}>
+
+                {/* Bubble */}
+                <div
+                  className="px-[0.625rem] py-2 text-[0.8125rem] text-[var(--text-primary)] leading-[1.45] break-words"
+                  style={{
+                    background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
+                    border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
+                    borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
+                  }}
+                >
                   {msg.content}
                 </div>
               </div>
@@ -230,57 +181,49 @@ export default function ChatPopup({ onClose, leftOffset = 0 }: ChatPopupProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input area */}
       {session ? (
         <form
           onSubmit={handleSend}
-          style={{
-            borderTop: "1px solid var(--border-subtle)",
-            padding: "0.625rem 0.875rem",
-            display: "flex", gap: "0.5rem",
-            background: "var(--bg-secondary)",
-            flexShrink: 0,
-          }}
+          className="flex gap-2 px-[0.875rem] py-[0.625rem] border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)] shrink-0"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Say something…"
             maxLength={500}
-            className="input-field"
-            style={{ flex: 1, background: "var(--bg-elevated)", fontSize: "0.8125rem", height: 36 }}
+            className="input-field flex-1 bg-[var(--bg-elevated)] text-[0.8125rem] h-9"
           />
           <button
             type="submit"
             disabled={!input.trim() || sending}
-            style={{
-              background: "var(--accent-orange)", border: "none", borderRadius: 7,
-              padding: "0 0.625rem", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: !input.trim() || sending ? 0.5 : 1, transition: "opacity 0.2s",
-              flexShrink: 0, height: 36,
-            }}
+            className={[
+              "flex items-center justify-center shrink-0 h-9 px-[0.625rem] rounded-[7px]",
+              "bg-[var(--accent-orange)] border-none cursor-pointer text-white transition-opacity duration-200",
+              !input.trim() || sending ? "opacity-50" : "opacity-100",
+            ].join(" ")}
           >
-            <Send size={15} color="white" />
+            <Send size={15} />
           </button>
         </form>
       ) : (
-        <div style={{
-          borderTop: "1px solid var(--border-subtle)",
-          padding: "0.75rem 0.875rem",
-          background: "var(--bg-secondary)",
-          flexShrink: 0,
-        }}>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.8125rem", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
-            <Zap size={12} color="var(--accent-orange)" />
+        <div className="border-t border-[var(--border-subtle)] px-[0.875rem] py-3 bg-[var(--bg-secondary)] shrink-0">
+          <p className="flex items-center gap-[0.375rem] text-[var(--text-secondary)] text-[0.8125rem] mb-2">
+            <Zap size={12} className="text-[var(--accent-orange)]" />
             Sign in to chat
           </p>
-          <div style={{ display: "flex", gap: "0.375rem" }}>
-            <Link href="/auth/signin" className="btn-ghost" style={{ textDecoration: "none", padding: "0.3rem 0.75rem", fontSize: "0.8125rem", flex: 1, textAlign: "center" }}>Sign In</Link>
-            <Link href="/auth/register" className="btn-primary" style={{ textDecoration: "none", padding: "0.3rem 0.75rem", fontSize: "0.8125rem", flex: 1, textAlign: "center" }}>Join</Link>
+          <div className="flex gap-[0.375rem]">
+            <Link href="/auth/signin" className="btn-ghost no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">
+              Sign In
+            </Link>
+            <Link href="/auth/register" className="btn-primary no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">
+              Join
+            </Link>
           </div>
         </div>
       )}
     </div>
   );
-}
+});
+
+export default ChatPopup;

@@ -28,41 +28,35 @@ export default function SubscribeButton({ creatorId, initialFollowing }: Props) 
 
   const isUnsubscribeMode = following && hovered;
 
+  const bg = following
+    ? isUnsubscribeMode ? "bg-red-500/10" : "bg-[var(--bg-elevated)]"
+    : "bg-[var(--accent-orange)]";
+
+  const text = following
+    ? isUnsubscribeMode ? "text-red-500" : "text-[var(--text-primary)]"
+    : "text-white";
+
+  const border = following
+    ? "border border-[var(--border-default)]"
+    : "border border-transparent";
+
   return (
     <button
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       disabled={isPending}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.4rem",
-        padding: "0.45rem 1.1rem",
-        borderRadius: 8,
-        fontSize: "0.875rem",
-        fontFamily: "var(--font-display)",
-        fontWeight: 600,
-        cursor: isPending ? "not-allowed" : "pointer",
-        border: following
-          ? "1px solid var(--border-default)"
-          : "1px solid transparent",
-        background: following
-          ? isUnsubscribeMode
-            ? "rgba(239,68,68,0.08)"
-            : "var(--bg-elevated)"
-          : "var(--accent-orange)",
-        color: following
-          ? isUnsubscribeMode
-            ? "#ef4444"
-            : "var(--text-primary)"
-          : "white",
-        transition: "all 0.18s",
-        opacity: isPending ? 0.6 : 1,
-      }}
+      className={[
+        "inline-flex items-center gap-[0.4rem]",
+        "py-[0.45rem] px-[1.1rem] rounded-lg",
+        "text-sm font-semibold font-display",
+        "transition-all duration-[180ms]",
+        isPending ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+        bg, text, border,
+      ].join(" ")}
     >
       {isPending ? (
-        <Loader size={14} style={{ animation: "spin 1s linear infinite" }} />
+        <Loader size={14} className="animate-spin" />
       ) : following ? (
         <UserMinus size={14} />
       ) : (

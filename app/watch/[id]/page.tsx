@@ -72,7 +72,6 @@ export default async function WatchPage({
 
   const isLocked = video.isPremium && (!session);
 
-  // Check follow status
   let isFollowing = false;
   const isMe = session?.user?.id === video.author.id;
   if (session?.user?.id && !isMe) {
@@ -89,7 +88,6 @@ export default async function WatchPage({
     } catch { /* ignore */ }
   }
 
-  // Increment view count — skip for the video's own author
   if (!isMe) {
     await prisma.video.update({
       where: { id },
@@ -97,7 +95,6 @@ export default async function WatchPage({
     });
   }
 
-  // Like/dislike counts + user's reaction
   const likesCount    = await prisma.like.count({ where: { videoId: id, type: "LIKE" } });
   const dislikesCount = await prisma.like.count({ where: { videoId: id, type: "DISLIKE" } });
   let userReaction: "LIKE" | "DISLIKE" | null = null;
@@ -108,7 +105,6 @@ export default async function WatchPage({
     userReaction = (row?.type as "LIKE" | "DISLIKE") ?? null;
   }
 
-  // Comments with replies and like data
   const rawComments = await prisma.comment.findMany({
     where: { videoId: id, parentId: null },
     include: {
@@ -158,7 +154,6 @@ export default async function WatchPage({
     _count: { likes: number };
   };
 
-  // Suggested: other videos, excluding current
   let suggested: SuggestedVideo[] = [];
   try {
     suggested = await prisma.video.findMany({
@@ -176,7 +171,7 @@ export default async function WatchPage({
   const [bg, accent] = THUMB_COLORS[Math.abs(id.charCodeAt(0) - 97) % THUMB_COLORS.length];
 
   return (
-    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "1.5rem", display: "grid", gridTemplateColumns: "1fr 360px", gap: "2rem", alignItems: "start" }}>
+    <div className="max-w-[1440px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
 
       {/* ── LEFT: player + info ── */}
       <div>
@@ -184,69 +179,46 @@ export default async function WatchPage({
         {/* Back */}
         <Link
           href="/feed"
-          style={{
-            display: "inline-flex", alignItems: "center", gap: "0.375rem",
-            textDecoration: "none", color: "var(--text-muted)", fontSize: "0.8125rem",
-            marginBottom: "1rem",
-            padding: "0.3rem 0.625rem", borderRadius: 7,
-            border: "1px solid var(--border-subtle)",
-            background: "var(--bg-elevated)",
-          }}
+          className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-4 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
         >
           <ArrowLeft size={13} />
           Back to Feed
         </Link>
 
         {/* Player */}
-        <div style={{
-          width: "100%", aspectRatio: "16/9",
-          borderRadius: 14, overflow: "hidden",
-          background: `linear-gradient(135deg, ${bg} 0%, ${accent}22 100%)`,
-          position: "relative",
-          border: "1px solid var(--border-subtle)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
+        <div
+          style={{ background: `linear-gradient(135deg, ${bg} 0%, ${accent}22 100%)` }}
+          className="w-full aspect-video rounded-[14px] overflow-hidden border border-[var(--border-subtle)] relative flex items-center justify-center"
+        >
           {isLocked ? (
-            /* Locked overlay */
-            <div style={{ textAlign: "center" }}>
-              <Lock size={48} color={accent} style={{ margin: "0 auto 1rem" }} />
-              <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.125rem", color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+            <div className="text-center">
+              <Lock size={48} color={accent} className="mx-auto mb-4" />
+              <p className="font-[var(--font-display)] font-bold text-lg text-[var(--text-primary)] mb-2">
                 Premium Content
               </p>
-              <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
+              <p className="text-[var(--text-secondary)] text-sm mb-6">
                 Subscribe to watch this video
               </p>
-              <Link href="/subscriptions" className="btn-primary" style={{ textDecoration: "none", padding: "0.625rem 1.5rem" }}>
+              <Link href="/subscriptions" className="btn-primary no-underline py-2.5 px-6">
                 View Plans
               </Link>
             </div>
           ) : isGDriveEmbed(video.url) ? (
-            /* Google Drive embed */
             <iframe
               src={video.url}
               allow="autoplay"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+              className="absolute inset-0 w-full h-full border-none"
             />
           ) : (
-            /* Native player */
             <>
               <video
                 src={video.url}
                 controls
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
+                className="absolute inset-0 w-full h-full object-contain"
               />
-              <div style={{
-                position: "absolute", inset: 0, display: "flex",
-                flexDirection: "column", alignItems: "center", justifyContent: "center",
-                pointerEvents: "none",
-              }}>
-                <div style={{
-                  width: 64, height: 64, borderRadius: "50%",
-                  background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)",
-                  border: "2px solid rgba(255,255,255,0.15)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <Play size={26} color="white" fill="white" style={{ marginLeft: 3 }} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="w-16 h-16 rounded-full bg-black/55 backdrop-blur-[8px] border border-white/15 flex items-center justify-center">
+                  <Play size={26} color="white" fill="white" className="ml-0.5" />
                 </div>
               </div>
             </>
@@ -254,14 +226,9 @@ export default async function WatchPage({
 
           {/* Duration badge */}
           {video.duration && (
-            <div style={{
-              position: "absolute", bottom: 12, right: 12,
-              background: "rgba(0,0,0,0.75)", borderRadius: 5,
-              padding: "0.2rem 0.5rem", display: "flex", alignItems: "center", gap: "0.3rem",
-              zIndex: 1,
-            }}>
+            <div className="absolute bottom-3 right-3 bg-black/75 rounded-[5px] py-[0.2rem] px-2 flex items-center gap-1 z-10">
               <Clock size={11} color="#ccc" />
-              <span style={{ fontSize: "0.75rem", color: "#eee", fontFamily: "var(--font-body)" }}>
+              <span className="text-[0.75rem] text-[#eee] font-[var(--font-body)]">
                 {formatDuration(video.duration)}
               </span>
             </div>
@@ -269,12 +236,8 @@ export default async function WatchPage({
 
           {/* PRO badge */}
           {video.isPremium && (
-            <div style={{
-              position: "absolute", top: 12, left: 12, zIndex: 1,
-              background: "linear-gradient(90deg,#f97316,#fbbf24)",
-              borderRadius: 5, padding: "0.15rem 0.5rem",
-            }}>
-              <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)", letterSpacing: "0.05em" }}>
+            <div className="absolute top-3 left-3 z-10 bg-[linear-gradient(90deg,#f97316,#fbbf24)] rounded-[5px] py-[0.15rem] px-2">
+              <span className="text-[0.6875rem] font-bold text-white font-[var(--font-display)] tracking-[0.05em]">
                 PRO
               </span>
             </div>
@@ -282,28 +245,20 @@ export default async function WatchPage({
         </div>
 
         {/* Title + stats */}
-        <div style={{ marginTop: "1.25rem" }}>
-          <h1 style={{
-            fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.375rem",
-            letterSpacing: "-0.02em", color: "var(--text-primary)", lineHeight: 1.3,
-            marginBottom: "0.75rem",
-          }}>
+        <div className="mt-5">
+          <h1 className="font-[var(--font-display)] font-extrabold text-[1.375rem] tracking-[-0.02em] text-[var(--text-primary)] leading-tight mb-3">
             {video.title}
           </h1>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+          <div className="flex items-center gap-5 flex-wrap mb-5">
+            <span className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
               <Eye size={14} /> {formatViews(video.views)} views
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            <span className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
               <Calendar size={14} /> {formatDate(video.createdAt)}
             </span>
             {video.category && (
-              <span style={{
-                fontSize: "0.75rem", fontWeight: 600, padding: "0.1875rem 0.625rem", borderRadius: 100,
-                background: "rgba(249,115,22,0.1)", color: "var(--accent-orange)",
-                border: "1px solid rgba(249,115,22,0.2)", fontFamily: "var(--font-display)",
-              }}>
+              <span className="text-[0.75rem] font-semibold py-[0.1875rem] px-[0.625rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-[var(--font-display)]">
                 {video.category.name}
               </span>
             )}
@@ -318,25 +273,24 @@ export default async function WatchPage({
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: "1.25rem" }} />
+          <div className="h-px bg-[var(--border-subtle)] mb-5" />
 
           {/* Author row */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
-            <Link href={`/profile/${video.author.id}`} style={{ display: "flex", alignItems: "center", gap: "0.875rem", textDecoration: "none" }}>
-              <div style={{
-                width: 46, height: 46, borderRadius: "50%", flexShrink: 0,
-                background: `${authorColor}22`, border: `2.5px solid ${authorColor}50`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.125rem", color: authorColor }}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <Link href={`/profile/${video.author.id}`} className="flex items-center gap-3.5 no-underline">
+              <div
+                style={{ background: `${authorColor}22`, border: `2.5px solid ${authorColor}50` }}
+                className="w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center"
+              >
+                <span style={{ color: authorColor }} className="font-[var(--font-display)] font-extrabold text-lg">
                   {(video.author.name ?? "?")[0].toUpperCase()}
                 </span>
               </div>
               <div>
-                <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.9375rem", color: "var(--text-primary)", marginBottom: "0.125rem" }}>
+                <p className="font-[var(--font-display)] font-bold text-[0.9375rem] text-[var(--text-primary)] mb-0.5">
                   {video.author.name}
                 </p>
-                <p style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                <p className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--text-muted)]">
                   <Users size={12} />
                   {video.author._count.subscribers} subscribers · {video.author._count.videos} videos
                 </p>
@@ -347,7 +301,7 @@ export default async function WatchPage({
               session?.user ? (
                 <SubscribeButton creatorId={video.author.id} initialFollowing={isFollowing} />
               ) : (
-                <Link href="/auth/signin" className="btn-primary" style={{ textDecoration: "none", padding: "0.5rem 1.25rem", fontSize: "0.875rem" }}>
+                <Link href="/auth/signin" className="btn-primary no-underline py-2 px-5 text-sm">
                   Sign in to subscribe
                 </Link>
               )
@@ -356,13 +310,8 @@ export default async function WatchPage({
 
           {/* Description */}
           {video.description && (
-            <div style={{
-              marginTop: "1.25rem",
-              background: "var(--bg-elevated)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: 10, padding: "1rem 1.25rem",
-            }}>
-              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+            <div className="mt-5 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[10px] py-4 px-5">
+              <p className="text-[0.9rem] text-[var(--text-secondary)] leading-[1.65] whitespace-pre-wrap">
                 {video.description}
               </p>
             </div>
@@ -379,16 +328,12 @@ export default async function WatchPage({
       </div>
 
       {/* ── RIGHT: suggested ── */}
-      <aside style={{ position: "sticky", top: "calc(64px + 1.5rem)" }}>
-        <p style={{
-          fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8125rem",
-          color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase",
-          marginBottom: "0.875rem",
-        }}>
+      <aside className="sticky top-[calc(64px+1.5rem)]">
+        <p className="font-[var(--font-display)] font-bold text-[0.8125rem] text-[var(--text-muted)] tracking-[0.06em] uppercase mb-3.5">
           Up Next
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div className="flex flex-col gap-3">
           {suggested.map((v, i) => {
             const [sbg, sacc] = THUMB_COLORS[i % THUMB_COLORS.length];
             const sLocked = v.isPremium && !session;
@@ -396,67 +341,41 @@ export default async function WatchPage({
               <Link
                 key={v.id}
                 href={`/watch/${v.id}`}
-                className="suggested-link"
-                style={{
-                  display: "flex", gap: "0.75rem", textDecoration: "none",
-                  borderRadius: 10, padding: "0.5rem",
-                  border: "1px solid transparent",
-                  transition: "background 0.15s, border-color 0.15s",
-                }}
+                className="suggested-link flex gap-3 no-underline rounded-[10px] p-2 border border-transparent transition-[background,border-color] duration-150"
               >
                 {/* Thumbnail */}
-                <div style={{
-                  width: 120, height: 68, borderRadius: 7, flexShrink: 0,
-                  background: `linear-gradient(135deg, ${sbg} 0%, ${sacc}33 100%)`,
-                  position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
-                  overflow: "hidden",
-                }}>
+                <div
+                  style={{ background: `linear-gradient(135deg, ${sbg} 0%, ${sacc}33 100%)` }}
+                  className="w-[120px] h-[68px] rounded-[7px] shrink-0 relative flex items-center justify-center overflow-hidden"
+                >
                   {sLocked ? (
                     <Lock size={16} color={sacc} />
                   ) : (
-                    <div style={{
-                      width: 28, height: 28, borderRadius: "50%",
-                      background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <Play size={11} color="white" fill="white" style={{ marginLeft: 1 }} />
+                    <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-[4px] flex items-center justify-center">
+                      <Play size={11} color="white" fill="white" className="ml-px" />
                     </div>
                   )}
                   {v.duration && (
-                    <span style={{
-                      position: "absolute", bottom: 4, right: 4,
-                      background: "rgba(0,0,0,0.72)", borderRadius: 3,
-                      padding: "0.0625rem 0.3rem", fontSize: "0.625rem", color: "#ddd",
-                    }}>
+                    <span className="absolute bottom-1 right-1 bg-black/[0.72] rounded-[3px] py-[0.0625rem] px-1.5 text-[0.625rem] text-[#ddd]">
                       {formatDuration(v.duration)}
                     </span>
                   )}
                   {v.isPremium && (
-                    <span style={{
-                      position: "absolute", top: 4, left: 4,
-                      background: "linear-gradient(90deg,#f97316,#fbbf24)",
-                      borderRadius: 3, padding: "0.0625rem 0.3rem",
-                      fontSize: "0.5625rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)",
-                    }}>
+                    <span className="absolute top-1 left-1 bg-[linear-gradient(90deg,#f97316,#fbbf24)] rounded-[3px] py-[0.0625rem] px-1.5 text-[0.5625rem] font-bold text-white font-[var(--font-display)]">
                       PRO
                     </span>
                   )}
                 </div>
 
                 {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.8125rem",
-                    color: "var(--text-primary)", lineHeight: 1.35,
-                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-                    marginBottom: "0.3rem",
-                  }}>
+                <div className="flex-1 min-w-0">
+                  <p className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-tight line-clamp-2 mb-1">
                     {v.title}
                   </p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  <p className="text-[0.75rem] text-[var(--text-muted)]">
                     {v.author?.name}
                   </p>
-                  <p style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                  <p className="flex items-center gap-1 text-[0.6875rem] text-[var(--text-muted)] mt-0.5">
                     <Eye size={10} /> {formatViews(v.views ?? 0)}
                   </p>
                 </div>

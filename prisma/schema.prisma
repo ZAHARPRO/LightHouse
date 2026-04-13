@@ -39,6 +39,8 @@ model User {
   commentLikes  CommentLike[]
   supportConversations SupportConversation[]
   supportMessagesSent  SupportMessage[] @relation("SupportSender")
+  adminAwards          Reward[]         @relation("AdminAwards")
+  customBadgesCreated  CustomBadge[]    @relation("BadgeCreator")
 }
 
 model Account {
@@ -195,8 +197,32 @@ model Reward {
   description String
   earnedAt    DateTime   @default(now())
 
+  isManual    Boolean @default(false)
+  adminNote   String?
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  awardedById String?
+  awardedBy   User?   @relation("AdminAwards", fields: [awardedById], references: [id])
+
+  customBadgeId String?
+  customBadge   CustomBadge? @relation(fields: [customBadgeId], references: [id])
+}
+
+model CustomBadge {
+  id          String   @id @default(cuid())
+  icon        String
+  label       String
+  color       String   @default("#6366f1")
+  points      Int      @default(10)
+  description String
+  createdAt   DateTime @default(now())
+
+  creatorId String
+  creator   User   @relation("BadgeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  rewards Reward[]
 }
 
 model ContactMessage {
@@ -234,6 +260,7 @@ enum RewardType {
   SUPER_FAN
   EARLY_ADOPTER
   PREMIUM_MEMBER
+  CUSTOM
 }
 
 enum ContactStatus {

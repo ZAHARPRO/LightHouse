@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, FileText, Award, Plus, Upload, Zap } from "lucide-react";
+import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck } from "lucide-react";
 import VideoManager from "./VideoManager";
 import PostManager from "./PostManager";
 
@@ -13,7 +13,16 @@ type Video = {
   _count: { likes: number };
 };
 type Post = { id: string; title: string; content: string; isPremium: boolean; createdAt: Date };
-type Reward = { id: string; type: string; pointsValue: number; description: string; earnedAt: Date };
+type Reward = {
+  id: string;
+  type: string;
+  pointsValue: number;
+  description: string;
+  earnedAt: Date;
+  isManual: boolean;
+  adminNote: string | null;
+  customBadge: { icon: string; label: string; color: string } | null;
+};
 
 const REWARD_META: Record<string, { icon: string; color: string; label: string }> = {
   WATCH_STREAK:   { icon: "🔥", color: "#f97316", label: "Watch Streak" },
@@ -118,19 +127,34 @@ export default function ProfileTabs({
           ) : (
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
               {rewards.map((r) => {
-                const meta = REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
+                const customMeta = r.customBadge
+                  ? { icon: r.customBadge.icon, color: r.customBadge.color, label: r.customBadge.label }
+                  : null;
+                const meta = customMeta ?? REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
                 return (
                   <div
                     key={r.id}
-                    className="card flex items-center gap-[0.875rem] px-6 py-5"
+                    className="card flex flex-col gap-2 px-5 py-4"
                     style={{ borderColor: `${meta.color}30` }}
                   >
-                    <div className="text-[1.75rem] shrink-0">{meta.icon}</div>
-                    <div>
-                      <p className="font-display font-bold text-[0.9rem] mb-0.5">{meta.label}</p>
-                      <p className="text-[var(--text-secondary)] text-[0.8125rem] mb-1">{r.description}</p>
-                      <span className="text-xs font-bold" style={{ color: meta.color }}>+{r.pointsValue} pts</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-[1.75rem] shrink-0">{meta.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display font-bold text-[0.9rem] mb-0.5">{meta.label}</p>
+                        <p className="text-[var(--text-secondary)] text-[0.8125rem]">{r.description}</p>
+                      </div>
+                      <span className="text-xs font-bold shrink-0" style={{ color: meta.color }}>+{r.pointsValue} pts</span>
                     </div>
+                    {r.isManual && (
+                      <div
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[0.7rem] font-display font-bold"
+                        style={{ background: "rgba(99,102,241,0.08)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.2)" }}
+                      >
+                        <ShieldCheck size={11} />
+                        Awarded by Admin
+                        {r.adminNote && <span className="font-normal opacity-80 truncate ml-0.5">— {r.adminNote}</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

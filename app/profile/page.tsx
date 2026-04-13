@@ -15,7 +15,10 @@ export default async function ProfilePage() {
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     include: {
-      rewards: { orderBy: { earnedAt: "desc" } },
+      rewards: {
+        orderBy: { earnedAt: "desc" },
+        include: { customBadge: { select: { icon: true, label: true, color: true } } },
+      },
       videos: {
         orderBy: { createdAt: "desc" },
         include: { _count: { select: { likes: true } } },

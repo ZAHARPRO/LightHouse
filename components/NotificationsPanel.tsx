@@ -130,13 +130,14 @@ interface Props {
   onClose: () => void;
   isClosing: boolean;
   onCommitsLoaded: (latestSha: string | null) => void;
+  onAllSeen: () => void;
   storageKey: string;
 }
 
 /* ─── Main panel ─── */
 
 const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function NotificationsPanel(
-  { anchorRight, onClose, isClosing, onCommitsLoaded, storageKey }, ref
+  { anchorRight, onClose, isClosing, onCommitsLoaded, onAllSeen, storageKey }, ref
 ) {
   const [commits, setCommits]         = useState<Commit[]>([]);
   const [commitsLoading, setCommitsLoading] = useState(true);
@@ -169,6 +170,20 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
     setter(now);
     localStorage.setItem(key, String(now));
   }
+
+  // Call onAllSeen when every section's unread count drops to zero
+  useEffect(() => {
+    if (commitsLoading || postsLoading || videosLoading) return;
+
+    const unread =
+      SITE_NEWS.filter(n => new Date(n.date).getTime() > siteNewsSeenAt).length +
+      commits.filter(c => new Date(c.date).getTime() > devNewsSeenAt).length +
+      posts.filter(p => new Date(p.createdAt).getTime() > postsSeenAt).length +
+      videos.filter(v => new Date(v.createdAt).getTime() > videosSeenAt).length;
+
+    if (unread === 0) onAllSeen();
+  }, [siteNewsSeenAt, devNewsSeenAt, postsSeenAt, videosSeenAt,
+      commits, posts, videos, commitsLoading, postsLoading, videosLoading]);
 
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

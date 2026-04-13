@@ -97,7 +97,7 @@ export default function Navbar() {
     if (seen !== latestSha) setHasNew(true);
   }
 
-  function openNotif()  { if (!notifClosing) { setNotifOpen(true); setHasNew(false); } }
+  function openNotif()  { if (!notifClosing) setNotifOpen(true); }
   function closeNotif() {
     if (!notifOpen) return;
     setNotifClosing(true);
@@ -320,6 +320,7 @@ export default function Navbar() {
           onClose={closeNotif}
           isClosing={notifClosing}
           onCommitsLoaded={handleCommitsLoaded}
+          onAllSeen={() => setHasNew(false)}
           storageKey={storageKey}
         />
       )}

@@ -80,7 +80,8 @@ export default function AdminBadgesPage() {
     setCreating(true);
     const res = await createCustomBadge({ icon, label, color, points, description: desc });
     if ("badge" in res) {
-      setBadges((p) => [res.badge as CustomBadge, ...p]);
+      const b = res.badge as { id: string; icon: string; label: string; color: string; points: number; description: string; createdAt: Date; creatorId: string };
+      setBadges((p) => [{ ...b, creator: { name: null }, _count: { rewards: 0 } }, ...p]);
       setLabel(""); setDesc(""); setIcon("🎖️"); setPoints(25); setColor("#6366f1");
     }
     setCreating(false);

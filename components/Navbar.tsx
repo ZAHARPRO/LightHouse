@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox,
+  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
@@ -202,6 +202,17 @@ export default function Navbar() {
                 </Link>
               ))}
             </div>
+
+            {/* Admin panel link */}
+            {session?.user?.role === "ADMIN" && (
+              <Link
+                href="/admin"
+                title="Admin Panel"
+                className={iconBtn(false)}
+              >
+                <LayoutDashboard size={16} />
+              </Link>
+            )}
 
             {/* Staff: Support Inbox button */}
             {isStaff && (

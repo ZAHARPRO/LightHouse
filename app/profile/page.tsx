@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TrendingUp, Star, Award, Crown } from "lucide-react";
+import { TrendingUp, Star, Award, Crown, Eye, ThumbsUp, MessageSquare, Users, Video, FileText, Flame, BarChart2 } from "lucide-react";
 import ProfileTabs from "@/components/ProfileTabs";
 
 const TIER_COLORS: Record<string, string> = {
@@ -26,9 +26,26 @@ export default async function ProfilePage() {
 
   if (!user) redirect("/auth/signin");
 
+  const uid = session.user.id;
+
+  const [totalLikes, totalComments, totalSubscribers] = await Promise.all([
+    prisma.like.count({ where: { video: { authorId: uid }, type: "LIKE" } }),
+    prisma.comment.count({ where: { OR: [{ video: { authorId: uid } }, { post: { authorId: uid } }] } }),
+    prisma.subscription.count({ where: { creatorId: uid } }),
+  ]);
+
+  const totalViews   = user.videos.reduce((s, v) => s + (v.views ?? 0), 0);
+  const avgViews     = user.videos.length > 0 ? Math.round(totalViews / user.videos.length) : 0;
+
   const tierColor = TIER_COLORS[user.tier] ?? "#888";
   const level     = Math.floor((user.points ?? 0) / 100) + 1;
   const pctToNext = (((user.points ?? 0) % 100) / 100) * 100;
+
+  function fmt(n: number) {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
+    return String(n);
+  }
 
   return (
     <div className="max-w-[900px] mx-auto px-6 py-12">
@@ -92,6 +109,43 @@ export default async function ProfilePage() {
                 <span className="font-display font-extrabold text-2xl text-[var(--text-primary)]">{value}</span>
               </div>
               <span className="text-[var(--text-muted)] text-[0.8rem]">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Channel Stats */}
+      <div className="card mb-8 p-7">
+        <div className="flex items-center gap-2 mb-5">
+          <BarChart2 size={15} className="text-[var(--accent-orange)]" />
+          <h2 className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)]">Channel Stats</h2>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { icon: Eye,          value: fmt(totalViews),    label: "Total Views",      sub: user.videos.length > 0 ? `~${fmt(avgViews)} avg/video` : null },
+            { icon: ThumbsUp,     value: fmt(totalLikes),    label: "Likes Received",   sub: null },
+            { icon: MessageSquare,value: fmt(totalComments), label: "Comments",          sub: null },
+            { icon: Users,        value: fmt(totalSubscribers), label: "Subscribers",   sub: null },
+            { icon: Video,        value: user.videos.length, label: "Videos",           sub: null },
+            { icon: FileText,     value: user.posts.length,  label: "Posts",            sub: null },
+            { icon: Flame,        value: user.watchStreak,   label: "Watch Streak",     sub: user.watchStreak > 0 ? "days in a row" : "Start watching!" },
+            { icon: Star,         value: user.points,        label: "Points",           sub: `Level ${level}` },
+          ].map(({ icon: Icon, value, label, sub }) => (
+            <div
+              key={label}
+              className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-4 flex flex-col gap-1"
+            >
+              <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[0.75rem] mb-1">
+                <Icon size={12} className="text-[var(--accent-orange)] shrink-0" />
+                {label}
+              </div>
+              <span className="font-display font-extrabold text-[1.5rem] text-[var(--text-primary)] leading-none">
+                {value}
+              </span>
+              {sub && (
+                <span className="text-[0.7rem] text-[var(--text-muted)]">{sub}</span>
+              )}
             </div>
           ))}
         </div>

@@ -23,6 +23,7 @@ model User {
   watchStreak     Int       @default(0)
   lastWatchedDate DateTime?
   lastActiveAt    DateTime?
+  activity        String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

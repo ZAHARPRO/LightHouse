@@ -114,13 +114,16 @@ export async function staffReply(convId: string, content: string) {
 }
 
 /* ── Staff: update their own lastActiveAt (presence ping) ── */
-export async function pingStaffPresence() {
+export async function pingStaffPresence(activity?: string) {
   const session = await auth();
   if (!session?.user?.id) return;
   if (!STAFF_ROLES.includes(session.user.role)) return;
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { lastActiveAt: new Date() },
+    data: {
+      lastActiveAt: new Date(),
+      ...(activity !== undefined && { activity }),
+    },
   });
 }
 

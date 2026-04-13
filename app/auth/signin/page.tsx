@@ -1,18 +1,26 @@
 "use client";
 
-import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Github, Chrome, Zap, Eye, EyeOff } from "lucide-react";
 
 export default function SignInPage() {
+  const { status } = useSession();
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/feed");
+  }, [status, router]);
+
+  if (status === "authenticated") return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,8 +37,7 @@ export default function SignInPage() {
       setError("Invalid email or password.");
       setLoading(false);
     } else {
-      router.refresh();
-      router.push("/feed");
+      window.location.href = "/feed";
     }
   }
 

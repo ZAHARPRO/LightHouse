@@ -1,17 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { registerUser } from "@/actions/auth";
 import { Zap, Eye, EyeOff, Github, Chrome } from "lucide-react";
 
 export default function RegisterPage() {
+  const { status } = useSession();
+  const router = useRouter();
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/feed");
+  }, [status, router]);
+
+  if (status === "authenticated") return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -26,8 +34,7 @@ export default function RegisterPage() {
       const email = formData.get("email") as string;
       const password = formData.get("password") as string;
       await signIn("credentials", { email, password, redirect: false });
-      router.refresh();
-      router.push("/feed");
+      window.location.href = "/feed";
     }
   }
 

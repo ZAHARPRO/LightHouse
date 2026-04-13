@@ -57,8 +57,8 @@ export default function SupportInbox({ onClose, isClosing, anchorRight }: Props)
   useEffect(() => {
     getOperatorInbox().then((data) => setConvs(data as ConvSummary[]));
     // Mark staff as online immediately and keep pinging every 2 min
-    pingStaffPresence();
-    const timer = setInterval(() => pingStaffPresence(), 2 * 60 * 1000);
+    pingStaffPresence("Support Inbox");
+    const timer = setInterval(() => pingStaffPresence("Support Inbox"), 2 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
 

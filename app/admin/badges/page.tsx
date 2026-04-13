@@ -9,6 +9,7 @@ import {
   awardBadgeToUser,
   searchUsers,
 } from "@/actions/admin";
+import ActivityPing from "@/components/ActivityPing";
 
 type CustomBadge = {
   id: string;
@@ -118,6 +119,7 @@ export default function AdminBadgesPage() {
 
   return (
     <div className="space-y-8">
+      <ActivityPing activity="Admin — Badge Creator" />
       <div>
         <h1 className="font-display font-extrabold text-2xl tracking-tight text-[var(--text-primary)] mb-1">Badge Creator</h1>
         <p className="text-[var(--text-muted)] text-sm">{badges.length} custom badge{badges.length !== 1 ? "s" : ""} created</p>

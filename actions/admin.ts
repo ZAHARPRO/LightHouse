@@ -162,6 +162,21 @@ export async function awardBadgeToUser(data: {
   return { ok: true };
 }
 
+/* ── Staff members list ── */
+export async function getStaffMembers() {
+  await requireAdmin();
+  return prisma.user.findMany({
+    where: { role: { not: "USER" } },
+    select: {
+      id: true, name: true, email: true, role: true,
+      lastActiveAt: true, activity: true,
+    },
+    orderBy: [
+      { lastActiveAt: { sort: "desc", nulls: "last" } },
+    ],
+  });
+}
+
 /* ── Search users (for award picker) ── */
 export async function searchUsers(query: string) {
   await requireAdmin();

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Search, Shield, Trash2, ChevronDown } from "lucide-react";
 import { getAdminUsers, changeUserRole, changeUserTier, deleteUser } from "@/actions/admin";
-import { useEffect } from "react";
+import ActivityPing from "@/components/ActivityPing";
 
 type User = {
   id: string; name: string | null; email: string | null;
@@ -79,6 +79,7 @@ export default function AdminUsersPage() {
 
   return (
     <div>
+      <ActivityPing activity="Admin — User Management" />
       <h1 className="font-display font-extrabold text-2xl tracking-tight text-[var(--text-primary)] mb-1">Users</h1>
       <p className="text-[var(--text-muted)] text-sm mb-6">{users.length} users total</p>
 

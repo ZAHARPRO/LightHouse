@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { ThumbsUp, Pin, PinOff, Reply, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { addComment, toggleCommentLike, togglePinComment } from "@/actions/comments";
 
@@ -230,17 +231,17 @@ function CommentItem({
 
         {/* Author row */}
         <div className="flex items-center gap-[0.625rem] mb-2">
-          <div className={[
+          <Link href={`/profile/${comment.author.id}`} className={[
             "w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center font-display font-extrabold text-[0.6875rem]",
             isAuthorComment
               ? "bg-orange-500/15 border-[1.5px] border-orange-500/40 text-[var(--accent-orange)]"
               : "bg-[var(--bg-elevated)] border-[1.5px] border-[var(--border-default)] text-[var(--text-secondary)]",
           ].join(" ")}>
             {(comment.author.name ?? "?")[0].toUpperCase()}
-          </div>
-          <span className="font-display font-bold text-sm text-[var(--text-primary)]">
+          </Link>
+          <Link href={`/profile/${comment.author.id}`} className="font-display font-bold text-sm text-[var(--text-primary)]">
             {comment.author.name}
-          </span>
+          </Link>
           {isAuthorComment && (
             <span className="text-[0.6875rem] font-bold px-2 py-[0.1rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/25 font-display">
               Creator
@@ -358,17 +359,17 @@ function CommentItem({
                     <div key={reply.id} className="py-3 px-[0.875rem] border-b border-[var(--border-subtle)]">
                       {/* Author */}
                       <div className="flex items-center gap-2 mb-[0.375rem]">
-                        <div className={[
+                        <Link href={`/profile/${reply.author.id}`} className={[
                           "w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-display font-extrabold text-[0.5625rem]",
                           isReplyAuthor
                             ? "bg-orange-500/15 border-[1.5px] border-orange-500/40 text-[var(--accent-orange)]"
                             : "bg-[var(--bg-elevated)] border-[1.5px] border-[var(--border-subtle)] text-[var(--text-secondary)]",
                         ].join(" ")}>
                           {(reply.author.name ?? "?")[0].toUpperCase()}
-                        </div>
-                        <span className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)]">
+                        </Link>
+                        <Link href={`/profile/${reply.author.id}`} className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)]">
                           {reply.author.name}
-                        </span>
+                        </Link>
                         {isReplyAuthor && (
                           <span className="text-[0.625rem] font-bold px-[0.4rem] py-[0.1rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/25 font-display">
                             Creator

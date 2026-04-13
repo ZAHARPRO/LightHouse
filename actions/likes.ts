@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { awardBadge } from "@/lib/badges";
 
 export async function toggleLike(videoId: string, type: "LIKE" | "DISLIKE") {
   const session = await auth();
@@ -31,5 +32,16 @@ export async function toggleLike(videoId: string, type: "LIKE" | "DISLIKE") {
   }
 
   await prisma.like.create({ data: { userId: session.user.id, videoId, type } });
+
+  // Award SUPER_FAN badge when user reaches 50 likes given
+  if (type === "LIKE") {
+    const likeCount = await prisma.like.count({
+      where: { userId: session.user.id, type: "LIKE" },
+    });
+    if (likeCount >= 50) {
+      await awardBadge(session.user.id, "SUPER_FAN");
+    }
+  }
+
   return { action: "added", type };
 }

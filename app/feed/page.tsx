@@ -15,11 +15,11 @@ const MOCK_VIDEOS = [
 
 const SUB_COLORS = ["#f97316", "#6366f1", "#10b981", "#fbbf24", "#ef4444", "#818cf8", "#ec4899", "#14b8a6"];
 
-const MOCK_POST = {
-  user: { name: "Shovel Knight", initials: "SK", color: "#fbbf24" },
-  text: "New level dropping next week — get ready for the toughest boss yet 🗡️",
-  likes: 41, comments: 2, views: 89, reach: 201,
-};
+const MOCK_COMMUNITY_POSTS = [
+  { id: "mp1", title: "New level dropping next week!", content: "Get ready for the toughest boss yet — we've been cooking this one for months.", isPremium: false, createdAt: new Date(Date.now() - 3600_000), author: { id: "a1", name: "Shovel Knight", tier: "ELITE" } },
+  { id: "mp2", title: "Behind the scenes of Tokyo Night Walk", content: "Shot entirely on a single mirrorless camera at 4AM. Here's what went wrong and what saved the footage.", isPremium: true, createdAt: new Date(Date.now() - 86400_000), author: { id: "a2", name: "Marco Visuals", tier: "PRO" } },
+  { id: "mp3", title: "Prisma ORM tips I wish I knew earlier", content: "After two years of production usage, here are the patterns that actually matter.", isPremium: false, createdAt: new Date(Date.now() - 172800_000), author: { id: "a3", name: "DB Wizard", tier: "BASIC" } },
+];
 
 export default async function FeedPage() {
   const session = await auth();
@@ -50,7 +50,6 @@ export default async function FeedPage() {
         where: {
           subscriberId: session.user.id,
           status: "ACTIVE",
-          // exclude self-subscriptions (platform plan)
           NOT: { creatorId: session.user.id },
         },
         orderBy: { startedAt: "desc" },
@@ -59,31 +58,41 @@ export default async function FeedPage() {
       });
       subs = rows.map((row: { creator: { id: string; name: string | null } }, i: number) => {
         const name = row.creator.name ?? "Unknown";
-        const initials = name
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase();
-        return {
-          id: row.creator.id,
-          name,
-          initials,
-          color: SUB_COLORS[i % SUB_COLORS.length],
-        };
+        const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+        return { id: row.creator.id, name, initials, color: SUB_COLORS[i % SUB_COLORS.length] };
       });
-    } catch {
-      // DB unavailable — show empty
-    }
+    } catch { /* DB unavailable */ }
+  }
+
+  // Community posts — posts from subscribed creators
+  type CommunityPost = { id: string; title: string; content: string; isPremium: boolean; createdAt: Date; author: { id: string; name: string | null; tier: string } };
+  let communityPosts: CommunityPost[] = [];
+  if (session?.user?.id) {
+    try {
+      const subCreatorIds = subs.map((s) => s.id);
+      if (subCreatorIds.length > 0) {
+        communityPosts = await prisma.post.findMany({
+          where: { authorId: { in: subCreatorIds } },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: {
+            id: true, title: true, content: true, isPremium: true, createdAt: true,
+            author: { select: { id: true, name: true, tier: true } },
+          },
+        }) as CommunityPost[];
+      }
+    } catch { /* DB unavailable */ }
+  }
+  if (communityPosts.length === 0 && !session) {
+    communityPosts = MOCK_COMMUNITY_POSTS;
   }
 
   return (
     <FeedLayout
       videos={videos}
       userTier={session ? "FREE" : null}
-      featuredVideo={videos[3] ?? MOCK_VIDEOS[3]}
       subs={subs}
-      post={MOCK_POST}
+      communityPosts={communityPosts}
       isLoggedIn={!!session}
     />
   );

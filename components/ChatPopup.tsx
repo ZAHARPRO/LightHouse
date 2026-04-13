@@ -116,6 +116,7 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
           <Link
             href="/chat"
             title="Open full chat"
+            onClick={onClose}
             className="w-7 h-7 rounded-md flex items-center justify-center no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150"
           >
             <Maximize2 size={13} />

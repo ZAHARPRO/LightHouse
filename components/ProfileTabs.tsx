@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Play, FileText, Award, Plus, Upload, Zap } from "lucide-react";
 import VideoManager from "./VideoManager";
@@ -38,7 +38,16 @@ export default function ProfileTabs({
   posts: Post[];
   rewards: Reward[];
 }) {
-  const [tab, setTab] = useState<TabId>("videos");
+  const [tab, setTab] = useState<TabId>(() => {
+    if (typeof window === "undefined") return "videos";
+    const p = new URLSearchParams(window.location.search).get("tab");
+    return (TABS.some(t => t.id === p) ? p : "videos") as TabId;
+  });
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("tab");
+    if (p && TABS.some(t => t.id === p)) setTab(p as TabId);
+  }, []);
 
   return (
     <div>
@@ -84,32 +93,50 @@ export default function ProfileTabs({
 
       {/* Badges tab */}
       {tab === "badges" && (
-        rewards.length === 0 ? (
-          <div className="card p-12 text-center">
-            <Zap size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
-            <p className="text-[var(--text-secondary)]">No badges yet — watch videos, comment, and engage to earn rewards!</p>
+        <div>
+          {/* Header row with catalog link */}
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[var(--text-muted)] text-sm">
+              {rewards.length === 0 ? "Watch videos, comment, and engage to earn badges." : `${rewards.length} badge${rewards.length === 1 ? "" : "s"} earned`}
+            </p>
+            <Link
+              href="/badges"
+              className="flex items-center gap-1 no-underline text-[0.8rem] font-display font-semibold text-[var(--accent-orange)] hover:underline"
+            >
+              <Award size={13} /> Browse all badges
+            </Link>
           </div>
-        ) : (
-          <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-            {rewards.map((r) => {
-              const meta = REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
-              return (
-                <div
-                  key={r.id}
-                  className="card flex items-center gap-[0.875rem] px-6 py-5"
-                  style={{ borderColor: `${meta.color}30` }}
-                >
-                  <div className="text-[1.75rem] shrink-0">{meta.icon}</div>
-                  <div>
-                    <p className="font-display font-bold text-[0.9rem] mb-0.5">{meta.label}</p>
-                    <p className="text-[var(--text-secondary)] text-[0.8125rem] mb-1">{r.description}</p>
-                    <span className="text-xs font-bold" style={{ color: meta.color }}>+{r.pointsValue} pts</span>
+
+          {rewards.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Zap size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
+              <p className="text-[var(--text-secondary)]">No badges yet.</p>
+              <Link href="/badges" className="mt-3 inline-block no-underline text-sm font-display font-semibold text-[var(--accent-orange)] hover:underline">
+                See what you can earn →
+              </Link>
+            </div>
+          ) : (
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+              {rewards.map((r) => {
+                const meta = REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
+                return (
+                  <div
+                    key={r.id}
+                    className="card flex items-center gap-[0.875rem] px-6 py-5"
+                    style={{ borderColor: `${meta.color}30` }}
+                  >
+                    <div className="text-[1.75rem] shrink-0">{meta.icon}</div>
+                    <div>
+                      <p className="font-display font-bold text-[0.9rem] mb-0.5">{meta.label}</p>
+                      <p className="text-[var(--text-secondary)] text-[0.8125rem] mb-1">{r.description}</p>
+                      <span className="text-xs font-bold" style={{ color: meta.color }}>+{r.pointsValue} pts</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Play, Heart, MessageCircle, Eye, Lock, Clock,
-  MessageSquare, ChevronRight, ChevronLeft, BarChart2,
+  Play, Eye, Lock, Clock,
+  MessageSquare, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import ChatPopup from "./ChatPopup";
 
@@ -40,19 +40,22 @@ type Video = {
   _count: { likes: number; comments: number };
 };
 
-type Sub  = { id: string; name: string; initials: string; color: string };
-type Post = {
-  user: { name: string; initials: string; color: string };
-  text: string;
-  likes: number; comments: number; views: number; reach: number;
+type Sub = { id: string; name: string; initials: string; color: string };
+
+type CommunityPost = {
+  id: string;
+  title: string;
+  content: string;
+  isPremium: boolean;
+  createdAt: Date;
+  author: { id: string; name: string | null; tier: string };
 };
 
 interface Props {
   videos: Video[];
   userTier: string | null;
-  featuredVideo: Video;
   subs: Sub[];
-  post: Post;
+  communityPosts: CommunityPost[];
   isLoggedIn: boolean;
 }
 
@@ -151,7 +154,22 @@ function VideoCard({ video, index, userTier, featured = false }: {
 }
 
 /* ── Main layout ── */
-export default function FeedLayout({ videos, userTier, featuredVideo, subs, post, isLoggedIn }: Props) {
+const TIER_COLORS: Record<string, string> = {
+  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
+};
+
+function timeAgo(date: Date): string {
+  const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+export default function FeedLayout({ videos, userTier, subs, communityPosts, isLoggedIn }: Props) {
   const [showRight, setShowRight]       = useState(true);
   const [leftExpanded, setLeftExpanded] = useState(false);
   const [chatOpen, setChatOpen]         = useState(false);
@@ -331,62 +349,83 @@ export default function FeedLayout({ videos, userTier, featuredVideo, subs, post
 
           {showRight && (
             <>
-              {/* Featured video card */}
-              <div className="rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-card)]">
-                <div
-                  className="flex items-center justify-center"
-                  style={{ aspectRatio: "16/9", background: "linear-gradient(135deg, #0a0a1a 0%, #1a1040 100%)" }}
+              {/* Community header */}
+              <div className="flex items-center justify-between">
+                <span className="font-display font-extrabold text-sm text-[var(--text-primary)]">Community</span>
+                <Link
+                  href="/community"
+                  className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline"
                 >
-                  <div
-                    className="font-display font-extrabold text-lg text-center px-4"
-                    style={{ color: "#fbbf24", letterSpacing: "0.04em", textShadow: "0 0 20px rgba(251,191,36,0.4)" }}
-                  >
-                    {featuredVideo.title.split(" ").slice(0, 2).join(" ")}
-                  </div>
-                </div>
-                <div className="px-[0.875rem] py-[0.625rem]">
-                  <p className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)]">
-                    {featuredVideo.title}
-                  </p>
-                </div>
+                  See all
+                </Link>
               </div>
 
-              {/* Post card */}
-              <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4">
-                <div className="flex items-center gap-[0.625rem] mb-3">
-                  <div
-                    className="w-[34px] h-[34px] rounded-full flex items-center justify-center font-display font-bold text-[0.6875rem] shrink-0"
-                    style={{ background: `${post.user.color}22`, border: `1.5px solid ${post.user.color}50`, color: post.user.color }}
-                  >
-                    {post.user.initials}
-                  </div>
-                  <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)]">
-                    {post.user.name}
-                  </span>
+              {/* Mini post feed */}
+              {communityPosts.length === 0 ? (
+                <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-4 py-6 text-center">
+                  <p className="text-[0.8125rem] text-[var(--text-muted)] font-display">
+                    {isLoggedIn ? "No posts from your subscriptions yet." : "Sign in to see posts from creators you follow."}
+                  </p>
+                  {!isLoggedIn && (
+                    <Link href="/auth/signin" className="btn-primary no-underline text-xs py-[0.3rem] px-4 mt-3 inline-block">
+                      Sign In
+                    </Link>
+                  )}
                 </div>
-                <p className="text-[0.8125rem] text-[var(--text-secondary)] leading-snug mb-[0.875rem]">
-                  {post.text}
-                </p>
-                <div className="flex items-center gap-[0.875rem]">
-                  {[
-                    { icon: <Heart size={13} className="text-red-500 fill-red-500" />, val: post.likes },
-                    { icon: <MessageCircle size={13} />, val: post.comments },
-                    { icon: <Eye size={13} />, val: post.views },
-                    { icon: <BarChart2 size={13} />, val: post.reach },
-                  ].map(({ icon, val }, idx) => (
-                    <span key={idx} className="flex items-center gap-[0.3rem] text-xs text-[var(--text-muted)]">
-                      {icon} {val}
-                    </span>
-                  ))}
+              ) : (
+                <div className="flex flex-col gap-[0.625rem]">
+                  {communityPosts.map((p) => {
+                    const color = TIER_COLORS[p.author.tier] ?? "#666";
+                    return (
+                      <Link
+                        key={p.id}
+                        href={`/post/${p.id}`}
+                        className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-[0.875rem] py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                      >
+                        {/* Author row */}
+                        <div className="flex items-center gap-2 mb-[0.5rem]">
+                          <div
+                            className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem]"
+                            style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
+                          >
+                            {(p.author.name ?? "?")[0].toUpperCase()}
+                          </div>
+                          <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
+                            {p.author.name}
+                          </span>
+                          <span className="ml-auto text-[0.6875rem] text-[var(--text-muted)] shrink-0">
+                            {timeAgo(p.createdAt)}
+                          </span>
+                        </div>
+                        {/* Title */}
+                        <p
+                          className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] mb-1 overflow-hidden"
+                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                        >
+                          {p.isPremium && (
+                            <span className="text-[var(--accent-orange)] mr-1">★</span>
+                          )}
+                          {p.title}
+                        </p>
+                        {/* Preview */}
+                        <p
+                          className="text-[0.75rem] text-[var(--text-muted)] leading-snug overflow-hidden"
+                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                        >
+                          {p.content}
+                        </p>
+                      </Link>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
 
               {/* CTA */}
               <Link
-                href="/subscriptions"
-                className="sidebar-cta-link block text-center px-4 py-3 rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] leading-[1.4] transition-colors duration-200 hover:bg-orange-500/[0.12]"
+                href="/community"
+                className="block text-center px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] transition-colors duration-200 hover:bg-orange-500/[0.12]"
               >
-                watch more<br />pictures and posts
+                See more posts →
               </Link>
             </>
           )}

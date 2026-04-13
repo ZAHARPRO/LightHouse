@@ -27,10 +27,11 @@ export default function SignInPage() {
 
     if (res?.error) {
       setError("Invalid email or password.");
+      setLoading(false);
     } else {
+      router.refresh();
       router.push("/feed");
     }
-    setLoading(false);
   }
 
   return (

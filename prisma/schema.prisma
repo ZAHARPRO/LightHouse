@@ -19,8 +19,10 @@ model User {
   bio           String?
   points          Int       @default(0)
   tier            Tier      @default(FREE)
+  role            Role      @default(USER)
   watchStreak     Int       @default(0)
   lastWatchedDate DateTime?
+  lastActiveAt    DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -35,6 +37,8 @@ model User {
   likes         Like[]
   posts         Post[]
   commentLikes  CommentLike[]
+  supportConversations SupportConversation[]
+  supportMessagesSent  SupportMessage[] @relation("SupportSender")
 }
 
 model Account {
@@ -241,4 +245,39 @@ enum ContactStatus {
 enum LikeType {
   LIKE
   DISLIKE
+}
+
+enum Role {
+  USER
+  STAFF
+  OPERATOR
+  ADMIN
+}
+
+enum SupportStatus {
+  OPEN
+  CLOSED
+}
+
+model SupportConversation {
+  id        String        @id @default(cuid())
+  status    SupportStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+}
+
+model SupportMessage {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  isFromStaff Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  conversationId String
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User   @relation("SupportSender", fields: [senderId], references: [id], onDelete: Cascade)
 }

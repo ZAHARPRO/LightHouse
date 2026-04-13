@@ -26,6 +26,7 @@ export default function RegisterPage() {
       const email = formData.get("email") as string;
       const password = formData.get("password") as string;
       await signIn("credentials", { email, password, redirect: false });
+      router.refresh();
       router.push("/feed");
     }
   }

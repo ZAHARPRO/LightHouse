@@ -4,14 +4,19 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText,
+  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
 import ChatPopup from "./ChatPopup";
+import SupportInbox from "./SupportInbox";
+
+const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 
 export default function Navbar() {
   const { data: session } = useSession();
+  const isStaff = session?.user?.role && STAFF_ROLES.includes(session.user.role);
+
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Side drawer
@@ -31,10 +36,7 @@ export default function Navbar() {
   const [chatClosing, setChatClosing] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
-  function openChat() {
-    closeDrawer();
-    setChatOpen(true);
-  }
+  function openChat() { closeDrawer(); setChatOpen(true); }
   function closeChat() {
     if (!chatOpen) return;
     setChatClosing(true);
@@ -105,9 +107,36 @@ export default function Navbar() {
   }
   function toggleNotif() { notifOpen ? closeNotif() : openNotif(); }
 
-  function getAnchorRight() {
-    if (!bellRef.current) return 16;
-    const rect = bellRef.current.getBoundingClientRect();
+  // Support inbox (staff only)
+  const [inboxOpen, setInboxOpen]       = useState(false);
+  const [inboxClosing, setInboxClosing] = useState(false);
+  const inboxBtnRef = useRef<HTMLButtonElement>(null);
+  const inboxPanelRef = useRef<HTMLDivElement>(null);
+
+  function openInbox()  { if (!inboxClosing) setInboxOpen(true); }
+  function closeInbox() {
+    if (!inboxOpen) return;
+    setInboxClosing(true);
+    setTimeout(() => { setInboxOpen(false); setInboxClosing(false); }, 180);
+  }
+  function toggleInbox() { inboxOpen ? closeInbox() : openInbox(); }
+
+  useEffect(() => {
+    if (!inboxOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        inboxPanelRef.current?.contains(e.target as Node) ||
+        inboxBtnRef.current?.contains(e.target as Node)
+      ) return;
+      closeInbox();
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [inboxOpen]);
+
+  function getAnchorRight(ref: React.RefObject<HTMLButtonElement | null>) {
+    if (!ref.current) return 16;
+    const rect = ref.current.getBoundingClientRect();
     return window.innerWidth - rect.right;
   }
 
@@ -173,6 +202,18 @@ export default function Navbar() {
                 </Link>
               ))}
             </div>
+
+            {/* Staff: Support Inbox button */}
+            {isStaff && (
+              <button
+                ref={inboxBtnRef}
+                onClick={toggleInbox}
+                title="Support Inbox"
+                className={[iconBtn(inboxOpen), "relative"].join(" ")}
+              >
+                <Inbox size={16} />
+              </button>
+            )}
 
             {/* Create dropdown — logged-in only */}
             {session && (
@@ -316,13 +357,24 @@ export default function Navbar() {
       {notifOpen && (
         <NotificationsPanel
           ref={panelRef}
-          anchorRight={getAnchorRight()}
+          anchorRight={getAnchorRight(bellRef)}
           onClose={closeNotif}
           isClosing={notifClosing}
           onCommitsLoaded={handleCommitsLoaded}
           onAllSeen={() => setHasNew(false)}
           storageKey={storageKey}
         />
+      )}
+
+      {/* Support inbox (staff only) */}
+      {isStaff && (inboxOpen || inboxClosing) && (
+        <div ref={inboxPanelRef}>
+          <SupportInbox
+            onClose={closeInbox}
+            isClosing={inboxClosing}
+            anchorRight={getAnchorRight(inboxBtnRef)}
+          />
+        </div>
       )}
     </>
   );

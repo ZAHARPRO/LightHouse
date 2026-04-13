@@ -7,11 +7,11 @@ import Link from "next/link";
 import { ArrowLeft, Save, Crown } from "lucide-react";
 import { updatePost } from "@/actions/posts";
 
-export default function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
+export default function EditPostPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  const [id, setId]           = useState("");
   const [title, setTitle]     = useState("");
   const [content, setContent] = useState("");
   const [isPremium, setIsPremium] = useState(false);
@@ -20,20 +20,17 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
   const [pending, start]      = useTransition();
 
   useEffect(() => {
-    params.then(({ id: postId }) => {
-      setId(postId);
-      fetch(`/api/posts/${postId}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) { setError(data.error); setLoading(false); return; }
-          setTitle(data.title);
-          setContent(data.content);
-          setIsPremium(data.isPremium);
-          setLoading(false);
-        })
-        .catch(() => { setError("Failed to load post"); setLoading(false); });
-    });
-  }, [params]);
+    fetch(`/api/posts/${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) { setError(data.error); setLoading(false); return; }
+        setTitle(data.title);
+        setContent(data.content);
+        setIsPremium(data.isPremium);
+        setLoading(false);
+      })
+      .catch(() => { setError("Failed to load post"); setLoading(false); });
+  }, [id]);
 
   if (status === "loading" || loading) {
     return (
@@ -73,7 +70,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
       </Link>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-10 py-8">
-        <h1 className="font-[var(--font-display)] font-extrabold text-[1.5rem] tracking-[-0.02em] text-[var(--text-primary)] mb-6">
+        <h1 className="font-display font-extrabold text-[1.5rem] tracking-[-0.02em] text-[var(--text-primary)] mb-6">
           Edit post
         </h1>
 
@@ -86,7 +83,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           {/* Title */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-[var(--font-display)] font-semibold text-sm text-[var(--text-secondary)]">
+            <label className="font-display font-semibold text-sm text-[var(--text-secondary)]">
               Title
             </label>
             <input
@@ -100,7 +97,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
 
           {/* Content */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-[var(--font-display)] font-semibold text-sm text-[var(--text-secondary)]">
+            <label className="font-display font-semibold text-sm text-[var(--text-secondary)]">
               Content
             </label>
             <textarea
@@ -129,7 +126,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
                 ].join(" ")}
               />
             </div>
-            <span className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)] font-[var(--font-display)] font-semibold">
+            <span className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)] font-display font-semibold">
               <Crown size={13} className="text-[#fbbf24]" /> Premium post
             </span>
           </label>
@@ -140,7 +137,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
               type="submit"
               disabled={pending || !title.trim() || !content.trim()}
               className={[
-                "flex items-center gap-2 px-6 py-2.5 rounded-lg font-[var(--font-display)] font-semibold text-sm",
+                "flex items-center gap-2 px-6 py-2.5 rounded-lg font-display font-semibold text-sm",
                 "bg-[var(--accent-orange)] border-none text-white transition-opacity duration-150",
                 pending || !title.trim() || !content.trim() ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
               ].join(" ")}
@@ -150,7 +147,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
             </button>
             <Link
               href={`/post/${id}`}
-              className="px-5 py-2.5 rounded-lg font-[var(--font-display)] font-semibold text-sm no-underline bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-150"
+              className="px-5 py-2.5 rounded-lg font-display font-semibold text-sm no-underline bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-150"
             >
               Cancel
             </Link>

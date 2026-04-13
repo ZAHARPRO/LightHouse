@@ -44,7 +44,7 @@ export default function SignInPage() {
           <div className="w-[52px] h-[52px] bg-[var(--accent-orange)] rounded-xl flex items-center justify-center mx-auto mb-4">
             <Zap size={24} color="white" strokeWidth={2.5} />
           </div>
-          <h1 className="font-[var(--font-display)] font-extrabold text-[1.625rem] tracking-tight mb-1.5">
+          <h1 className="font-display font-extrabold text-[1.625rem] tracking-tight mb-1.5">
             Welcome back
           </h1>
           <p className="text-[var(--text-secondary)] text-[0.9rem]">

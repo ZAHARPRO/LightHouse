@@ -40,11 +40,11 @@ export default function SubscriptionsPage() {
       <div className="text-center mb-16">
         <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full py-1.5 px-4 mb-6">
           <Crown size={14} color="var(--accent-orange)" />
-          <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
+          <span className="font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
             Subscription Plans
           </span>
         </div>
-        <h1 className="font-[var(--font-display)] font-extrabold text-[clamp(2.25rem,5vw,3.5rem)] tracking-[-0.04em] leading-none mb-5">
+        <h1 className="font-display font-extrabold text-[clamp(2.25rem,5vw,3.5rem)] tracking-[-0.04em] leading-none mb-5">
           Choose your <span className="gradient-text">level</span>
         </h1>
         <p className="text-[var(--text-secondary)] max-w-[520px] mx-auto text-[1.0625rem] leading-[1.7]">
@@ -75,7 +75,7 @@ export default function SubscriptionsPage() {
                   className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full py-1 px-4 flex items-center gap-1.5"
                 >
                   <Sparkles size={12} color="white" />
-                  <span className="font-[var(--font-display)] text-[0.75rem] font-bold text-white tracking-[0.05em]">
+                  <span className="font-display text-[0.75rem] font-bold text-white tracking-[0.05em]">
                     MOST POPULAR
                   </span>
                 </div>
@@ -90,11 +90,11 @@ export default function SubscriptionsPage() {
                   {ICONS[planKey]}
                 </div>
                 <div>
-                  <h3 className="font-[var(--font-display)] font-extrabold text-[1.25rem] text-[var(--text-primary)]">
+                  <h3 className="font-display font-extrabold text-[1.25rem] text-[var(--text-primary)]">
                     {plan.name}
                   </h3>
                   <div className="flex items-baseline gap-1">
-                    <span style={{ color: accent }} className="font-[var(--font-display)] font-extrabold text-[1.875rem]">
+                    <span style={{ color: accent }} className="font-display font-extrabold text-[1.875rem]">
                       ${plan.price}
                     </span>
                     <span className="text-[var(--text-muted)] text-sm">/mo</span>
@@ -128,7 +128,7 @@ export default function SubscriptionsPage() {
                     color: success === planKey ? accent : isPopular ? "white" : accent,
                     opacity: loading && loading !== planKey ? 0.5 : 1,
                   }}
-                  className="w-full font-[var(--font-display)] font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200 cursor-pointer disabled:cursor-default"
+                  className="w-full font-display font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200 cursor-pointer disabled:cursor-default"
                 >
                   {success === planKey ? "✓ Subscribed!" : loading === planKey ? "Processing…" : `Get ${plan.name}`}
                 </button>
@@ -140,7 +140,7 @@ export default function SubscriptionsPage() {
                     border: `1px solid ${accent}`,
                     color: isPopular ? "white" : accent,
                   }}
-                  className="block text-center no-underline w-full font-[var(--font-display)] font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200"
+                  className="block text-center no-underline w-full font-display font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200"
                 >
                   Get Started
                 </Link>

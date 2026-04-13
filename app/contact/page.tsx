@@ -28,11 +28,11 @@ export default function ContactPage() {
       <div className="text-center mb-16">
         <div className="inline-flex items-center gap-2 bg-orange-500/[0.08] border border-orange-500/20 rounded-full py-1.5 px-4 mb-6">
           <Mail size={14} color="var(--accent-orange)" />
-          <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
+          <span className="font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
             Get in Touch
           </span>
         </div>
-        <h1 className="font-[var(--font-display)] font-extrabold text-[clamp(2rem,4vw,3rem)] tracking-[-0.04em] mb-4">
+        <h1 className="font-display font-extrabold text-[clamp(2rem,4vw,3rem)] tracking-[-0.04em] mb-4">
           We&apos;d love to <span className="gradient-text">hear from you</span>
         </h1>
         <p className="text-[var(--text-secondary)] max-w-[480px] mx-auto leading-[1.7]">
@@ -57,7 +57,7 @@ export default function ContactPage() {
                 <Icon size={20} color={accent} />
               </div>
               <div>
-                <p className="font-[var(--font-display)] font-bold text-[0.9rem] text-[var(--text-primary)] mb-0.5">{title}</p>
+                <p className="font-display font-bold text-[0.9rem] text-[var(--text-primary)] mb-0.5">{title}</p>
                 <p className="text-[var(--text-secondary)] text-[0.8125rem]">{desc}</p>
               </div>
             </div>
@@ -66,7 +66,7 @@ export default function ContactPage() {
           <div className="mt-2 p-6 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(251,191,36,0.04))] border border-orange-500/15 rounded-xl">
             <div className="flex gap-2 items-center mb-2.5">
               <Zap size={16} color="var(--accent-orange)" />
-              <span className="font-[var(--font-display)] font-bold text-[0.875rem]">Response time</span>
+              <span className="font-display font-bold text-[0.875rem]">Response time</span>
             </div>
             <p className="text-[var(--text-secondary)] text-[0.875rem] leading-relaxed">
               We typically respond to all messages within{" "}
@@ -82,7 +82,7 @@ export default function ContactPage() {
               <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
                 <CheckCircle size={32} color="#10b981" />
               </div>
-              <h3 className="font-[var(--font-display)] font-extrabold text-2xl mb-2.5">
+              <h3 className="font-display font-extrabold text-2xl mb-2.5">
                 Message sent!
               </h3>
               <p className="text-[var(--text-secondary)]">

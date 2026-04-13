@@ -42,7 +42,7 @@ function Avatar({ name, tier }: { name: string; tier: string }) {
       style={{ width: 34, height: 34, background: `${color}22`, border: `2px solid ${color}44` }}
       className="rounded-full flex items-center justify-center shrink-0"
     >
-      <span style={{ color }} className="font-[var(--font-display)] font-bold text-[0.75rem]">
+      <span style={{ color }} className="font-display font-bold text-[0.75rem]">
         {name?.[0]?.toUpperCase() ?? "?"}
       </span>
     </div>
@@ -119,7 +119,7 @@ export default function ChatPage() {
           </Link>
           <div className="flex items-center gap-2 mb-1">
             <MessageSquare size={18} color="var(--accent-orange)" />
-            <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] tracking-[-0.03em]">
+            <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.03em]">
               Global Chat
             </h1>
           </div>
@@ -151,7 +151,7 @@ export default function ChatPage() {
                 <div className={["max-w-[70%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
                   {/* Name + badge + time */}
                   <div className={["flex items-center gap-2 mb-1", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
-                    <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--text-primary)]">
+                    <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)]">
                       {isMe ? "You" : msg.author.name}
                     </span>
                     <span

@@ -22,7 +22,7 @@ export default async function UploadPage() {
           <div className="w-10 h-10 rounded-[10px] bg-orange-500/[0.12] border border-orange-500/25 flex items-center justify-center">
             <Upload size={19} color="var(--accent-orange)" />
           </div>
-          <h1 className="font-[var(--font-display)] font-extrabold text-[1.625rem] tracking-[-0.02em] text-[var(--text-primary)]">
+          <h1 className="font-display font-extrabold text-[1.625rem] tracking-[-0.02em] text-[var(--text-primary)]">
             Upload Video
           </h1>
         </div>
@@ -40,7 +40,7 @@ export default async function UploadPage() {
       <div className="mt-6 py-4 px-5 rounded-[10px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex gap-3 items-start">
         <Zap size={15} color="var(--accent-orange)" className="shrink-0 mt-0.5" />
         <div>
-          <p className="font-[var(--font-display)] font-bold text-[0.8125rem] text-[var(--text-secondary)] mb-1">
+          <p className="font-display font-bold text-[0.8125rem] text-[var(--text-secondary)] mb-1">
             Tips
           </p>
           <ul className="text-[var(--text-muted)] text-[0.8125rem] leading-[1.7] pl-4">

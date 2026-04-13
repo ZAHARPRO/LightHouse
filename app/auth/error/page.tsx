@@ -8,7 +8,7 @@ export default function AuthErrorPage() {
         <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
           <AlertCircle size={28} color="#ef4444" />
         </div>
-        <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] mb-3">
+        <h1 className="font-display font-extrabold text-[1.75rem] mb-3">
           Authentication Error
         </h1>
         <p className="text-[var(--text-secondary)] mb-8">

@@ -100,11 +100,11 @@ export default async function PostPage({
       <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-10 py-8 mb-6">
         {/* Badges */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-[var(--font-display)] tracking-[0.05em] uppercase">
+          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-display tracking-[0.05em] uppercase">
             Post
           </span>
           {post.isPremium && (
-            <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-[linear-gradient(90deg,rgba(249,115,22,0.15),rgba(251,191,36,0.15))] text-[#fbbf24] border border-[rgba(251,191,36,0.25)] font-[var(--font-display)] tracking-[0.05em] uppercase">
+            <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-[linear-gradient(90deg,rgba(249,115,22,0.15),rgba(251,191,36,0.15))] text-[#fbbf24] border border-[rgba(251,191,36,0.25)] font-display tracking-[0.05em] uppercase">
               <Crown size={10} /> Premium
             </span>
           )}
@@ -124,7 +124,7 @@ export default async function PostPage({
         </div>
 
         {/* Title */}
-        <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] tracking-[-0.02em] text-[var(--text-primary)] leading-tight mb-6">
+        <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.02em] text-[var(--text-primary)] leading-tight mb-6">
           {post.title}
         </h1>
 
@@ -137,12 +137,12 @@ export default async function PostPage({
             style={{ background: `${authorColor}22`, border: `2px solid ${authorColor}50` }}
             className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
           >
-            <span style={{ color: authorColor }} className="font-[var(--font-display)] font-extrabold text-base">
+            <span style={{ color: authorColor }} className="font-display font-extrabold text-base">
               {(post.author.name ?? "?")[0].toUpperCase()}
             </span>
           </div>
           <div>
-            <p className="font-[var(--font-display)] font-bold text-[0.9rem] text-[var(--text-primary)]">
+            <p className="font-display font-bold text-[0.9rem] text-[var(--text-primary)]">
               {post.author.name}
             </p>
             <p className="flex items-center gap-1 text-[0.75rem] text-[var(--text-muted)]">
@@ -156,7 +156,7 @@ export default async function PostPage({
       {locked ? (
         <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-8 py-12 text-center">
           <Lock size={40} color="var(--accent-orange)" className="mx-auto mb-4" />
-          <p className="font-[var(--font-display)] font-bold text-lg text-[var(--text-primary)] mb-2">
+          <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-2">
             Premium Post
           </p>
           <p className="text-[var(--text-secondary)] text-[0.9rem] mb-6">

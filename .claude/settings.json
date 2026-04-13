@@ -7,7 +7,8 @@
       "Bash(grep -r \"className=\" /c/Users/apple/Documets/GitHub/LightHouse/components/*.tsx)",
       "Bash(grep -ro \"var\\(--[a-zA-Z0-9-]*\\)\" /c/Users/apple/Documets/GitHub/LightHouse/app/**/*.tsx /c/Users/apple/Documets/GitHub/LightHouse/components/*.tsx)",
       "Bash(grep -ro \"className=\\\\\"[^\\\\\"]*\\\\\"\" /c/Users/apple/Documets/GitHub/LightHouse/components/*.tsx /c/Users/apple/Documets/GitHub/LightHouse/app/**/*.tsx)",
-      "Bash(grep -r \"className=\\\\\"[^\\\\\"]*\" /c/Users/apple/Documets/GitHub/LightHouse/components/*.tsx /c/Users/apple/Documets/GitHub/LightHouse/app/**/*.tsx)"
+      "Bash(grep -r \"className=\\\\\"[^\\\\\"]*\" /c/Users/apple/Documets/GitHub/LightHouse/components/*.tsx /c/Users/apple/Documets/GitHub/LightHouse/app/**/*.tsx)",
+      "Bash(node -e ':*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\post"

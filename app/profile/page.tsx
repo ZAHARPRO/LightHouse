@@ -41,19 +41,19 @@ export default async function ProfilePage() {
           style={{ background: `${tierColor}22`, border: `3px solid ${tierColor}44` }}
           className="w-[88px] h-[88px] rounded-full shrink-0 flex items-center justify-center"
         >
-          <span style={{ color: tierColor }} className="font-[var(--font-display)] font-extrabold text-[2.25rem]">
+          <span style={{ color: tierColor }} className="font-display font-extrabold text-[2.25rem]">
             {(user.name ?? "U")[0].toUpperCase()}
           </span>
         </div>
 
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap mb-1">
-            <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] tracking-[-0.02em]">
+            <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.02em]">
               {user.name}
             </h1>
             <span
               style={{ background: `${tierColor}18`, color: tierColor, border: `1px solid ${tierColor}30` }}
-              className="text-[0.75rem] font-bold py-[0.1875rem] px-[0.625rem] rounded-full font-[var(--font-display)] tracking-[0.05em] uppercase"
+              className="text-[0.75rem] font-bold py-[0.1875rem] px-[0.625rem] rounded-full font-display tracking-[0.05em] uppercase"
             >
               {user.tier}
             </span>
@@ -63,7 +63,7 @@ export default async function ProfilePage() {
           {/* Level bar */}
           <div className="max-w-[320px]">
             <div className="flex justify-between mb-1.5">
-              <span className="flex items-center gap-1.5 font-[var(--font-display)] font-bold text-sm text-[var(--accent-orange)]">
+              <span className="flex items-center gap-1.5 font-display font-bold text-sm text-[var(--accent-orange)]">
                 <TrendingUp size={14}/> Level {level}
               </span>
               <span className="text-[var(--text-muted)] text-[0.8125rem]">
@@ -89,7 +89,7 @@ export default async function ProfilePage() {
             <div key={label} className="text-center">
               <div className="flex items-center justify-center gap-1 mb-0.5">
                 <Icon size={14} color="var(--accent-orange)"/>
-                <span className="font-[var(--font-display)] font-extrabold text-2xl text-[var(--text-primary)]">{value}</span>
+                <span className="font-display font-extrabold text-2xl text-[var(--text-primary)]">{value}</span>
               </div>
               <span className="text-[var(--text-muted)] text-[0.8rem]">{label}</span>
             </div>
@@ -108,7 +108,7 @@ export default async function ProfilePage() {
       {user.tier === "FREE" && (
         <div className="mt-8 p-8 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),transparent)] border border-orange-500/15 rounded-xl flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h3 className="font-[var(--font-display)] font-bold text-lg mb-1">Upgrade your plan</h3>
+            <h3 className="font-display font-bold text-lg mb-1">Upgrade your plan</h3>
             <p className="text-[var(--text-secondary)] text-sm">Earn more points, unlock exclusive content, and get a premium badge.</p>
           </div>
           <a href="/subscriptions" className="btn-primary no-underline whitespace-nowrap">View Plans</a>

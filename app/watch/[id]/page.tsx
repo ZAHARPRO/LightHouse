@@ -198,7 +198,7 @@ export default async function WatchPage({
           {isLocked ? (
             <div className="text-center">
               <Lock size={48} color={accent} className="mx-auto mb-4" />
-              <p className="font-[var(--font-display)] font-bold text-lg text-[var(--text-primary)] mb-2">
+              <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-2">
                 Premium Content
               </p>
               <p className="text-[var(--text-secondary)] text-sm mb-6">
@@ -243,7 +243,7 @@ export default async function WatchPage({
           {/* PRO badge */}
           {video.isPremium && (
             <div className="absolute top-3 left-3 z-10 bg-[linear-gradient(90deg,#f97316,#fbbf24)] rounded-[5px] py-[0.15rem] px-2">
-              <span className="text-[0.6875rem] font-bold text-white font-[var(--font-display)] tracking-[0.05em]">
+              <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.05em]">
                 PRO
               </span>
             </div>
@@ -252,7 +252,7 @@ export default async function WatchPage({
 
         {/* Title + stats */}
         <div className="mt-5">
-          <h1 className="font-[var(--font-display)] font-extrabold text-[1.375rem] tracking-[-0.02em] text-[var(--text-primary)] leading-tight mb-3">
+          <h1 className="font-display font-extrabold text-[1.375rem] tracking-[-0.02em] text-[var(--text-primary)] leading-tight mb-3">
             {video.title}
           </h1>
 
@@ -264,7 +264,7 @@ export default async function WatchPage({
               <Calendar size={14} /> {formatDate(video.createdAt)}
             </span>
             {video.category && (
-              <span className="text-[0.75rem] font-semibold py-[0.1875rem] px-[0.625rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-[var(--font-display)]">
+              <span className="text-[0.75rem] font-semibold py-[0.1875rem] px-[0.625rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-display">
                 {video.category.name}
               </span>
             )}
@@ -288,12 +288,12 @@ export default async function WatchPage({
                 style={{ background: `${authorColor}22`, border: `2.5px solid ${authorColor}50` }}
                 className="w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center"
               >
-                <span style={{ color: authorColor }} className="font-[var(--font-display)] font-extrabold text-lg">
+                <span style={{ color: authorColor }} className="font-display font-extrabold text-lg">
                   {(video.author.name ?? "?")[0].toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="font-[var(--font-display)] font-bold text-[0.9375rem] text-[var(--text-primary)] mb-0.5">
+                <p className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)] mb-0.5">
                   {video.author.name}
                 </p>
                 <p className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--text-muted)]">
@@ -335,7 +335,7 @@ export default async function WatchPage({
 
       {/* ── RIGHT: suggested ── */}
       <aside className="sticky top-[calc(64px+1.5rem)]">
-        <p className="font-[var(--font-display)] font-bold text-[0.8125rem] text-[var(--text-muted)] tracking-[0.06em] uppercase mb-3.5">
+        <p className="font-display font-bold text-[0.8125rem] text-[var(--text-muted)] tracking-[0.06em] uppercase mb-3.5">
           Up Next
         </p>
 
@@ -367,7 +367,7 @@ export default async function WatchPage({
                     </span>
                   )}
                   {v.isPremium && (
-                    <span className="absolute top-1 left-1 bg-[linear-gradient(90deg,#f97316,#fbbf24)] rounded-[3px] py-[0.0625rem] px-1.5 text-[0.5625rem] font-bold text-white font-[var(--font-display)]">
+                    <span className="absolute top-1 left-1 bg-[linear-gradient(90deg,#f97316,#fbbf24)] rounded-[3px] py-[0.0625rem] px-1.5 text-[0.5625rem] font-bold text-white font-display">
                       PRO
                     </span>
                   )}
@@ -375,7 +375,7 @@ export default async function WatchPage({
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-tight line-clamp-2 mb-1">
+                  <p className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-tight line-clamp-2 mb-1">
                     {v.title}
                   </p>
                   <p className="text-[0.75rem] text-[var(--text-muted)]">

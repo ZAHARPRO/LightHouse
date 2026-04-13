@@ -153,7 +153,7 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="font-[var(--font-display)] font-bold text-sm text-[var(--text-primary)] truncate">
+                <p className="font-display font-bold text-sm text-[var(--text-primary)] truncate">
                   {video.title}
                 </p>
                 <div className="flex gap-3 mt-1">
@@ -222,7 +222,7 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
             {isReup && (
               <form onSubmit={(e) => handleReupload(video.id, e)}
                 className="border-t border-[var(--border-subtle)] py-5 px-4 bg-orange-500/[0.04]">
-                <div className="flex items-center gap-2 mb-3 text-[#f97316] text-[0.8125rem] font-[var(--font-display)] font-bold">
+                <div className="flex items-center gap-2 mb-3 text-[#f97316] text-[0.8125rem] font-display font-bold">
                   <AlertTriangle size={14}/> Re-uploading will reset views &amp; likes to zero
                 </div>
                 <div className="flex gap-2">
@@ -256,14 +256,14 @@ export default function VideoManager({ initialVideos }: { initialVideos: Video[]
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="font-[var(--font-display)] font-semibold text-[0.75rem] text-[var(--text-muted)] mb-1.5">
+    <p className="font-display font-semibold text-[0.75rem] text-[var(--text-muted)] mb-1.5">
       {children}
     </p>
   );
 }
 
 function btnClass(variant: "default" | "orange" | "red"): string {
-  const base = "flex items-center gap-[0.3rem] py-1.5 px-2.5 rounded-[7px] cursor-pointer font-[var(--font-display)] font-semibold text-[0.8rem] transition-all duration-150 border";
+  const base = "flex items-center gap-[0.3rem] py-1.5 px-2.5 rounded-[7px] cursor-pointer font-display font-semibold text-[0.8rem] transition-all duration-150 border";
   if (variant === "orange") return `${base} bg-orange-500/[0.12] border-orange-500/35 text-[var(--accent-orange)]`;
   if (variant === "red")    return `${base} bg-red-500/10 border-red-500/30 text-red-500`;
   return `${base} bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]`;

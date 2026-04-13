@@ -25,14 +25,14 @@ export default function Home() {
           style={{ animationDelay: "0.1s" }}
         >
           <Zap size={13} color="var(--accent-orange)" />
-          <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--accent-orange)] tracking-[0.08em] uppercase">
+          <span className="font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] tracking-[0.08em] uppercase">
             Now in Beta
           </span>
         </div>
 
         {/* Headline */}
         <h1
-          className="animate-in font-[var(--font-display)] font-extrabold text-[clamp(3rem,8vw,6rem)] leading-none tracking-[-0.04em] max-w-[900px] mb-6"
+          className="animate-in font-display font-extrabold text-[clamp(3rem,8vw,6rem)] leading-none tracking-[-0.04em] max-w-[900px] mb-6"
           style={{ animationDelay: "0.2s" }}
         >
           <span className="text-[var(--text-primary)]">Where great</span>
@@ -56,14 +56,14 @@ export default function Home() {
         >
           <Link
             href="/feed"
-            className="inline-flex items-center gap-2 bg-[var(--accent-orange)] text-white font-[var(--font-display)] font-bold text-base py-[0.875rem] px-8 rounded-[10px] no-underline transition-all duration-200 shadow-[0_8px_32px_rgba(249,115,22,0.3)]"
+            className="inline-flex items-center gap-2 bg-[var(--accent-orange)] text-white font-display font-bold text-base py-[0.875rem] px-8 rounded-[10px] no-underline transition-all duration-200 shadow-[0_8px_32px_rgba(249,115,22,0.3)]"
           >
             <Play size={18} fill="white" />
             Watch Now
           </Link>
           <Link
             href="/auth/register"
-            className="inline-flex items-center gap-2 bg-transparent text-[var(--text-secondary)] font-[var(--font-display)] font-semibold text-base py-[0.875rem] px-8 rounded-[10px] no-underline border border-[var(--border-default)] transition-all duration-200"
+            className="inline-flex items-center gap-2 bg-transparent text-[var(--text-secondary)] font-display font-semibold text-base py-[0.875rem] px-8 rounded-[10px] no-underline border border-[var(--border-default)] transition-all duration-200"
           >
             Join Free
             <ArrowRight size={17} />
@@ -83,7 +83,7 @@ export default function Home() {
             <div key={label} className="text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <Icon size={15} color="var(--accent-orange)" />
-                <span className="font-[var(--font-display)] font-extrabold text-[1.75rem] text-[var(--text-primary)]">
+                <span className="font-display font-extrabold text-[1.75rem] text-[var(--text-primary)]">
                   {value}
                 </span>
               </div>
@@ -97,7 +97,7 @@ export default function Home() {
       <section className="py-24 px-6 bg-[var(--bg-secondary)]">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-center mb-16">
-            <h2 className="font-[var(--font-display)] font-extrabold text-[clamp(2rem,4vw,3rem)] tracking-[-0.03em] text-[var(--text-primary)] mb-4">
+            <h2 className="font-display font-extrabold text-[clamp(2rem,4vw,3rem)] tracking-[-0.03em] text-[var(--text-primary)] mb-4">
               Everything you need to{" "}
               <span className="gradient-text">shine</span>
             </h2>
@@ -120,7 +120,7 @@ export default function Home() {
                 >
                   <Icon size={22} color={accent} />
                 </div>
-                <h3 className="font-[var(--font-display)] font-bold text-lg mb-2.5 text-[var(--text-primary)]">
+                <h3 className="font-display font-bold text-lg mb-2.5 text-[var(--text-primary)]">
                   {title}
                 </h3>
                 <p className="text-[var(--text-secondary)] text-[0.9375rem] leading-relaxed">
@@ -135,7 +135,7 @@ export default function Home() {
       {/* CTA BANNER */}
       <section className="py-24 px-6">
         <div className="max-w-[900px] mx-auto bg-[linear-gradient(135deg,rgba(249,115,22,0.12),rgba(251,191,36,0.06))] border border-orange-500/20 rounded-[20px] px-16 py-16 text-center relative overflow-hidden lighthouse-beam">
-          <h2 className="font-[var(--font-display)] font-extrabold text-[clamp(1.75rem,4vw,2.75rem)] tracking-[-0.03em] mb-4">
+          <h2 className="font-display font-extrabold text-[clamp(1.75rem,4vw,2.75rem)] tracking-[-0.03em] mb-4">
             Ready to illuminate your world?
           </h2>
           <p className="text-[var(--text-secondary)] mb-8 text-[1.0625rem]">
@@ -143,7 +143,7 @@ export default function Home() {
           </p>
           <Link
             href="/auth/register"
-            className="inline-flex items-center gap-2 bg-[var(--accent-orange)] text-white font-[var(--font-display)] font-bold text-base py-[0.875rem] px-10 rounded-[10px] no-underline shadow-[0_8px_32px_rgba(249,115,22,0.35)] transition-all duration-200"
+            className="inline-flex items-center gap-2 bg-[var(--accent-orange)] text-white font-display font-bold text-base py-[0.875rem] px-10 rounded-[10px] no-underline shadow-[0_8px_32px_rgba(249,115,22,0.35)] transition-all duration-200"
           >
             Get Started — It&apos;s Free
             <ArrowRight size={18} />

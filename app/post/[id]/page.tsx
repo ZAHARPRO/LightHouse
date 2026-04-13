@@ -2,7 +2,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Crown, Calendar, Users, Lock } from "lucide-react";
+import { ArrowLeft, Crown, Calendar, Users, Lock, Pencil, Clock } from "lucide-react";
+import PostCommentsSection from "@/components/PostCommentsSection";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -52,6 +53,37 @@ export default async function PostPage({
 
   const locked      = post.isPremium && !isMe && !isSubscribed;
   const authorColor = TIER_COLORS[post.author.tier] ?? "#888";
+  const wasEdited   = post.updatedAt.getTime() - post.createdAt.getTime() > 5000;
+  const uid = session?.user?.id ?? null;
+
+  const rawComments = await prisma.comment.findMany({
+    where: { postId: id, parentId: null },
+    include: {
+      author: { select: { id: true, name: true } },
+      likes:  { select: { userId: true } },
+      replies: {
+        include: {
+          author: { select: { id: true, name: true } },
+          likes:  { select: { userId: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  const comments = rawComments.map((c) => ({
+    id: c.id, content: c.content, createdAt: c.createdAt, isPinned: c.isPinned,
+    author: c.author,
+    likeCount: c.likes.length,
+    userLiked: uid ? c.likes.some((l) => l.userId === uid) : false,
+    replies: c.replies.map((r) => ({
+      id: r.id, content: r.content, createdAt: r.createdAt,
+      author: r.author,
+      likeCount: r.likes.length,
+      userLiked: uid ? r.likes.some((l) => l.userId === uid) : false,
+      replyToName: r.replyToName,
+    })),
+  }));
 
   return (
     <div className="max-w-[740px] mx-auto px-6 py-10">
@@ -76,9 +108,19 @@ export default async function PostPage({
               <Crown size={10} /> Premium
             </span>
           )}
-          <span className="flex items-center gap-1 text-[0.8rem] text-[var(--text-muted)] ml-auto">
-            <Calendar size={12} /> {formatDate(post.createdAt)}
-          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="flex items-center gap-1 text-[0.8rem] text-[var(--text-muted)]">
+              <Calendar size={12} /> {formatDate(post.createdAt)}
+            </span>
+            {isMe && (
+              <Link
+                href={`/post/${id}/edit`}
+                className="inline-flex items-center gap-1 no-underline text-[0.75rem] font-semibold py-[0.2rem] px-[0.6rem] rounded-[6px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150"
+              >
+                <Pencil size={11} /> Edit
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Title */}
@@ -129,8 +171,28 @@ export default async function PostPage({
           <div className="text-[var(--text-secondary)] text-base leading-[1.8] whitespace-pre-wrap break-words">
             {post.content}
           </div>
+          {wasEdited && (
+            <p className="flex items-center gap-1 mt-5 text-[0.75rem] text-[var(--text-muted)] border-t border-[var(--border-subtle)] pt-4">
+              <Clock size={11} />
+              Edited{" "}
+              {new Date(post.updatedAt).toLocaleDateString("en-US", {
+                year: "numeric", month: "short", day: "numeric",
+              })}{" "}
+              at{" "}
+              {new Date(post.updatedAt).toLocaleTimeString("en-US", {
+                hour: "2-digit", minute: "2-digit",
+              })}
+            </p>
+          )}
         </div>
       )}
+
+      <PostCommentsSection
+        postId={id}
+        postAuthorId={post.author.id}
+        currentUserId={uid}
+        initialComments={comments}
+      />
     </div>
   );
 }

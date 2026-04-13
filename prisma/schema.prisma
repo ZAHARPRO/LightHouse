@@ -107,8 +107,12 @@ model Comment {
 
   authorId String
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  videoId  String
-  video    Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  videoId  String?
+  video    Video?  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  postId   String?
+  post     Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   parentId    String?
   parent      Comment?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
@@ -152,7 +156,8 @@ model Post {
   updatedAt DateTime @updatedAt
 
   authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
 }
 
 model ChatMessage {

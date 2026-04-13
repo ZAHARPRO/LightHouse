@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, forwardRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
-import { Send, Maximize2, X, MessageSquare, Zap } from "lucide-react";
+import { Send, Maximize2, X, MessageSquare, Zap, Reply } from "lucide-react";
 
 type Message = {
   id: string;
@@ -55,7 +55,10 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
   const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,14 +79,16 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
     e.preventDefault();
     if (!input.trim() || !session || sending) return;
     setSending(true);
+    const content = replyTo ? `@${replyTo.name} ${input.trim()}` : input.trim();
     const optimistic: Message = {
       id: `opt-${Date.now()}`,
-      content: input.trim(),
+      content,
       createdAt: new Date(),
       author: { id: session.user?.id ?? "", name: session.user?.name ?? "You", image: null, tier: "FREE" },
     };
     setMessages((prev) => [optimistic, ...prev]);
     setInput("");
+    setReplyTo(null);
     const result = await sendChatMessage(optimistic.content);
     if (result.message) {
       setMessages((prev) => prev.map((m) => m.id === optimistic.id ? (result.message as Message) : m));
@@ -141,7 +146,9 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
           return (
             <div
               key={msg.id}
-              className={["flex gap-2 items-start", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}
+              className={["flex gap-2 items-start group relative", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}
+              onMouseEnter={() => setHoveredId(msg.id)}
+              onMouseLeave={() => setHoveredId(null)}
             >
               <Link href={`/profile/${msg.author.id}`} className="no-underline">
                 <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
@@ -164,16 +171,32 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
                   </span>
                 </div>
 
-                {/* Bubble */}
-                <div
-                  className="px-[0.625rem] py-2 text-[0.8125rem] text-[var(--text-primary)] leading-[1.45] break-words"
-                  style={{
-                    background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-                    border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
-                    borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
-                  }}
-                >
-                  {msg.content}
+                {/* Bubble + reply button */}
+                <div className={["flex items-end gap-1.5", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
+                  <div
+                    className="px-[0.625rem] py-2 text-[0.8125rem] text-[var(--text-primary)] leading-[1.45] break-words"
+                    style={{
+                      background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
+                      border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
+                      borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
+                    }}
+                  >
+                    {msg.content}
+                  </div>
+
+                  {/* Reply button — shown on hover for others' messages */}
+                  {!isMe && session && hoveredId === msg.id && (
+                    <button
+                      onClick={() => {
+                        setReplyTo({ id: msg.id, name: msg.author.name ?? "?" });
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }}
+                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150 mb-[2px]"
+                      title={`Reply to ${msg.author.name}`}
+                    >
+                      <Reply size={11} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -184,14 +207,31 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
 
       {/* Input area */}
       {session ? (
+        <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)] shrink-0">
+          {/* Replying-to banner */}
+          {replyTo && (
+            <div className="flex items-center justify-between px-[0.875rem] pt-[0.5rem] pb-[0.25rem]">
+              <span className="flex items-center gap-1.5 text-[0.75rem] text-[var(--accent-orange)]">
+                <Reply size={11} />
+                Replying to <strong>{replyTo.name}</strong>
+              </span>
+              <button
+                onClick={() => setReplyTo(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
         <form
           onSubmit={handleSend}
-          className="flex gap-2 px-[0.875rem] py-[0.625rem] border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)] shrink-0"
+          className="flex gap-2 px-[0.875rem] py-[0.625rem]"
         >
           <input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Say something…"
+            placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Say something…"}
             maxLength={500}
             className="input-field flex-1 bg-[var(--bg-elevated)] text-[0.8125rem] h-9"
           />
@@ -207,6 +247,7 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
             <Send size={15} />
           </button>
         </form>
+        </div>
       ) : (
         <div className="border-t border-[var(--border-subtle)] px-[0.875rem] py-3 bg-[var(--bg-secondary)] shrink-0">
           <p className="flex items-center gap-[0.375rem] text-[var(--text-secondary)] text-[0.8125rem] mb-2">

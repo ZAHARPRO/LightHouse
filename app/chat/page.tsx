@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
-import { Send, MessageSquare, Users, Zap, ArrowLeft } from "lucide-react";
+import { Send, MessageSquare, Users, Zap, ArrowLeft, Reply, X } from "lucide-react";
 
 type Message = {
   id: string;
@@ -39,11 +39,7 @@ function Avatar({ name, tier }: { name: string; tier: string }) {
   const color = colors[tier] ?? "#666";
   return (
     <div
-      style={{
-        width: 34, height: 34,
-        background: `${color}22`,
-        border: `2px solid ${color}44`,
-      }}
+      style={{ width: 34, height: 34, background: `${color}22`, border: `2px solid ${color}44` }}
       className="rounded-full flex items-center justify-center shrink-0"
     >
       <span style={{ color }} className="font-[var(--font-display)] font-bold text-[0.75rem]">
@@ -58,7 +54,10 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,9 +75,10 @@ export default function ChatPage() {
     if (!input.trim() || !session || sending) return;
     setSending(true);
 
+    const content = replyTo ? `@${replyTo.name} ${input.trim()}` : input.trim();
     const optimistic: Message = {
       id: `opt-${Date.now()}`,
-      content: input.trim(),
+      content,
       createdAt: new Date(),
       author: {
         id: session.user?.id ?? "",
@@ -90,6 +90,7 @@ export default function ChatPage() {
 
     setMessages((prev) => [optimistic, ...prev]);
     setInput("");
+    setReplyTo(null);
 
     const result = await sendChatMessage(optimistic.content);
     if (result.message) {
@@ -116,7 +117,6 @@ export default function ChatPage() {
             <ArrowLeft size={13} />
             Back to Feed
           </Link>
-
           <div className="flex items-center gap-2 mb-1">
             <MessageSquare size={18} color="var(--accent-orange)" />
             <h1 className="font-[var(--font-display)] font-extrabold text-[1.75rem] tracking-[-0.03em]">
@@ -133,29 +133,24 @@ export default function ChatPage() {
 
       {/* Chat window */}
       <div className="flex-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl overflow-hidden flex flex-col min-h-0">
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
           {sorted.map((msg) => {
             const tier = TIER_LABELS[msg.author.tier] ?? TIER_LABELS.FREE;
             const isMe = msg.author.id === session?.user?.id;
-
             return (
               <div
                 key={msg.id}
-                className={[
-                  "animate-in flex gap-3 items-start",
-                  isMe ? "flex-row-reverse" : "flex-row",
-                ].join(" ")}
+                className={["animate-in flex gap-3 items-start group", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}
+                onMouseEnter={() => setHoveredId(msg.id)}
+                onMouseLeave={() => setHoveredId(null)}
               >
                 <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
-                <div className={[
-                  "max-w-[70%] flex flex-col",
-                  isMe ? "items-end" : "items-start",
-                ].join(" ")}>
-                  <div className={[
-                    "flex items-center gap-2 mb-1",
-                    isMe ? "flex-row-reverse" : "flex-row",
-                  ].join(" ")}>
+
+                <div className={["max-w-[70%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
+                  {/* Name + badge + time */}
+                  <div className={["flex items-center gap-2 mb-1", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
                     <span className="font-[var(--font-display)] font-semibold text-[0.8125rem] text-[var(--text-primary)]">
                       {isMe ? "You" : msg.author.name}
                     </span>
@@ -169,15 +164,32 @@ export default function ChatPage() {
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  <div
-                    className={[
-                      "py-[0.625rem] px-[0.875rem] text-[0.9rem] text-[var(--text-primary)] leading-relaxed break-words",
-                      isMe
-                        ? "bg-orange-500/[0.12] border border-orange-500/20 rounded-[12px_4px_12px_12px]"
-                        : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[4px_12px_12px_12px]",
-                    ].join(" ")}
-                  >
-                    {msg.content}
+
+                  {/* Bubble + reply button */}
+                  <div className={["flex items-end gap-2", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
+                    <div
+                      className={[
+                        "py-[0.625rem] px-[0.875rem] text-[0.9rem] text-[var(--text-primary)] leading-relaxed break-words",
+                        isMe
+                          ? "bg-orange-500/[0.12] border border-orange-500/20 rounded-[12px_4px_12px_12px]"
+                          : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[4px_12px_12px_12px]",
+                      ].join(" ")}
+                    >
+                      {msg.content}
+                    </div>
+
+                    {!isMe && session && hoveredId === msg.id && (
+                      <button
+                        onClick={() => {
+                          setReplyTo({ id: msg.id, name: msg.author.name ?? "?" });
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150 mb-[2px]"
+                        title={`Reply to ${msg.author.name}`}
+                      >
+                        <Reply size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -186,30 +198,44 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
+        {/* Input area */}
         {session ? (
-          <form
-            onSubmit={handleSend}
-            className="border-t border-[var(--border-subtle)] py-[0.875rem] px-5 flex gap-3 bg-[var(--bg-secondary)]"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Say something to the world…"
-              maxLength={500}
-              className="input-field flex-1 bg-[var(--bg-elevated)]"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || sending}
-              className={[
-                "bg-[var(--accent-orange)] border-none rounded-lg p-3 cursor-pointer flex items-center justify-center shrink-0 transition-opacity duration-200",
-                !input.trim() || sending ? "opacity-50" : "opacity-100",
-              ].join(" ")}
-            >
-              <Send size={18} color="white" />
-            </button>
-          </form>
+          <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+            {replyTo && (
+              <div className="flex items-center justify-between px-5 pt-3 pb-1">
+                <span className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--accent-orange)]">
+                  <Reply size={13} />
+                  Replying to <strong>{replyTo.name}</strong>
+                </span>
+                <button
+                  onClick={() => setReplyTo(null)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            <form onSubmit={handleSend} className="py-[0.875rem] px-5 flex gap-3">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Say something to the world…"}
+                maxLength={500}
+                className="input-field flex-1 bg-[var(--bg-elevated)]"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || sending}
+                className={[
+                  "bg-[var(--accent-orange)] border-none rounded-lg p-3 cursor-pointer flex items-center justify-center shrink-0 transition-opacity duration-200",
+                  !input.trim() || sending ? "opacity-50" : "opacity-100",
+                ].join(" ")}
+              >
+                <Send size={18} color="white" />
+              </button>
+            </form>
+          </div>
         ) : (
           <div className="border-t border-[var(--border-subtle)] py-4 px-5 bg-[var(--bg-secondary)] flex items-center justify-between">
             <span className="text-[var(--text-secondary)] text-[0.9rem] flex items-center gap-1.5">

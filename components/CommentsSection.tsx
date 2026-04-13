@@ -192,7 +192,7 @@ function CommentItem({
   const [pending, start]              = useTransition();
   const isAuthorComment = comment.author.id === videoAuthorId;
 
-  function openReply(toName?: string) { setReplyTo(toName ? { name: toName } : null); setReplyText(""); }
+  function openReply(toName?: string) { setReplyTo({ name: toName ?? "" }); setReplyText(""); }
   function closeReply() { setReplyTo(null); setReplyText(""); }
 
   function submitReply(e: React.FormEvent) {

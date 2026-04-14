@@ -23,7 +23,7 @@ export default function BanBanner({
     setError("");
     const res = await submitAppeal(message);
     if ("error" in res) {
-      setError(res.error);
+      setError(res.error ?? "Something went wrong");
       setLoading(false);
     } else {
       setSent(true);

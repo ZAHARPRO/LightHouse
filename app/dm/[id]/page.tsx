@@ -173,7 +173,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
   }
 
   return (
-    <div className="max-w-[700px] mx-auto px-4 py-6 h-[calc(100vh-64px)] flex flex-col">
+    <div className="w-full px-6 py-6 h-[calc(100vh-64px)] flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-4 shrink-0">
@@ -187,6 +187,33 @@ export default function DMConversationPage({ params }: { params: { id: string } 
 
         {other && (
           <>
+            {/* Avatar */}
+            <Link href={`/profile/${other.id}`} no-underline
+              className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden"
+              style={{
+                background: `${TIER_COLORS[other.tier] ?? "#888"}20`,
+                border: `2px solid ${TIER_COLORS[other.tier] ?? "#888"}40`,
+                color: TIER_COLORS[other.tier] ?? "#888",
+              }}
+            >
+              {other.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={other.image} alt={other.name ?? "avatar"} className="w-full h-full object-cover" />
+              ) : (
+                (other.name ?? "?")[0].toUpperCase()
+              )}
+            </Link>
+
+            {/* Name + username */}
+            <Link href={`/profile/${other.id}`} className="no-underline flex-1 min-w-0">
+              <p className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)] hover:text-[var(--accent-orange)] transition-colors leading-tight">
+                {other.name}
+              </p>
+              {other.username && (
+                <p className="text-[0.72rem] text-[var(--text-muted)] leading-tight">@{other.username}</p>
+              )}
+            </Link>
+
             {/* Block button — left of avatar */}
             {isBlockedByMe ? (
               <button
@@ -207,33 +234,6 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                 <UserX size={15} />
               </button>
             )}
-
-            {/* Avatar */}
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden"
-              style={{
-                background: `${TIER_COLORS[other.tier] ?? "#888"}20`,
-                border: `2px solid ${TIER_COLORS[other.tier] ?? "#888"}40`,
-                color: TIER_COLORS[other.tier] ?? "#888",
-              }}
-            >
-              {other.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={other.image} alt={other.name ?? "avatar"} className="w-full h-full object-cover" />
-              ) : (
-                (other.name ?? "?")[0].toUpperCase()
-              )}
-            </div>
-
-            {/* Name + username */}
-            <Link href={`/profile/${other.id}`} className="no-underline flex-1 min-w-0">
-              <p className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)] hover:text-[var(--accent-orange)] transition-colors leading-tight">
-                {other.name}
-              </p>
-              {other.username && (
-                <p className="text-[0.72rem] text-[var(--text-muted)] leading-tight">@{other.username}</p>
-              )}
-            </Link>
           </>
         )}
       </div>
@@ -316,7 +316,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-3 pb-2">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pb-2">
         {messages.map((msg) => {
           const isMe  = msg.sender.id === myId;
           const color = TIER_COLORS[msg.sender.tier] ?? "#888";

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { TrendingUp, Star, Award, Crown, Eye, ThumbsUp, MessageSquare, Users, Video, FileText, Flame, BarChart2 } from "lucide-react";
 import ProfileTabs from "@/components/ProfileTabs";
+import BanBanner from "@/components/BanBanner";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -52,6 +53,11 @@ export default async function ProfilePage() {
 
   return (
     <div className="max-w-[900px] mx-auto px-6 py-12">
+
+      {/* Ban notice on own profile */}
+      {user.isBanned && (
+        <BanBanner reason={user.banReason ?? null} isOwn />
+      )}
 
       {/* Profile card */}
       <div className="card lighthouse-beam flex gap-8 items-center flex-wrap p-10 mb-8">

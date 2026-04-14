@@ -23,6 +23,9 @@ export async function createVideo(formData: FormData) {
 
   if (!title || !url) return { error: "Title and URL are required" };
 
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isBanned: true } });
+  if (me?.isBanned) return { error: "Your account has been suspended." };
+
   const video = await prisma.video.create({
     data: {
       title,

@@ -22,6 +22,9 @@ export async function sendChatMessage(content: string) {
     return { error: "Message must be 1-500 characters" };
   }
 
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isBanned: true } });
+  if (me?.isBanned) return { error: "Your account has been suspended." };
+
   const message = await prisma.chatMessage.create({
     data: { content: content.trim(), authorId: session.user.id },
     include: {

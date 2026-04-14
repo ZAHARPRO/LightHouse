@@ -7,6 +7,8 @@ import {
   Award, TrendingUp, Zap, ArrowLeft,
 } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
+import ReportButton from "@/components/ReportButton";
+import BanBanner from "@/components/BanBanner";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -58,6 +60,7 @@ export default async function PublicProfilePage({
         _count: { select: { subscribers: true, videos: true } },
       },
     });
+    // suppress unused warning — fields are read below
   } catch {
     notFound();
   }
@@ -87,8 +90,18 @@ export default async function PublicProfilePage({
   const pctToNext = (((user.points ?? 0) % 100) / 100) * 100;
   const totalViews = user.videos.reduce((sum: number, v: { views: number | null }) => sum + (v.views ?? 0), 0);
 
+  const isViewerStaff = ["ADMIN", "OPERATOR", "STAFF"].includes(session?.user?.role ?? "");
+
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "2.5rem 1.5rem" }}>
+
+      {/* Ban banner */}
+      {user.isBanned && (
+        <BanBanner
+          reason={user.banReason}
+          isOwn={isMe}
+        />
+      )}
 
       {/* Back */}
       <Link
@@ -149,7 +162,12 @@ export default async function PublicProfilePage({
                 Edit Profile
               </Link>
             ) : session?.user ? (
-              <SubscribeButton creatorId={id} initialFollowing={isFollowing} />
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <SubscribeButton creatorId={id} initialFollowing={isFollowing} />
+                {!isViewerStaff && (
+                  <ReportButton targetId={id} targetName={user.name ?? "user"} />
+                )}
+              </div>
             ) : (
               <Link
                 href="/auth/signin"

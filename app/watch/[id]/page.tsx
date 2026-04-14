@@ -11,6 +11,7 @@ import {
 import SubscribeButton from "@/components/SubscribeButton";
 import LikeButtons from "@/components/LikeButtons";
 import CommentsSection from "@/components/CommentsSection";
+import ReportButton from "@/components/ReportButton";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -303,15 +304,20 @@ export default async function WatchPage({
               </div>
             </Link>
 
-            {!isMe && (
-              session?.user ? (
-                <SubscribeButton creatorId={video.author.id} initialFollowing={isFollowing} />
-              ) : (
-                <Link href="/auth/signin" className="btn-primary no-underline py-2 px-5 text-sm">
-                  Sign in to subscribe
-                </Link>
-              )
-            )}
+            <div className="flex items-center gap-2">
+              {!isMe && (
+                session?.user ? (
+                  <SubscribeButton creatorId={video.author.id} initialFollowing={isFollowing} />
+                ) : (
+                  <Link href="/auth/signin" className="btn-primary no-underline py-2 px-5 text-sm">
+                    Sign in to subscribe
+                  </Link>
+                )
+              )}
+              {session?.user && !isMe && (
+                <ReportButton targetId={video.author.id} targetName={video.author.name ?? "user"} />
+              )}
+            </div>
           </div>
 
           {/* Description */}

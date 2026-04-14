@@ -15,6 +15,9 @@ export async function addPostComment(
   if (!session?.user?.id) return { error: "Not authenticated" };
   if (!content.trim()) return { error: "Content required" };
 
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isBanned: true } });
+  if (me?.isBanned) return { error: "Your account has been suspended." };
+
   const comment = await prisma.comment.create({
     data: {
       content: content.trim(),

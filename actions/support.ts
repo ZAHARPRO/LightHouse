@@ -20,6 +20,9 @@ export async function sendSupportMessage(content: string) {
   if (!session?.user?.id) return { error: "Not authenticated" };
   if (!content.trim()) return { error: "Empty message" };
 
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isBanned: true } });
+  if (me?.isBanned) return { error: "Your account has been suspended. Use the appeal form on your profile." };
+
   const conv = await getOrCreateConversation(session.user.id);
   const msg = await prisma.supportMessage.create({
     data: {

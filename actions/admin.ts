@@ -162,6 +162,61 @@ export async function awardBadgeToUser(data: {
   return { ok: true };
 }
 
+/* ── Reported users list ── */
+export async function getReportedUsers() {
+  await requireAdmin();
+  const reports = await prisma.report.groupBy({
+    by: ["targetId"],
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+  });
+
+  if (reports.length === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: reports.map((r: { targetId: string; _count: { id: number } }) => r.targetId) } },
+    select: { id: true, name: true, email: true, role: true, isBanned: true, banReason: true, bannedAt: true },
+  });
+
+  const countMap = new Map(
+    reports.map((r: { targetId: string; _count: { id: number } }) => [r.targetId, r._count.id])
+  );
+  return users
+    .map((u) => ({ ...u, reportCount: countMap.get(u.id) ?? 0 }))
+    .sort((a, b) => (b.reportCount as number) - (a.reportCount as number));
+}
+
+/* ── Ban a user ── */
+export async function banUser(userId: string, reason: string) {
+  const session = await requireAdmin();
+  if (userId === session.user.id) return { error: "Cannot ban yourself" };
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isBanned: true, banReason: reason.trim() || "Violated community guidelines", bannedAt: new Date() },
+  });
+  revalidatePath("/admin/reports");
+  return { ok: true };
+}
+
+/* ── Unban a user ── */
+export async function unbanUser(userId: string) {
+  await requireAdmin();
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isBanned: false, banReason: null, bannedAt: null },
+  });
+  revalidatePath("/admin/reports");
+  return { ok: true };
+}
+
+/* ── Dismiss all reports for a user ── */
+export async function dismissReports(targetId: string) {
+  await requireAdmin();
+  await prisma.report.deleteMany({ where: { targetId } });
+  revalidatePath("/admin/reports");
+  return { ok: true };
+}
+
 /* ── Staff members list ── */
 export async function getStaffMembers() {
   await requireAdmin();

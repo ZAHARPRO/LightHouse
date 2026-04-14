@@ -35,7 +35,7 @@ export default function ReportButton({
     setError("");
     const res = await reportUser(targetId, finalReason);
     if ("error" in res) {
-      setError(res.error);
+      setError(res.error ?? "Something went wrong");
       setLoading(false);
     } else {
       setDone(true);

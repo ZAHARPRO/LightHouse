@@ -45,7 +45,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
     getDMMessages(convId).then((res) => {
       if ("messages" in res) {
         setMessages(res.messages as DMsg[]);
-        setMyId(res.myId);
+        setMyId(res.myId ?? "");
       }
     });
   }, [convId]);

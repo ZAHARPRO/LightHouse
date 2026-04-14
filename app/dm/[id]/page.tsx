@@ -186,7 +186,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
         </Link>
 
         {other && (
-          <>
+          <div className="flex-1 min-w-0">
             {/* Avatar */}
             <Link href={`/profile/${other.id}`} no-underline
               className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden"
@@ -234,7 +234,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                 <UserX size={15} />
               </button>
             )}
-          </>
+          </div>
         )}
       </div>
 

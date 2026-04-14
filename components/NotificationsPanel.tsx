@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   X, Bell, GitCommit, Loader, AlertCircle, ExternalLink,
-  Megaphone, Cog, FileText, Video, ChevronDown, Lock, Play,
+  Megaphone, Cog, FileText, Video, ChevronDown, Lock, Play, MessageCircle,
 } from "lucide-react";
 
 /* ─── Types ─── */
@@ -33,6 +33,14 @@ type NotifVideo = {
   duration: number | null;
   createdAt: string;
   author: { id: string; name: string | null; tier: string };
+};
+
+type NotifDM = {
+  id: string;
+  updatedAt: string;
+  other: { id: string; name: string | null; username: string | null; tier: string; image: string | null };
+  lastMessage: { content: string; senderId: string; createdAt: string; isDeleted: boolean } | null;
+  lastIsMe: boolean;
 };
 
 /* ─── Helpers ─── */
@@ -151,6 +159,9 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   const [videos, setVideos]           = useState<NotifVideo[]>([]);
   const [videosLoading, setVideosLoading]   = useState(true);
 
+  const [dms, setDms]                 = useState<NotifDM[]>([]);
+  const [dmsLoading, setDmsLoading]   = useState(true);
+
   // Timestamps of when user last opened each section (persisted in localStorage)
   const [siteNewsSeenAt, setSiteNewsSeenAt] = useState<number>(
     () => parseInt(localStorage.getItem("lh_notif_sitenews_seen") ?? "0", 10)
@@ -158,11 +169,11 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   const [devNewsSeenAt, setDevNewsSeenAt]   = useState<number>(
     () => parseInt(localStorage.getItem("lh_notif_devnews_seen") ?? "0", 10)
   );
-  const [postsSeenAt, setPostsSeenAt]       = useState<number>(
-    () => parseInt(localStorage.getItem("lh_notif_posts_seen") ?? "0", 10)
+  const [contentSeenAt, setContentSeenAt]   = useState<number>(
+    () => parseInt(localStorage.getItem("lh_notif_content_seen") ?? "0", 10)
   );
-  const [videosSeenAt, setVideosSeenAt]     = useState<number>(
-    () => parseInt(localStorage.getItem("lh_notif_videos_seen") ?? "0", 10)
+  const [dmsSeenAt, setDmsSeenAt]           = useState<number>(
+    () => parseInt(localStorage.getItem("lh_notif_dms_seen") ?? "0", 10)
   );
 
   function markSeen(key: string, setter: (n: number) => void) {
@@ -173,17 +184,18 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
 
   // Call onAllSeen when every section's unread count drops to zero
   useEffect(() => {
-    if (commitsLoading || postsLoading || videosLoading) return;
+    if (commitsLoading || postsLoading || videosLoading || dmsLoading) return;
 
     const unread =
       SITE_NEWS.filter(n => new Date(n.date).getTime() > siteNewsSeenAt).length +
       commits.filter(c => new Date(c.date).getTime() > devNewsSeenAt).length +
-      posts.filter(p => new Date(p.createdAt).getTime() > postsSeenAt).length +
-      videos.filter(v => new Date(v.createdAt).getTime() > videosSeenAt).length;
+      (posts.filter(p => new Date(p.createdAt).getTime() > contentSeenAt).length +
+       videos.filter(v => new Date(v.createdAt).getTime() > contentSeenAt).length) +
+      dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length;
 
     if (unread === 0) onAllSeen();
-  }, [siteNewsSeenAt, devNewsSeenAt, postsSeenAt, videosSeenAt,
-      commits, posts, videos, commitsLoading, postsLoading, videosLoading]);
+  }, [siteNewsSeenAt, devNewsSeenAt, contentSeenAt, dmsSeenAt,
+      commits, posts, videos, dms, commitsLoading, postsLoading, videosLoading, dmsLoading]);
 
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -221,6 +233,13 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
       .then((data) => setVideos(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setVideosLoading(false));
+
+    // DM conversations
+    fetch("/api/notifications/dms")
+      .then((r) => r.json())
+      .then((data) => setDms(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setDmsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -411,129 +430,85 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
           )}
         </Section>
 
-        {/* ══ 2. New Posts ══ */}
+        {/* ══ 2. New Content (Posts + Videos) ══ */}
         <Section
           icon={<FileText size={14} />}
-          label="New Posts"
-          badge={posts.filter(p => new Date(p.createdAt).getTime() > postsSeenAt).length}
-          onOpen={() => markSeen("lh_notif_posts_seen", setPostsSeenAt)}
+          label="New Content"
+          badge={posts.filter(p => new Date(p.createdAt).getTime() > contentSeenAt).length + videos.filter(v => new Date(v.createdAt).getTime() > contentSeenAt).length}
+          onOpen={() => markSeen("lh_notif_content_seen", setContentSeenAt)}
         >
-          {postsLoading && (
+          {(postsLoading || videosLoading) && (
             <div className="py-5 text-center">
               <Loader size={16} className="mx-auto text-[var(--accent-orange)] animate-spin" />
             </div>
           )}
 
-          {!postsLoading && posts.length === 0 && (
+          {!postsLoading && !videosLoading && posts.length === 0 && videos.length === 0 && (
             <p className="px-4 py-5 text-center text-xs text-[var(--text-muted)]">
-              No new posts from your subscriptions.
+              No new posts or videos from your subscriptions.
             </p>
           )}
 
-          {!postsLoading && posts.map((p, i) => {
-            const color = TIER_COLORS[p.author.tier] ?? "#666";
+          {!postsLoading && !videosLoading && [...posts.map(p => ({ ...p, type: "post" as const })), ...videos.map(v => ({ ...v, type: "video" as const }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((item, i, arr) => {
+            const color = TIER_COLORS[item.author.tier] ?? "#666";
+            const isPost = item.type === "post";
             return (
               <Link
-                key={p.id}
-                href={`/post/${p.id}`}
+                key={`${item.type}-${item.id}`}
+                href={isPost ? `/post/${item.id}` : `/watch/${item.id}`}
                 onClick={onClose}
                 className={[
                   "flex items-start gap-3 px-4 py-3 no-underline transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]",
-                  i < posts.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
+                  i < arr.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
                 ].join(" ")}
               >
-                {/* Avatar */}
-                <div
-                  className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem] mt-[2px]"
-                  style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                >
-                  {(p.author.name ?? "?")[0].toUpperCase()}
-                </div>
+                {/* Icon/Avatar */}
+                {isPost ? (
+                  <div
+                    className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem] mt-[2px]"
+                    style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
+                  >
+                    {(item.author.name ?? "?")[0].toUpperCase()}
+                  </div>
+                ) : (
+                  <div
+                    className="w-10 h-[26px] rounded shrink-0 flex items-center justify-center mt-[2px]"
+                    style={{ background: `${color}18`, border: `1px solid ${color}30` }}
+                  >
+                    <Play size={10} style={{ color }} />
+                  </div>
+                )}
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 mb-[0.2rem]">
+                    {!isPost && (
+                      <div
+                        className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.4375rem]"
+                        style={{ background: `${color}22`, border: `1px solid ${color}50`, color }}
+                      >
+                        {(item.author.name ?? "?")[0].toUpperCase()}
+                      </div>
+                    )}
                     <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
-                      {p.author.name}
+                      {item.author.name}
                     </span>
-                    {p.isPremium && <Lock size={10} className="text-[var(--accent-orange)] shrink-0" />}
+                    {item.isPremium && <Lock size={10} className="text-[var(--accent-orange)] shrink-0" />}
+                    <span className="text-[0.65rem] text-[var(--text-muted)] ml-auto">
+                      {isPost ? "Post" : "Video"}
+                    </span>
                   </div>
                   <p
                     className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] overflow-hidden"
                     style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
                   >
-                    {p.title}
-                  </p>
-                  <span className="text-[0.6875rem] text-[var(--text-muted)]">{timeAgo(p.createdAt)}</span>
-                </div>
-              </Link>
-            );
-          })}
-        </Section>
-
-        {/* ══ 3. New Videos ══ */}
-        <Section
-          icon={<Video size={14} />}
-          label="New Videos"
-          badge={videos.filter(v => new Date(v.createdAt).getTime() > videosSeenAt).length}
-          onOpen={() => markSeen("lh_notif_videos_seen", setVideosSeenAt)}
-        >
-          {videosLoading && (
-            <div className="py-5 text-center">
-              <Loader size={16} className="mx-auto text-[var(--accent-orange)] animate-spin" />
-            </div>
-          )}
-
-          {!videosLoading && videos.length === 0 && (
-            <p className="px-4 py-5 text-center text-xs text-[var(--text-muted)]">
-              No new videos from your subscriptions.
-            </p>
-          )}
-
-          {!videosLoading && videos.map((v, i) => {
-            const color = TIER_COLORS[v.author.tier] ?? "#666";
-            return (
-              <Link
-                key={v.id}
-                href={`/watch/${v.id}`}
-                onClick={onClose}
-                className={[
-                  "flex items-start gap-3 px-4 py-3 no-underline transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]",
-                  i < videos.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
-                ].join(" ")}
-              >
-                {/* Thumbnail placeholder */}
-                <div
-                  className="w-10 h-[26px] rounded shrink-0 flex items-center justify-center mt-[2px]"
-                  style={{ background: `${color}18`, border: `1px solid ${color}30` }}
-                >
-                  <Play size={10} style={{ color }} />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 mb-[0.2rem]">
-                    <div
-                      className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.4375rem]"
-                      style={{ background: `${color}22`, border: `1px solid ${color}50`, color }}
-                    >
-                      {(v.author.name ?? "?")[0].toUpperCase()}
-                    </div>
-                    <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
-                      {v.author.name}
-                    </span>
-                    {v.isPremium && <Lock size={10} className="text-[var(--accent-orange)] shrink-0" />}
-                  </div>
-                  <p
-                    className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] overflow-hidden"
-                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-                  >
-                    {v.title}
+                    {item.title}
                   </p>
                   <div className="flex items-center gap-2 mt-[0.2rem]">
-                    <span className="text-[0.6875rem] text-[var(--text-muted)]">{timeAgo(v.createdAt)}</span>
-                    {v.duration && (
+                    <span className="text-[0.6875rem] text-[var(--text-muted)]">{timeAgo(item.createdAt)}</span>
+                    {!isPost && "duration" in item && item.duration && (
                       <>
                         <span className="text-[var(--border-subtle)] text-[0.6875rem]">·</span>
-                        <span className="text-[0.6875rem] text-[var(--text-muted)]">{fmtDuration(v.duration)}</span>
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">{fmtDuration(item.duration)}</span>
                       </>
                     )}
                   </div>
@@ -541,6 +516,97 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
               </Link>
             );
           })}
+        </Section>
+
+        {/* ══ 3. Direct Messages ══ */}
+        <Section
+          icon={<MessageCircle size={14} />}
+          label="Direct Messages"
+          badge={dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length}
+          onOpen={() => markSeen("lh_notif_dms_seen", setDmsSeenAt)}
+        >
+          {dmsLoading && (
+            <div className="py-5 text-center">
+              <Loader size={16} className="mx-auto text-[var(--accent-orange)] animate-spin" />
+            </div>
+          )}
+
+          {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length === 0 && (
+            <p className="px-4 py-5 text-center text-sm text-[var(--text-muted)] italic">
+              cry baby you're alone 👶
+            </p>
+          )}
+
+          {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).map((dm, i, arr) => {
+            const color = TIER_COLORS[dm.other.tier] ?? "#666";
+            const preview = dm.lastMessage
+              ? dm.lastMessage.isDeleted
+                ? "Message deleted"
+                : dm.lastIsMe
+                  ? `You: ${dm.lastMessage.content}`
+                  : dm.lastMessage.content
+              : "No messages yet";
+            return (
+              <Link
+                key={dm.id}
+                href={`/dm/${dm.id}`}
+                onClick={onClose}
+                className={[
+                  "flex items-center gap-3 px-4 py-3 no-underline transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]",
+                  i < arr.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
+                ].join(" ")}
+              >
+                {/* Avatar */}
+                <div
+                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem] overflow-hidden"
+                  style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
+                >
+                  {dm.other.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={dm.other.image} alt={dm.other.name ?? "avatar"} className="w-full h-full object-cover" />
+                  ) : (
+                    (dm.other.name ?? "?")[0].toUpperCase()
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-1 mb-[0.15rem]">
+                    <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] truncate">
+                      {dm.other.name}
+                      {dm.other.username && (
+                        <span className="font-normal text-[0.7rem] text-[var(--text-muted)] ml-1">
+                          @{dm.other.username}
+                        </span>
+                      )}
+                    </span>
+                    {dm.lastMessage && (
+                      <span className="text-[0.6rem] text-[var(--text-muted)] shrink-0">
+                        {timeAgo(dm.lastMessage.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="text-[0.75rem] text-[var(--text-muted)] truncate"
+                    style={{ fontStyle: dm.lastMessage?.isDeleted ? "italic" : undefined }}
+                  >
+                    {preview}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+
+          {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length > 0 && (
+            <div className="px-4 py-2 flex items-center justify-end border-t border-[var(--border-subtle)]">
+              <Link
+                href="/dm"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] no-underline font-display hover:text-[var(--accent-orange)] transition-colors duration-150"
+              >
+                <MessageCircle size={11} /> All messages
+              </Link>
+            </div>
+          )}
         </Section>
 
       </div>

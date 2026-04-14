@@ -16,6 +16,7 @@ type Message = {
     image: string | null;
     tier: string;
   };
+  isError?: boolean;
 };
 
 const DEMO_MESSAGES: Message[] = [
@@ -97,6 +98,19 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.map((m) => (m.id === optimistic.id ? (result.message as Message) : m))
       );
+    } else if (result.error) {
+      const errId = `err-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== optimistic.id),
+        {
+          id: errId,
+          content: result.error!,
+          createdAt: new Date(),
+          author: { id: "system", name: "System", image: null, tier: "FREE" },
+          isError: true,
+        },
+      ]);
+      setTimeout(() => setMessages((prev) => prev.filter((m) => m.id !== errId)), 6000);
     }
     setSending(false);
   }
@@ -139,6 +153,18 @@ export default function ChatPage() {
           {sorted.map((msg) => {
             const tier = TIER_LABELS[msg.author.tier] ?? TIER_LABELS.FREE;
             const isMe = msg.author.id === session?.user?.id;
+
+            if (msg.isError) {
+              return (
+                <div key={msg.id} className="flex justify-center">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-display font-semibold"
+                    style={{ background: "rgba(239,68,68,0.10)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}>
+                    ⚠ {msg.content}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={msg.id}

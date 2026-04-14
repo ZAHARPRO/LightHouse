@@ -23,14 +23,18 @@ export default function ReportButton({
   const [open, setOpen]       = useState(false);
   const [reason, setReason]   = useState("");
   const [custom, setCustom]   = useState("");
+  const [details, setDetails] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone]       = useState(false);
   const [error, setError]     = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const finalReason = reason === "Other" ? custom.trim() : reason;
-    if (!finalReason) { setError("Please select or enter a reason."); return; }
+    const baseReason = reason === "Other" ? custom.trim() : reason;
+    if (!baseReason) { setError("Please select or enter a reason."); return; }
+    const finalReason = details.trim()
+      ? `${baseReason} — ${details.trim()}`
+      : baseReason;
     setLoading(true);
     setError("");
     const res = await reportUser(targetId, finalReason);
@@ -47,6 +51,7 @@ export default function ReportButton({
     setDone(false);
     setReason("");
     setCustom("");
+    setDetails("");
     setError("");
   }
 
@@ -124,6 +129,29 @@ export default function ReportButton({
                       required
                     />
                   )}
+
+                  {/* Optional details */}
+                  <div className="mb-3">
+                    <label className="block text-[0.72rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-[0.05em] mb-1.5">
+                      Additional details <span className="normal-case font-normal opacity-70">(optional)</span>
+                    </label>
+                    <textarea
+                      value={details}
+                      onChange={(e) => setDetails(e.target.value)}
+                      placeholder="Describe what happened in more detail…"
+                      rows={2}
+                      className="input-field w-full resize-none text-sm"
+                    />
+                  </div>
+
+                  {/* Hint */}
+                  <div
+                    className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-3 text-[0.75rem] text-[var(--text-muted)] leading-[1.5]"
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
+                  >
+                    <span className="shrink-0 mt-px">💡</span>
+                    <span>Providing additional context helps our team reach a fair and accurate decision.</span>
+                  </div>
 
                   {error && (
                     <p className="text-red-400 text-sm mb-3">{error}</p>

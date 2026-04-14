@@ -75,10 +75,46 @@ export default function Navbar() {
 
   const storageKey = `lh_last_seen_commit_${session?.user?.id ?? "guest"}`;
 
+  // Dates of static site-news items — keep in sync with NotificationsPanel
+  const SITE_NEWS_DATES = ["2026-04-13", "2026-04-12"];
+
+  // Background unread check — runs on mount and whenever session changes.
+  // Does NOT require the panel to be open.
   useEffect(() => {
-    const seen = localStorage.getItem(storageKey);
-    setHasNew(!seen);
-  }, [storageKey]);
+    const siteNewsSeenAt = parseInt(localStorage.getItem("lh_notif_sitenews_seen") ?? "0", 10);
+    const devNewsSeenAt  = parseInt(localStorage.getItem("lh_notif_devnews_seen")  ?? "0", 10);
+    const postsSeenAt    = parseInt(localStorage.getItem("lh_notif_posts_seen")    ?? "0", 10);
+    const videosSeenAt   = parseInt(localStorage.getItem("lh_notif_videos_seen")   ?? "0", 10);
+
+    // 1. Check static site news immediately (no fetch needed)
+    const siteNewsUnread = SITE_NEWS_DATES.some(
+      (d) => new Date(d).getTime() > siteNewsSeenAt
+    );
+    if (siteNewsUnread) { setHasNew(true); return; }
+
+    // 2. Fetch the rest in background
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    Promise.all([
+      fetch("/api/github-commits").then((r) => r.json()).catch(() => []),
+      fetch("/api/notifications/posts").then((r) => r.json()).catch(() => []),
+      fetch("/api/notifications/videos").then((r) => r.json()).catch(() => []),
+    ]).then(([commits, posts, videos]) => {
+      const unread =
+        (Array.isArray(commits) && commits.some(
+          (c: { date: string }) =>
+            new Date(c.date).getTime() > devNewsSeenAt &&
+            new Date(c.date).getTime() >= weekAgo
+        )) ||
+        (Array.isArray(posts) && posts.some(
+          (p: { createdAt: string }) => new Date(p.createdAt).getTime() > postsSeenAt
+        )) ||
+        (Array.isArray(videos) && videos.some(
+          (v: { createdAt: string }) => new Date(v.createdAt).getTime() > videosSeenAt
+        ));
+      setHasNew(unread);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -93,10 +129,10 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notifOpen]);
 
+  // Called by NotificationsPanel when commits load — used to mark SHA as seen
   function handleCommitsLoaded(latestSha: string | null) {
     if (!latestSha) return;
-    const seen = localStorage.getItem(storageKey);
-    if (seen !== latestSha) setHasNew(true);
+    localStorage.setItem(storageKey, latestSha);
   }
 
   function openNotif()  { if (!notifClosing) setNotifOpen(true); }
@@ -110,8 +146,23 @@ export default function Navbar() {
   // Support inbox (staff only)
   const [inboxOpen, setInboxOpen]       = useState(false);
   const [inboxClosing, setInboxClosing] = useState(false);
+  const [hasNewTickets, setHasNewTickets] = useState(false);
   const inboxBtnRef = useRef<HTMLButtonElement>(null);
   const inboxPanelRef = useRef<HTMLDivElement>(null);
+
+  // Background unread-ticket check for staff
+  useEffect(() => {
+    if (!isStaff) return;
+    function check() {
+      fetch("/api/support/unread")
+        .then((r) => r.json())
+        .then((d) => setHasNewTickets((d?.count ?? 0) > 0))
+        .catch(() => {});
+    }
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [isStaff]);
 
   function openInbox()  { if (!inboxClosing) setInboxOpen(true); }
   function closeInbox() {
@@ -218,11 +269,14 @@ export default function Navbar() {
             {isStaff && (
               <button
                 ref={inboxBtnRef}
-                onClick={toggleInbox}
+                onClick={() => { toggleInbox(); setHasNewTickets(false); }}
                 title="Support Inbox"
                 className={[iconBtn(inboxOpen), "relative"].join(" ")}
               >
                 <Inbox size={16} />
+                {hasNewTickets && !inboxOpen && (
+                  <span className="absolute top-[6px] right-[6px] w-[7px] h-[7px] rounded-full bg-[var(--accent-orange)] border-[1.5px] border-[var(--bg-primary)]" />
+                )}
               </button>
             )}
 

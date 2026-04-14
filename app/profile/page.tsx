@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TrendingUp, Star, Award, Crown, Eye, ThumbsUp, MessageSquare, Users, Video, FileText, Flame, BarChart2 } from "lucide-react";
+import { TrendingUp, Star, Award, Crown, Eye, ThumbsUp, MessageSquare, Users, Video, FileText, Flame, BarChart2, MessageCircle } from "lucide-react";
+import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
 import BanBanner from "@/components/BanBanner";
 
@@ -83,6 +84,13 @@ export default async function ProfilePage() {
             >
               {user.tier}
             </span>
+            <Link
+              href="/dm"
+              className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
+            >
+              <MessageCircle size={13} />
+              Messages
+            </Link>
           </div>
           <p className="text-[var(--text-muted)] text-sm mb-4">{user.email}</p>
 

@@ -16,6 +16,9 @@ export async function createPost(formData: FormData) {
   if (!title || !content) return { error: "Title and content are required" };
   if (title.length > 200)  return { error: "Title is too long (max 200 chars)" };
 
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isBanned: true } });
+  if (me?.isBanned) return { error: "Your account has been suspended." };
+
   const post = await prisma.post.create({
     data: { title, content, isPremium, authorId: session.user.id },
   });

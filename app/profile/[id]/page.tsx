@@ -9,6 +9,7 @@ import {
 import SubscribeButton from "@/components/SubscribeButton";
 import ReportButton from "@/components/ReportButton";
 import BanBanner from "@/components/BanBanner";
+import MessageButton from "@/components/MessageButton";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -164,6 +165,7 @@ export default async function PublicProfilePage({
             ) : session?.user ? (
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <SubscribeButton creatorId={id} initialFollowing={isFollowing} />
+                <MessageButton targetId={id} />
                 {!isViewerStaff && (
                   <ReportButton targetId={id} targetName={user.name ?? "user"} />
                 )}

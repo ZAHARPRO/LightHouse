@@ -186,10 +186,11 @@ export default function DMConversationPage({ params }: { params: { id: string } 
         </Link>
 
         {other && (
-          <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
             {/* Avatar */}
-            <Link href={`/profile/${other.id}`} no-underline
-              className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden"
+            <Link
+              href={`/profile/${other.id}`}
+              className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden no-underline"
               style={{
                 background: `${TIER_COLORS[other.tier] ?? "#888"}20`,
                 border: `2px solid ${TIER_COLORS[other.tier] ?? "#888"}40`,
@@ -205,7 +206,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
             </Link>
 
             {/* Name + username */}
-            <Link href={`/profile/${other.id}`} className="no-underline flex-1 min-w-0">
+            <Link href={`/profile/${other.id}`} className="no-underline">
               <p className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)] hover:text-[var(--accent-orange)] transition-colors leading-tight">
                 {other.name}
               </p>
@@ -214,7 +215,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
               )}
             </Link>
 
-            {/* Block button — left of avatar */}
+            {/* Block button */}
             {isBlockedByMe ? (
               <button
                 onClick={handleUnblock}
@@ -317,9 +318,10 @@ export default function DMConversationPage({ params }: { params: { id: string } 
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pb-2">
-        {messages.map((msg) => {
-          const isMe  = msg.sender.id === myId;
-          const color = TIER_COLORS[msg.sender.tier] ?? "#888";
+        {messages.map((msg, msgIndex) => {
+          const isMe      = msg.sender.id === myId;
+          const color     = TIER_COLORS[msg.sender.tier] ?? "#888";
+          const menuBelow = msgIndex < 3;
 
           return (
             <div
@@ -428,7 +430,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                       style={{
                         background: "var(--bg-card)",
                         border: "1px solid var(--border-subtle)",
-                        bottom: "110%",
+                        ...(menuBelow ? { top: "110%" } : { bottom: "110%" }),
                         [isMe ? "right" : "left"]: 0,
                       }}
                       onClick={(e) => e.stopPropagation()}

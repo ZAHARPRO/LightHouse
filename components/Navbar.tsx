@@ -211,7 +211,7 @@ export default function Navbar() {
               <Menu size={17} />
             </button>
 
-            <Link href="/" className="flex items-center gap-2 no-underline">
+            <Link href="/feed" className="flex items-center gap-2 no-underline">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--accent-orange)] shrink-0">
                 <Zap size={18} color="white" strokeWidth={2.5} />
               </div>
@@ -240,7 +240,6 @@ export default function Navbar() {
             {/* Nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
               {[
-                { href: "/feed",          label: "Feed" },
                 { href: "/subscriptions", label: "Plans" },
                 { href: "/contact",       label: "Contact" },
               ].map(({ href, label }) => (

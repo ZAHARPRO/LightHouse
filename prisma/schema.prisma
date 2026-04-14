@@ -12,6 +12,7 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   name          String?
+  username      String?   @unique
   email         String?   @unique
   emailVerified DateTime?
   image         String?
@@ -50,6 +51,8 @@ model User {
   dmConvs1             DirectConversation[] @relation("DMUser1")
   dmConvs2             DirectConversation[] @relation("DMUser2")
   directMessagesSent   DirectMessage[]      @relation("DMSender")
+  blocksMade           Block[]              @relation("BlocksMade")
+  blocksReceived       Block[]              @relation("BlocksReceived")
 }
 
 model Account {
@@ -253,6 +256,9 @@ model DirectMessage {
   id             String   @id @default(cuid())
   content        String   @db.Text
   createdAt      DateTime @default(now())
+  isEdited       Boolean  @default(false)
+  isPinned       Boolean  @default(false)
+  isDeleted      Boolean  @default(false)
 
   senderId       String
   sender         User               @relation("DMSender", fields: [senderId], references: [id], onDelete: Cascade)
@@ -263,6 +269,18 @@ model DirectMessage {
   replyToId      String?
   replyTo        DirectMessage?  @relation("DMReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   replies        DirectMessage[] @relation("DMReplies")
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  blockerId String
+  blocker   User   @relation("BlocksMade",     fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User   @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
 }
 
 model Report {

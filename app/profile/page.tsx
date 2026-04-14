@@ -5,6 +5,8 @@ import { TrendingUp, Star, Award, Crown, Eye, ThumbsUp, MessageSquare, Users, Vi
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
 import BanBanner from "@/components/BanBanner";
+import AvatarUpload from "@/components/AvatarUpload";
+import UsernameEditor from "@/components/UsernameEditor";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -64,14 +66,11 @@ export default async function ProfilePage() {
       <div className="card lighthouse-beam flex gap-8 items-center flex-wrap p-10 mb-8">
 
         {/* Avatar */}
-        <div
-          style={{ background: `${tierColor}22`, border: `3px solid ${tierColor}44` }}
-          className="w-[88px] h-[88px] rounded-full shrink-0 flex items-center justify-center"
-        >
-          <span style={{ color: tierColor }} className="font-display font-extrabold text-[2.25rem]">
-            {(user.name ?? "U")[0].toUpperCase()}
-          </span>
-        </div>
+        <AvatarUpload
+          currentImage={user.image ?? null}
+          tierColor={tierColor}
+          name={user.name ?? "U"}
+        />
 
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap mb-1">
@@ -92,7 +91,10 @@ export default async function ProfilePage() {
               Messages
             </Link>
           </div>
-          <p className="text-[var(--text-muted)] text-sm mb-4">{user.email}</p>
+          <p className="text-[var(--text-muted)] text-sm mb-2">{user.email}</p>
+          <div className="mb-4">
+            <UsernameEditor initialUsername={user.username ?? null} />
+          </div>
 
           {/* Level bar */}
           <div className="max-w-[320px]">

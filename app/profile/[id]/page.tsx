@@ -10,6 +10,7 @@ import SubscribeButton from "@/components/SubscribeButton";
 import ReportButton from "@/components/ReportButton";
 import BanBanner from "@/components/BanBanner";
 import MessageButton from "@/components/MessageButton";
+import BlockButton from "@/components/BlockButton";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -93,6 +94,14 @@ export default async function PublicProfilePage({
 
   const isViewerStaff = ["ADMIN", "OPERATOR", "STAFF"].includes(session?.user?.role ?? "");
 
+  let isBlockedByMe = false;
+  if (session?.user?.id && !isMe) {
+    const block = await prisma.block.findUnique({
+      where: { blockerId_blockedId: { blockerId: session.user.id, blockedId: id } },
+    });
+    isBlockedByMe = !!block;
+  }
+
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "2.5rem 1.5rem" }}>
 
@@ -130,15 +139,21 @@ export default async function PublicProfilePage({
           width: 88, height: 88, borderRadius: "50%",
           background: `${tierColor}22`, border: `3px solid ${tierColor}55`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
+          flexShrink: 0, overflow: "hidden",
         }}>
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2.25rem", color: tierColor }}>
-            {(user.name ?? "?")[0].toUpperCase()}
-          </span>
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt={user.name ?? "avatar"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2.25rem", color: tierColor }}>
+              {(user.name ?? "?")[0].toUpperCase()}
+            </span>
+          )}
         </div>
 
         {/* Info */}
         <div style={{ flex: 1, minWidth: 200 }}>
+          {/* Name + username + tier */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.75rem", letterSpacing: "-0.02em" }}>
               {user.name}
@@ -150,11 +165,20 @@ export default async function PublicProfilePage({
             }}>
               {TIER_LABEL[user.tier] ?? user.tier}
             </span>
+          </div>
+          {user.username && (
+            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <span style={{ opacity: 0.5 }}>@</span>{user.username}
+            </p>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
             {isMe ? (
               <Link
                 href="/profile"
                 style={{
-                  fontSize: "0.75rem", padding: "0.1875rem 0.75rem", borderRadius: 100,
+                  fontSize: "0.75rem", padding: "0.375rem 0.875rem", borderRadius: 8,
                   background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
                   color: "var(--text-muted)", textDecoration: "none",
                   fontFamily: "var(--font-display)", fontWeight: 600,
@@ -163,13 +187,14 @@ export default async function PublicProfilePage({
                 Edit Profile
               </Link>
             ) : session?.user ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <>
                 <SubscribeButton creatorId={id} initialFollowing={isFollowing} />
                 <MessageButton targetId={id} />
+                <BlockButton targetId={id} targetName={user.name ?? "user"} initialBlocked={isBlockedByMe} />
                 {!isViewerStaff && (
                   <ReportButton targetId={id} targetName={user.name ?? "user"} />
                 )}
-              </div>
+              </>
             ) : (
               <Link
                 href="/auth/signin"

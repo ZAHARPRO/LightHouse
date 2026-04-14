@@ -67,12 +67,22 @@ export async function getDMMessages(convId: string) {
 
   const conv = await prisma.directConversation.findUnique({
     where: { id: convId },
-    select: { user1Id: true, user2Id: true },
+    select: {
+      user1Id: true,
+      user2Id: true,
+      user1: { select: { id: true, isBanned: true, banReason: true, bannedAt: true } },
+      user2: { select: { id: true, isBanned: true, banReason: true, bannedAt: true } },
+    },
   });
 
   if (!conv || (conv.user1Id !== me && conv.user2Id !== me)) {
     return { error: "Not found" };
   }
+
+  const otherUser = conv.user1Id === me ? conv.user2 : conv.user1;
+  const otherBan = otherUser.isBanned
+    ? { reason: otherUser.banReason, bannedAt: otherUser.bannedAt }
+    : null;
 
   const messages = await prisma.directMessage.findMany({
     where: { conversationId: convId },
@@ -89,7 +99,7 @@ export async function getDMMessages(convId: string) {
     },
   });
 
-  return { messages, myId: me };
+  return { messages, myId: me, otherBan };
 }
 
 /* ── Send a message ── */

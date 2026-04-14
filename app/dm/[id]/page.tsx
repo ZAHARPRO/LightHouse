@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { getDMMessages, sendDirectMessage } from "@/actions/dm";
-import { ArrowLeft, Reply, Send, X } from "lucide-react";
+import { ArrowLeft, Reply, Send, X, ShieldOff } from "lucide-react";
 import Link from "next/link";
 
 type DMSender = { id: string; name: string | null; tier: string };
@@ -34,6 +34,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
 
   const [messages, setMessages] = useState<DMsg[]>([]);
   const [myId, setMyId]         = useState<string>("");
+  const [otherBan, setOtherBan] = useState<{ reason: string | null; bannedAt: Date | null } | null>(null);
   const [input, setInput]       = useState("");
   const [replyTo, setReplyTo]   = useState<{ id: string; name: string; content: string } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
       if ("messages" in res) {
         setMessages(res.messages as DMsg[]);
         setMyId(res.myId ?? "");
+        setOtherBan(res.otherBan ?? null);
       }
     });
   }, [convId]);
@@ -112,6 +114,29 @@ export default function DMConversationPage({ params }: { params: { id: string } 
           </>
         )}
       </div>
+
+      {/* Ban notice */}
+      {otherBan && (
+        <div
+          className="shrink-0 flex items-start gap-2.5 px-4 py-3 rounded-xl mb-3 text-[0.8125rem]"
+          style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}
+        >
+          <ShieldOff size={15} className="shrink-0 mt-0.5" style={{ color: "#f87171" }} />
+          <div>
+            <span className="font-display font-semibold" style={{ color: "#f87171" }}>
+              This user&apos;s account has been suspended.
+            </span>
+            {otherBan.reason && (
+              <span className="ml-1.5">Reason: {otherBan.reason}.</span>
+            )}
+            {otherBan.bannedAt && (
+              <span className="ml-1.5 opacity-70">
+                — {new Date(otherBan.bannedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto flex flex-col gap-3 pb-2">

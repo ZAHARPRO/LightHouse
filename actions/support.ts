@@ -116,6 +116,24 @@ export async function staffReply(convId: string, content: string) {
   return { message: msg };
 }
 
+/* ── Staff: get all conversations for a specific user ── */
+export async function getUserTickets(userId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+  if (!STAFF_ROLES.includes(session.user.role)) return [];
+
+  return prisma.supportConversation.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      messages: {
+        orderBy: { createdAt: "asc" },
+        include: { sender: { select: { id: true, name: true } } },
+      },
+    },
+  });
+}
+
 /* ── Staff: update their own lastActiveAt (presence ping) ── */
 export async function pingStaffPresence(activity?: string) {
   const session = await auth();

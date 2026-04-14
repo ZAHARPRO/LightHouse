@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition } from "react";
-import { X, Send, CheckCircle, Inbox, ChevronLeft } from "lucide-react";
+import { X, Send, CheckCircle, Inbox, ChevronLeft, ShieldAlert, MessageCircle } from "lucide-react";
 import {
   getOperatorInbox,
   getConversationById,
@@ -13,6 +13,7 @@ import {
 type ConvSummary = {
   id: string;
   updatedAt: Date;
+  isAppeal: boolean;
   user: { id: string; name: string | null; email: string | null };
   messages: { content: string; isFromStaff: boolean; sender: { name: string | null } }[];
 };
@@ -27,6 +28,8 @@ type FullMsg = {
 
 type FullConv = {
   id: string;
+  isAppeal: boolean;
+  status: string;
   user: { id: string; name: string | null; email: string | null };
   messages: FullMsg[];
 };
@@ -128,6 +131,17 @@ export default function SupportInbox({ onClose, isClosing, anchorRight }: Props)
           <span className="font-display font-bold text-sm text-[var(--text-primary)]">
             {selected ? `${selected.user.name ?? "User"}'s ticket` : "Support Inbox"}
           </span>
+          {selected && (
+            <span
+              className="text-[0.6rem] font-display font-bold px-1.5 py-[0.15rem] rounded-full ml-0.5"
+              style={selected.isAppeal
+                ? { background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }
+                : { background: "rgba(99,102,241,0.12)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.25)" }
+              }
+            >
+              {selected.isAppeal ? "APPEAL" : "SUPPORT"}
+            </span>
+          )}
           {!selected && convs.length > 0 && (
             <span className="ml-1 text-[0.65rem] font-bold px-1.5 py-0.5 rounded-full bg-[var(--accent-orange)] text-white">
               {convs.length}
@@ -236,11 +250,22 @@ export default function SupportInbox({ onClose, isClosing, anchorRight }: Props)
                   onClick={() => openConv(conv.id)}
                   className="w-full text-left px-4 py-3.5 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] transition-colors duration-100 flex flex-col gap-0.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-display font-semibold text-[0.875rem] text-[var(--text-primary)]">
-                      {conv.user.name ?? conv.user.email ?? "Unknown"}
-                    </span>
-                    <span className="text-[0.65rem] text-[var(--text-muted)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-display font-semibold text-[0.875rem] text-[var(--text-primary)] truncate">
+                        {conv.user.name ?? conv.user.email ?? "Unknown"}
+                      </span>
+                      {conv.isAppeal ? (
+                        <span className="shrink-0 flex items-center gap-0.5 text-[0.6rem] font-display font-bold px-1.5 py-[0.15rem] rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+                          <ShieldAlert size={8} /> Appeal
+                        </span>
+                      ) : (
+                        <span className="shrink-0 flex items-center gap-0.5 text-[0.6rem] font-display font-bold px-1.5 py-[0.15rem] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <MessageCircle size={8} /> Support
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[0.65rem] text-[var(--text-muted)] shrink-0">
                       {timeAgo(conv.updatedAt)}
                     </span>
                   </div>

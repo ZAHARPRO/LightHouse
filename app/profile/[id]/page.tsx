@@ -217,145 +217,133 @@ export default async function PublicProfilePage({
             </div>
           </div>
 
-          {/* Username as main heading */}
-          <div style={{ marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.625rem", letterSpacing: "-0.02em", margin: 0 }}>
-              {displayHandle}
-            </h1>
-            <span style={{
-              fontSize: "0.75rem", fontWeight: 700, padding: "0.1875rem 0.625rem", borderRadius: 100,
-              background: `${tierColor}18`, color: tierColor, border: `1px solid ${tierColor}30`,
-              fontFamily: "var(--font-display)", letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>
-              {TIER_LABEL[user.tier] ?? user.tier}
-            </span>
-          </div>
+          {/* Two-column layout: info left, badge right */}
+          <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
 
-          {/* Display name (if username is set) */}
-          {displayName && (
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "0.5rem" }}>
-              {displayName}
-            </p>
-          )}
+            {/* Left: main info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Username as main heading */}
+              <div style={{ marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.625rem", letterSpacing: "-0.02em", margin: 0 }}>
+                  {displayHandle}
+                </h1>
+                <span style={{
+                  fontSize: "0.75rem", fontWeight: 700, padding: "0.1875rem 0.625rem", borderRadius: 100,
+                  background: `${tierColor}18`, color: tierColor, border: `1px solid ${tierColor}30`,
+                  fontFamily: "var(--font-display)", letterSpacing: "0.05em", textTransform: "uppercase",
+                }}>
+                  {TIER_LABEL[user.tier] ?? user.tier}
+                </span>
+              </div>
 
-          {/* Bio */}
-          {user.bio && (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "1rem", maxWidth: 500 }}>
-              <AlignLeft size={13} style={{ color: "var(--text-muted)", marginTop: 3, flexShrink: 0 }} />
-              <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: 1.55, margin: 0 }}>
-                {user.bio}
-              </p>
-            </div>
-          )}
+              {/* Display name (if username is set) */}
+              {displayName && (
+                <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "0.5rem" }}>
+                  {displayName}
+                </p>
+              )}
 
-          {/* Level bar */}
-          <div style={{ maxWidth: 320, marginBottom: "1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.375rem" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8125rem", color: "var(--accent-orange)" }}>
-                <TrendingUp size={13} /> Level {level}
-              </span>
-              <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
-                {user.points} pts
-              </span>
-            </div>
-            <div style={{ height: 5, background: "var(--bg-elevated)", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${pctToNext}%`, background: "linear-gradient(90deg,#f97316,#fbbf24)", borderRadius: 3 }} />
-            </div>
-          </div>
+              {/* Bio */}
+              {user.bio && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "1rem", maxWidth: 500 }}>
+                  <AlignLeft size={13} style={{ color: "var(--text-muted)", marginTop: 3, flexShrink: 0 }} />
+                  <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: 1.55, margin: 0 }}>
+                    {user.bio}
+                  </p>
+                </div>
+              )}
 
-          {/* Stats row */}
-          <div style={{ display: "flex", gap: "1.75rem", flexWrap: "wrap" }}>
-            {[
-              { icon: Play,  value: user._count.videos,       label: "Videos" },
-              { icon: Users, value: user._count.subscribers,  label: "Subscribers" },
-              { icon: Eye,   value: formatViews(totalViews),  label: "Total Views" },
-              { icon: Crown, value: level,                    label: "Level" },
-              { icon: Star,  value: user.points,              label: "Points" },
-            ].map(({ icon: Icon, value, label }) => (
-              <div key={label} style={{ textAlign: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", marginBottom: "0.125rem" }}>
-                  <Icon size={13} color="var(--accent-orange)" />
-                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.25rem", color: "var(--text-primary)" }}>
-                    {value}
+              {/* Level bar */}
+              <div style={{ maxWidth: 320, marginBottom: "1.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.375rem" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8125rem", color: "var(--accent-orange)" }}>
+                    <TrendingUp size={13} /> Level {level}
+                  </span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
+                    {user.points} pts
                   </span>
                 </div>
-                <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{label}</span>
+                <div style={{ height: 5, background: "var(--bg-elevated)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pctToNext}%`, background: "linear-gradient(90deg,#f97316,#fbbf24)", borderRadius: 3 }} />
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
-      {/* ── Badge Showcase ── */}
-      {showcaseBadges.length > 0 && (
-        <div style={{ marginBottom: "1.75rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.875rem" }}>🏆</span>
-            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1rem", margin: 0 }}>
-              Featured Badges
-            </h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
-            {/* Always render 3 slots */}
-            {[0, 1, 2].map((idx) => {
-              const badge = showcaseBadges[idx];
-              if (!badge) {
-                /* empty slot — subtle placeholder */
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      borderRadius: 16,
-                      border: "1.5px dashed var(--border-subtle)",
-                      padding: "1.5rem 1rem",
-                      display: "flex", flexDirection: "column", alignItems: "center", gap: "0.625rem",
-                      opacity: 0.35,
-                    }}
-                  >
-                    <div style={{
-                      width: 44, height: 44, borderRadius: "50%",
-                      background: "var(--bg-elevated)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "1.25rem",
-                    }}>
-                      🎖️
+              {/* Stats row */}
+              <div style={{ display: "flex", gap: "1.75rem", flexWrap: "wrap" }}>
+                {[
+                  { icon: Play,  value: user._count.videos,       label: "Videos" },
+                  { icon: Users, value: user._count.subscribers,  label: "Subscribers" },
+                  { icon: Eye,   value: formatViews(totalViews),  label: "Total Views" },
+                  { icon: Crown, value: level,                    label: "Level" },
+                  { icon: Star,  value: user.points,              label: "Points" },
+                ].map(({ icon: Icon, value, label }) => (
+                  <div key={label} style={{ textAlign: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", marginBottom: "0.125rem" }}>
+                      <Icon size={13} color="var(--accent-orange)" />
+                      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.25rem", color: "var(--text-primary)" }}>
+                        {value}
+                      </span>
                     </div>
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
-                      Empty
-                    </span>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{label}</span>
                   </div>
-                );
-              }
-              const meta = getPubMeta(badge);
-              return (
-                <div
-                  key={idx}
-                  style={{
+                ))}
+              </div>
+            </div>
+
+            {/* Right: featured badge */}
+            <div style={{ flexShrink: 0, width: 148 }}>
+              <p style={{
+                fontSize: "0.6875rem", fontFamily: "var(--font-display)", fontWeight: 700,
+                color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em",
+                marginBottom: "0.625rem", textAlign: "center",
+              }}>
+                Featured
+              </p>
+              {showcaseBadges[0] ? (() => {
+                const meta = getPubMeta(showcaseBadges[0]);
+                return (
+                  <div style={{
                     borderRadius: 16,
                     border: `1.5px solid ${meta.color}35`,
                     background: `${meta.color}0a`,
-                    padding: "1.5rem 1rem",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.625rem",
-                    transition: "box-shadow 0.2s",
-                  }}
-                >
-                  <span style={{ fontSize: "2.25rem", lineHeight: 1 }}>{meta.icon}</span>
-                  <span style={{
-                    fontSize: "0.78rem", fontFamily: "var(--font-display)", fontWeight: 700,
-                    color: meta.color, textAlign: "center", lineHeight: 1.3,
+                    padding: "1.25rem 0.75rem",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem",
                   }}>
-                    {meta.label}
-                  </span>
-                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", textAlign: "center" }}>
-                    {badge.description}
+                    <span style={{ fontSize: "2.5rem", lineHeight: 1 }}>{meta.icon}</span>
+                    <span style={{
+                      fontSize: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700,
+                      color: meta.color, textAlign: "center", lineHeight: 1.3,
+                    }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 }}>
+                      {showcaseBadges[0].description}
+                    </span>
+                  </div>
+                );
+              })() : (
+                <div style={{
+                  borderRadius: 16,
+                  border: "1.5px dashed var(--border-subtle)",
+                  padding: "1.25rem 0.75rem",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem",
+                  opacity: 0.4,
+                }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: "50%",
+                    background: "var(--bg-elevated)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "1.375rem",
+                  }}>🎖️</div>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
+                    No badge
                   </span>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Videos */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>

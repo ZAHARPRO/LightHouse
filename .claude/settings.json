@@ -12,7 +12,8 @@
       "Bash(npx tsc:*)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\post"
+      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\post",
+      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\news"
     ]
   }
 }

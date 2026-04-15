@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TrendingUp, Star, Award, Crown, MessageCircle } from "lucide-react";
+import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
 import BanBanner from "@/components/BanBanner";
@@ -91,6 +91,13 @@ export default async function ProfilePage() {
               >
                 <MessageCircle size={13} />
                 Messages
+              </Link>
+              <Link
+                href={`/profile/${user.id}`}
+                className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
+              >
+                <ExternalLink size={13} />
+                Public Profile
               </Link>
             </div>
 

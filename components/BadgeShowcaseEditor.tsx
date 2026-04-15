@@ -34,8 +34,6 @@ export default function BadgeShowcaseEditor({
 }) {
   const [slots, setSlots] = useState<(string | null)[]>([
     initialSlots[0] ?? null,
-    initialSlots[1] ?? null,
-    initialSlots[2] ?? null,
   ]);
   const [picking, setPicking] = useState<number | null>(null);
   const [pending, start]      = useTransition();
@@ -76,10 +74,10 @@ export default function BadgeShowcaseEditor({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className="text-[0.8125rem] font-display font-bold text-[var(--text-primary)]">
-            Featured Badges
+            Featured Badge
           </span>
           <span className="text-[0.7rem] text-[var(--text-muted)] font-display">
-            — up to 3 shown on your public profile
+            — 1 badge shown on your public profile
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -92,8 +90,8 @@ export default function BadgeShowcaseEditor({
         </div>
       </div>
 
-      {/* 3 slots */}
-      <div className="grid grid-cols-3 gap-3 mb-1">
+      {/* 1 slot */}
+      <div className="flex gap-3 mb-1">
         {slots.map((slotId, idx) => {
           const reward = slotId ? rewards.find((r) => r.id === slotId) : null;
           const meta   = reward ? getBadgeMeta(reward) : null;
@@ -150,7 +148,7 @@ export default function BadgeShowcaseEditor({
                 className="text-[0.72rem] font-display font-semibold"
                 style={{ color: picking === idx ? "var(--accent-orange)" : "var(--text-muted)" }}
               >
-                {picking === idx ? "Choosing…" : `Slot ${idx + 1}`}
+                {picking === idx ? "Choosing…" : "Feature"}
               </span>
             </button>
           );
@@ -167,7 +165,7 @@ export default function BadgeShowcaseEditor({
           ) : (
             <>
               <p className="text-[0.75rem] text-[var(--text-muted)] font-display mb-3">
-                Select a badge for Slot {picking + 1}:
+                Select a badge to feature:
               </p>
               <div className="flex flex-wrap gap-2">
                 {available.map((r) => {

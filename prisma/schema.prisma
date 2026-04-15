@@ -55,6 +55,8 @@ model User {
   directMessagesSent   DirectMessage[]      @relation("DMSender")
   blocksMade           Block[]              @relation("BlocksMade")
   blocksReceived       Block[]              @relation("BlocksReceived")
+  newsPosts            NewsPost[]           @relation("NewsAuthor")
+  newsLikes            NewsLike[]
 }
 
 model Account {
@@ -133,6 +135,9 @@ model Comment {
 
   postId   String?
   post     Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  newsPostId String?
+  newsPost   NewsPost? @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
 
   parentId    String?
   parent      Comment?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
@@ -353,6 +358,32 @@ enum Role {
   STAFF
   OPERATOR
   ADMIN
+}
+
+model NewsPost {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId  String
+  author    User       @relation("NewsAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     NewsLike[]
+}
+
+model NewsLike {
+  id         String   @id @default(cuid())
+  type       LikeType
+  createdAt  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newsPostId String
+  newsPost   NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, newsPostId])
 }
 
 enum SupportStatus {

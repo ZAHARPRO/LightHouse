@@ -123,6 +123,12 @@ export default function CommentsSection({ videoId, videoAuthorId, currentUserId,
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (text.trim() && !pending) handleSubmit(e as unknown as React.FormEvent);
+                }
+              }}
               placeholder="Write a comment…"
               rows={2}
               maxLength={2000}
@@ -305,6 +311,12 @@ function CommentItem({
               <textarea
                 value={replyText}
                 onChange={e => setReplyText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (replyText.trim() && !pending) submitReply(e as unknown as React.FormEvent);
+                  }
+                }}
                 placeholder={replyTo.name ? `Reply to @${replyTo.name}…` : "Write a reply…"}
                 rows={2}
                 maxLength={2000}

@@ -47,6 +47,18 @@ export default async function AdminDashboard() {
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">Badge Creator</h2>
           <p className="text-sm text-[var(--text-muted)]">Create custom badges and manually award them to users.</p>
         </Link>
+        <Link href="/admin/reports" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+          <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">Report Center</h2>
+          <p className="text-sm text-[var(--text-muted)]">View and manage user-submitted reports about content or behavior.</p>
+        </Link>
+        <Link href="/admin/news" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+          <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">News Management</h2>
+          <p className="text-sm text-[var(--text-muted)]">Create, edit, and delete news posts for the platform.</p>
+        </Link>
+        <Link href="/admin/staff" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+          <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">Staff Management</h2>
+          <p className="text-sm text-[var(--text-muted)]">Manage platform staff members and their permissions.</p>
+        </Link>
       </div>
     </div>
   );

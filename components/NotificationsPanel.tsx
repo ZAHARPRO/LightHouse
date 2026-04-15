@@ -69,10 +69,14 @@ const TIER_COLORS: Record<string, string> = {
   ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
 };
 
-const SITE_NEWS: { id: string; title: string; body: string; date: string }[] = [
-  { id: "sn1", title: "Community feed is live!", body: "You can now see posts from creators you follow in the sidebar and on the /community page.", date: "2026-04-13" },
-  { id: "sn2", title: "Profile links in comments", body: "Clicking on an avatar or username in comments now takes you to their profile page.", date: "2026-04-12" },
-];
+type SiteNewsItem = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  author: { name: string | null };
+  _count: { comments: number; likes: number };
+};
 
 /* ─── Accordion section ─── */
 
@@ -163,6 +167,9 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   const [dms, setDms]                 = useState<NotifDM[]>([]);
   const [dmsLoading, setDmsLoading]   = useState(true);
 
+  const [siteNews, setSiteNews]           = useState<SiteNewsItem[]>([]);
+  const [siteNewsLoading, setSiteNewsLoading] = useState(true);
+
   // Timestamps of when user last opened each section (persisted in localStorage)
   const [siteNewsSeenAt, setSiteNewsSeenAt] = useState<number>(
     () => parseInt(localStorage.getItem("lh_notif_sitenews_seen") ?? "0", 10)
@@ -185,10 +192,10 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
 
   // Call onAllSeen when every section's unread count drops to zero
   useEffect(() => {
-    if (commitsLoading || postsLoading || videosLoading || dmsLoading) return;
+    if (commitsLoading || postsLoading || videosLoading || dmsLoading || siteNewsLoading) return;
 
     const unread =
-      SITE_NEWS.filter(n => new Date(n.date).getTime() > siteNewsSeenAt).length +
+      siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAt).length +
       commits.filter(c => new Date(c.date).getTime() > devNewsSeenAt).length +
       (posts.filter(p => new Date(p.createdAt).getTime() > contentSeenAt).length +
        videos.filter(v => new Date(v.createdAt).getTime() > contentSeenAt).length) +
@@ -196,13 +203,21 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
 
     if (unread === 0) onAllSeen();
   }, [siteNewsSeenAt, devNewsSeenAt, contentSeenAt, dmsSeenAt,
-      commits, posts, videos, dms, commitsLoading, postsLoading, videosLoading, dmsLoading]);
+      siteNews, commits, posts, videos, dms,
+      siteNewsLoading, commitsLoading, postsLoading, videosLoading, dmsLoading]);
 
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* Fetch all three in parallel */
+  /* Fetch all in parallel */
   useEffect(() => {
-    // Commits (site news)
+    // Site news from DB
+    fetch("/api/notifications/news")
+      .then((r) => r.json())
+      .then((data) => setSiteNews(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setSiteNewsLoading(false));
+
+    // Commits (dev news)
     fetch("/api/github-commits")
       .then(async (r) => {
         const data = await r.json();
@@ -292,35 +307,68 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
       {/* ── Scrollable body ── */}
       <div className="overflow-y-auto flex-1">
 
-        {/* ══ 0. Site News (global announcements — stub) ══ */}
+        {/* ══ 0. Site News (from DB) ══ */}
         <Section
           icon={<Megaphone size={14} />}
           label="Site News"
-          badge={SITE_NEWS.filter(n => new Date(n.date).getTime() > siteNewsSeenAt).length}
+          badge={siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAt).length}
           onOpen={() => markSeen("lh_notif_sitenews_seen", setSiteNewsSeenAt)}
         >
-          {SITE_NEWS.map((item, i, arr) => (
-            <div
+          {siteNewsLoading && (
+            <div className="py-5 text-center">
+              <Loader size={16} className="mx-auto text-[var(--accent-orange)] animate-spin" />
+            </div>
+          )}
+
+          {!siteNewsLoading && siteNews.length === 0 && (
+            <p className="px-4 py-5 text-center text-xs text-[var(--text-muted)]">
+              No announcements yet.
+            </p>
+          )}
+
+          {!siteNewsLoading && siteNews.map((item, i, arr) => (
+            <Link
               key={item.id}
+              href={`/news/${item.id}`}
+              onClick={onClose}
               className={[
-                "px-4 py-3",
+                "flex items-start gap-2 px-4 py-3 no-underline transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]",
                 i < arr.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
               ].join(" ")}
             >
-              <div className="flex items-start gap-2">
-                <div className="w-[7px] h-[7px] rounded-full bg-[var(--accent-orange)] border-2 border-orange-500/30 shrink-0 mt-[5px]" />
-                <div>
-                  <p className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-[1.35] mb-1">
-                    {item.title}
-                  </p>
-                  <p className="text-[0.775rem] text-[var(--text-secondary)] leading-[1.5] mb-1">
-                    {item.body}
-                  </p>
-                  <span className="text-[0.6875rem] text-[var(--text-muted)]">{item.date}</span>
+              <div className="w-[7px] h-[7px] rounded-full bg-[var(--accent-orange)] border-2 border-orange-500/30 shrink-0 mt-[5px]" />
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-[1.35] mb-0.5">
+                  {item.title}
+                </p>
+                <p
+                  className="text-[0.75rem] text-[var(--text-secondary)] leading-[1.5] mb-1 overflow-hidden"
+                  style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                >
+                  {item.content}
+                </p>
+                <div className="flex items-center gap-2 text-[0.6875rem] text-[var(--text-muted)]">
+                  <span>{timeAgo(item.createdAt)}</span>
+                  <span>·</span>
+                  <span>👍 {item._count.likes}</span>
+                  <span>·</span>
+                  <span>💬 {item._count.comments}</span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
+
+          {!siteNewsLoading && siteNews.length > 0 && (
+            <div className="px-4 py-2 flex items-center justify-end border-t border-[var(--border-subtle)]">
+              <Link
+                href="/news"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] no-underline font-display hover:text-[var(--accent-orange)] transition-colors duration-150"
+              >
+                <Megaphone size={11} /> All announcements
+              </Link>
+            </div>
+          )}
         </Section>
 
         {/* ══ 1. Development News ══ */}

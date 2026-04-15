@@ -54,21 +54,31 @@ export default function UsernameEditor({ initialUsername }: { initialUsername: s
   }
 
   return (
-    <button
-      onClick={handleEdit}
-      className="group flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0"
-    >
-      <AtSign size={13} className="text-[var(--text-muted)]" />
-      {saved ? (
-        <span className="text-[0.875rem] font-display font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
-          {saved}
-        </span>
-      ) : (
-        <span className="text-[0.875rem] text-[var(--text-muted)] italic group-hover:text-[var(--text-secondary)] transition-colors">
-          Set username…
-        </span>
-      )}
-      <Pencil size={11} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
-    </button>
+    <div className="relative inline-block group/wrap">
+      <button
+        onClick={handleEdit}
+        className="group flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0"
+      >
+        <AtSign size={13} className="text-[var(--text-muted)]" />
+        {saved ? (
+          <span className="text-[0.875rem] font-display font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
+            {saved}
+          </span>
+        ) : (
+          <span className="text-[0.875rem] text-[var(--text-muted)] italic group-hover:text-[var(--text-secondary)] transition-colors">
+            Set username…
+          </span>
+        )}
+        <Pencil size={11} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+      </button>
+
+      {/* Tooltip */}
+      <div className="pointer-events-none absolute left-0 bottom-full mb-2 z-20 opacity-0 group-hover/wrap:opacity-100 transition-opacity duration-150">
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-[0.7rem] font-display px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+          Shown on your public profile
+        </div>
+        <div className="w-2 h-2 bg-[var(--bg-elevated)] border-r border-b border-[var(--border-subtle)] rotate-45 ml-3 -mt-1" />
+      </div>
+    </div>
   );
 }

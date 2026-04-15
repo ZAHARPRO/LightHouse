@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard,
+  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
@@ -19,13 +19,66 @@ export default function Navbar() {
   const isStaff = session?.user?.role && STAFF_ROLES.includes(session.user.role);
 
   const router = useRouter();
-  const [searchQ, setSearchQ] = useState("");
+  const [searchQ, setSearchQ]       = useState("");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [activeIdx, setActiveIdx]     = useState(-1);
+  const searchRef  = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  type Suggestion = {
+    type: "video" | "creator" | "post";
+    id: string; label: string; sub: string | null; href: string;
+    image?: string | null; tier?: string;
+  };
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = searchQ.trim();
-    if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
+    if (activeIdx >= 0 && suggestions[activeIdx]) {
+      router.push(suggestions[activeIdx].href);
+      closeSuggest();
+      return;
+    }
+    if (q) { router.push(`/search?q=${encodeURIComponent(q)}`); closeSuggest(); }
   }
+
+  function closeSuggest() { setSuggestOpen(false); setActiveIdx(-1); }
+
+  function handleSearchChange(val: string) {
+    setSearchQ(val);
+    setActiveIdx(-1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!val.trim()) { setSuggestions([]); setSuggestOpen(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      const res = await fetch(`/api/search/suggestions?q=${encodeURIComponent(val.trim())}`).then(r => r.json()).catch(() => []);
+      setSuggestions(res);
+      setSuggestOpen(res.length > 0);
+    }, 220);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (!suggestOpen) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); }
+    if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); }
+    if (e.key === "Escape")    { closeSuggest(); }
+  }
+
+  useEffect(() => {
+    if (!suggestOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!searchRef.current?.contains(e.target as Node)) closeSuggest();
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [suggestOpen]);
+
+  const TYPE_ICON: Record<string, React.ReactNode> = {
+    video:   <Play size={13} className="shrink-0 text-[var(--accent-orange)]" />,
+    creator: <Users size={13} className="shrink-0 text-[#6366f1]" />,
+    post:    <FileText size={13} className="shrink-0 text-[#10b981]" />,
+  };
+  const TYPE_LABEL: Record<string, string> = { video: "Video", creator: "Creator", post: "Post" };
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -232,19 +285,74 @@ export default function Navbar() {
           </div>
 
           {/* Search */}
-          <form onSubmit={handleSearch} className="relative">
-            <Search
-              size={15}
-              className="absolute  top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
-            />
-            <input
-              type="text"
-              value={searchQ}
-              onChange={(e) => setSearchQ(e.target.value)}
-              placeholder="Search videos, creators, posts…"
-              className="input-field w-full pl-10 h-[42px] rounded-[10px]"
-            />
-          </form>
+          <div ref={searchRef} className="relative">
+            <form onSubmit={handleSearch} className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
+              />
+              <input
+                type="text"
+                value={searchQ}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search videos, creators, posts…"
+                className="input-field w-full h-[42px] rounded-[10px]"
+                style={{ paddingLeft: "2.25rem" }}
+                autoComplete="off"
+              />
+            </form>
+
+            {/* Suggestions dropdown */}
+            {suggestOpen && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[200] rounded-xl border border-[var(--border-subtle)] bg-[rgba(12,12,12,0.97)] backdrop-blur-xl shadow-2xl overflow-hidden">
+                {/* "Search for" shortcut */}
+                <button
+                  onMouseDown={() => { router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`); closeSuggest(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] transition-colors border-b border-[var(--border-subtle)] cursor-pointer"
+                >
+                  <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
+                  <span className="text-[0.8125rem] text-[var(--text-secondary)]">
+                    Search for <span className="text-[var(--text-primary)] font-semibold font-display">"{searchQ}"</span>
+                  </span>
+                </button>
+
+                {/* Results */}
+                {suggestions.map((s, i) => (
+                  <button
+                    key={`${s.type}-${s.id}`}
+                    onMouseDown={() => { router.push(s.href); closeSuggest(); setSearchQ(s.label); }}
+                    onMouseEnter={() => setActiveIdx(i)}
+                    className={[
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer",
+                      activeIdx === i ? "bg-white/[0.06]" : "hover:bg-white/[0.04]",
+                    ].join(" ")}
+                  >
+                    {/* Type icon */}
+                    <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
+                      {TYPE_ICON[s.type]}
+                    </div>
+
+                    {/* Label + sub */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
+                        {s.label}
+                      </p>
+                      {s.sub && (
+                        <p className="text-[0.72rem] text-[var(--text-muted)] truncate">{s.sub}</p>
+                      )}
+                    </div>
+
+                    {/* Type badge */}
+                    <span className="shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
+                      {TYPE_LABEL[s.type]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Right */}
           <div className="flex items-center gap-[0.625rem]">

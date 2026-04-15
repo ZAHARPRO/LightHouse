@@ -42,3 +42,37 @@ export async function removeUserAvatar() {
   });
   return { ok: true };
 }
+
+export async function updateBio(bio: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  const trimmed = bio.trim().slice(0, 300);
+  await prisma.user.update({ where: { id: session.user.id }, data: { bio: trimmed || null } });
+  return { ok: true };
+}
+
+export async function updateUserBanner(dataUrl: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  if (!dataUrl.startsWith("data:image/")) return { error: "Invalid image format" };
+  if (dataUrl.length > 2_500_000) return { error: "Image too large (max ~1.8MB)" };
+  await prisma.user.update({ where: { id: session.user.id }, data: { banner: dataUrl } });
+  return { ok: true };
+}
+
+export async function removeUserBanner() {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  await prisma.user.update({ where: { id: session.user.id }, data: { banner: null } });
+  return { ok: true };
+}
+
+export async function updateBadgeShowcase(rewardIds: string[]) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { badgeShowcase: JSON.stringify(rewardIds.slice(0, 3)) },
+  });
+  return { ok: true };
+}

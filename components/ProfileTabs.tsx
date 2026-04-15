@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck } from "lucide-react";
+import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck, BarChart2, Eye, ThumbsUp, MessageSquare, Users, Video, Flame, Star, Settings2 } from "lucide-react";
 import VideoManager from "./VideoManager";
 import PostManager from "./PostManager";
+import BadgeShowcaseEditor from "./BadgeShowcaseEditor";
 
 type Video = {
   id: string; title: string; description: string | null;
@@ -32,26 +33,49 @@ const REWARD_META: Record<string, { icon: string; color: string; label: string }
   PREMIUM_MEMBER: { icon: "👑", color: "#fbbf24", label: "Premium Member" },
 };
 
+type Stats = {
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalSubscribers: number;
+  avgViews: number;
+  watchStreak: number;
+  points: number;
+  level: number;
+  videoCount: number;
+  postCount: number;
+};
+
 const TABS = [
   { id: "videos",    label: "Videos",    icon: Play },
   { id: "community", label: "Community", icon: FileText },
   { id: "badges",    label: "Badges",    icon: Award },
+  { id: "stats",     label: "Stats",     icon: BarChart2 },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
 
+function fmt(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
 export default function ProfileTabs({
-  videos, posts, rewards,
+  videos, posts, rewards, stats, badgeShowcase,
 }: {
   videos: Video[];
   posts: Post[];
   rewards: Reward[];
+  stats: Stats;
+  badgeShowcase: string[];
 }) {
   const [tab, setTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "videos";
     const p = new URLSearchParams(window.location.search).get("tab");
     return (TABS.some(t => t.id === p) ? p : "videos") as TabId;
   });
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get("tab");
@@ -77,9 +101,11 @@ export default function ProfileTabs({
             ].join(" ")}
           >
             <Icon size={14} /> {label}
-            <span className="ml-0.5 text-xs opacity-70">
-              ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
-            </span>
+            {id !== "stats" && (
+              <span className="ml-0.5 text-xs opacity-70">
+                ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
+              </span>
+            )}
           </button>
         ))}
 
@@ -103,18 +129,42 @@ export default function ProfileTabs({
       {/* Badges tab */}
       {tab === "badges" && (
         <div>
-          {/* Header row with catalog link */}
+          {/* Header row */}
           <div className="flex items-center justify-between mb-4">
             <p className="text-[var(--text-muted)] text-sm">
-              {rewards.length === 0 ? "Watch videos, comment, and engage to earn badges." : `${rewards.length} badge${rewards.length === 1 ? "" : "s"} earned`}
+              {rewards.length === 0
+                ? "Watch videos, comment, and engage to earn badges."
+                : `${rewards.length} badge${rewards.length === 1 ? "" : "s"} earned`}
             </p>
-            <Link
-              href="/badges"
-              className="flex items-center gap-1 no-underline text-[0.8rem] font-display font-semibold text-[var(--accent-orange)] hover:underline"
-            >
-              <Award size={13} /> Browse all badges
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowcaseOpen((v) => !v)}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[0.78rem] font-display font-semibold cursor-pointer transition-colors duration-150",
+                  showcaseOpen
+                    ? "border-[var(--accent-orange)] text-[var(--accent-orange)] bg-orange-500/[0.07]"
+                    : "border-[var(--border-subtle)] text-[var(--text-secondary)] bg-[var(--bg-elevated)] hover:border-orange-500/40 hover:text-[var(--accent-orange)]",
+                ].join(" ")}
+              >
+                <Settings2 size={13} />
+                Showcase
+              </button>
+              <Link
+                href="/badges"
+                className="flex items-center gap-1 no-underline text-[0.8rem] font-display font-semibold text-[var(--accent-orange)] hover:underline"
+              >
+                <Award size={13} /> Browse all
+              </Link>
+            </div>
           </div>
+
+          {/* Badge Showcase editor (collapsible) */}
+          {showcaseOpen && (
+            <BadgeShowcaseEditor
+              rewards={rewards}
+              initialSlots={badgeShowcase}
+            />
+          )}
 
           {rewards.length === 0 ? (
             <div className="card p-12 text-center">
@@ -160,6 +210,39 @@ export default function ProfileTabs({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Stats tab */}
+      {tab === "stats" && (
+        <div>
+          <p className="text-[var(--text-muted)] text-sm mb-5">Your channel performance at a glance.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { icon: Eye,           value: fmt(stats.totalViews),       label: "Total Views",    sub: stats.videoCount > 0 ? `~${fmt(stats.avgViews)} avg/video` : null },
+              { icon: ThumbsUp,      value: fmt(stats.totalLikes),       label: "Likes Received", sub: null },
+              { icon: MessageSquare, value: fmt(stats.totalComments),    label: "Comments",       sub: null },
+              { icon: Users,         value: fmt(stats.totalSubscribers), label: "Subscribers",    sub: null },
+              { icon: Video,         value: stats.videoCount,            label: "Videos",         sub: null },
+              { icon: FileText,      value: stats.postCount,             label: "Posts",          sub: null },
+              { icon: Flame,         value: stats.watchStreak,           label: "Watch Streak",   sub: stats.watchStreak > 0 ? "days in a row" : "Start watching!" },
+              { icon: Star,          value: stats.points,                label: "Points",         sub: `Level ${stats.level}` },
+            ].map(({ icon: Icon, value, label, sub }) => (
+              <div
+                key={label}
+                className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-4 flex flex-col gap-1"
+              >
+                <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[0.75rem] mb-1">
+                  <Icon size={12} className="text-[var(--accent-orange)] shrink-0" />
+                  {label}
+                </div>
+                <span className="font-display font-extrabold text-[1.5rem] text-[var(--text-primary)] leading-none">
+                  {value}
+                </span>
+                {sub && <span className="text-[0.7rem] text-[var(--text-muted)]">{sub}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

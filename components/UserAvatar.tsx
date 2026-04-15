@@ -50,7 +50,7 @@ export default function UserAvatar({
   return (
     <div
       className={[
-        "rounded-full flex items-center justify-center shrink-0 overflow-hidden",
+        "rounded-full flex items-center justify-center shrink-0 overflow-hidden border-orange-700",
         sizeClass,
         className,
       ].join(" ")}

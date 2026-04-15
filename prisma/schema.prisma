@@ -18,6 +18,8 @@ model User {
   image         String?
   password      String?
   bio           String?
+  banner        String?
+  badgeShowcase String?
   points          Int       @default(0)
   tier            Tier      @default(FREE)
   role            Role      @default(USER)

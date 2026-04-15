@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X, MessageSquare, Maximize2, Users } from "lucide-react";
 
-type Sub = { id: string; name: string; tier: string };
+type Sub = { id: string; name: string; tier: string; image: string | null; initials: string; color: string };
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -158,12 +158,20 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
                 onClick={onClose}
                 className="sidebar-sub-link flex items-center gap-[0.625rem] px-1 py-[0.375rem] rounded-lg no-underline transition-colors duration-150"
               >
-                <div
-                  className="w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center text-[0.625rem] font-bold font-display"
-                  style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                >
-                  {initials}
-                </div>
+<div
+  className="w-[30px] h-[30px] rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[0.6875rem] font-bold font-display"
+  style={
+    sub.image
+      ? { border: `1.5px solid ${color}50` }
+      : { background: `${color}22`, border: `1.5px solid ${color}50`, color: color }
+  }
+>
+  {sub.image ? (
+    <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+  ) : (
+    initials
+  )}
+</div>
                 <div className="min-w-0">
                   <p className="font-body text-[0.8125rem] text-[var(--text-primary)] truncate">
                     {sub.name}

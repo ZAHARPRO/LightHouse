@@ -6,6 +6,7 @@ import {
   X, Bell, GitCommit, Loader, AlertCircle, ExternalLink,
   Megaphone, Cog, FileText, Video, ChevronDown, Lock, Play, MessageCircle,
 } from "lucide-react";
+import UserAvatar from "./UserAvatar";
 
 /* ─── Types ─── */
 
@@ -23,7 +24,7 @@ type NotifPost = {
   title: string;
   isPremium: boolean;
   createdAt: string;
-  author: { id: string; name: string | null; tier: string };
+  author: { id: string; name: string | null; image: string | null; tier: string };
 };
 
 type NotifVideo = {
@@ -32,7 +33,7 @@ type NotifVideo = {
   isPremium: boolean;
   duration: number | null;
   createdAt: string;
-  author: { id: string; name: string | null; tier: string };
+  author: { id: string; name: string | null; image: string | null; tier: string };
 };
 
 type NotifDM = {
@@ -464,12 +465,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
               >
                 {/* Icon/Avatar */}
                 {isPost ? (
-                  <div
-                    className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem] mt-[2px]"
-                    style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                  >
-                    {(item.author.name ?? "?")[0].toUpperCase()}
-                  </div>
+                  <UserAvatar name={item.author.name ?? "?"} image={item.author.image} tier={item.author.tier} size="sm" className="mt-[2px]" />
                 ) : (
                   <div
                     className="w-10 h-[26px] rounded shrink-0 flex items-center justify-center mt-[2px]"
@@ -482,12 +478,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 mb-[0.2rem]">
                     {!isPost && (
-                      <div
-                        className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.4375rem]"
-                        style={{ background: `${color}22`, border: `1px solid ${color}50`, color }}
-                      >
-                        {(item.author.name ?? "?")[0].toUpperCase()}
-                      </div>
+                      <UserAvatar name={item.author.name ?? "?"} image={item.author.image} tier={item.author.tier} size="xs" />
                     )}
                     <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
                       {item.author.name}
@@ -538,7 +529,6 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
           )}
 
           {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).map((dm, i, arr) => {
-            const color = TIER_COLORS[dm.other.tier] ?? "#666";
             const preview = dm.lastMessage
               ? dm.lastMessage.isDeleted
                 ? "Message deleted"
@@ -557,17 +547,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
                 ].join(" ")}
               >
                 {/* Avatar */}
-                <div
-                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem] overflow-hidden"
-                  style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                >
-                  {dm.other.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={dm.other.image} alt={dm.other.name ?? "avatar"} className="w-full h-full object-cover" />
-                  ) : (
-                    (dm.other.name ?? "?")[0].toUpperCase()
-                  )}
-                </div>
+                <UserAvatar name={dm.other.name ?? "?"} image={dm.other.image} tier={dm.other.tier} size="sm" />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-1 mb-[0.15rem]">

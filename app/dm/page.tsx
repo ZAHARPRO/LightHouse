@@ -3,10 +3,7 @@ import { redirect } from "next/navigation";
 import { getDMConversations } from "@/actions/dm";
 import Link from "next/link";
 import { MessageCircle, ArrowLeft } from "lucide-react";
-
-const TIER_COLORS: Record<string, string> = {
-  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#818cf8", FREE: "#888",
-};
+import UserAvatar from "@/components/UserAvatar";
 
 function timeAgo(d: Date) {
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -51,7 +48,6 @@ export default async function DMListPage() {
       ) : (
         <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden">
           {convs.map((conv, i) => {
-            const color = TIER_COLORS[conv.other.tier] ?? "#888";
             return (
               <Link
                 key={conv.id}
@@ -63,12 +59,7 @@ export default async function DMListPage() {
                 ].join(" ")}
               >
                 {/* Avatar */}
-                <div
-                  className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-sm"
-                  style={{ background: `${color}20`, border: `2px solid ${color}40`, color }}
-                >
-                  {(conv.other.name ?? "?")[0].toUpperCase()}
-                </div>
+                <UserAvatar name={conv.other.name ?? "?"} image={conv.other.image} tier={conv.other.tier} size="md" />
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">

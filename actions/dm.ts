@@ -41,8 +41,8 @@ export async function getDMConversations() {
     where: { OR: [{ user1Id: me }, { user2Id: me }] },
     orderBy: { updatedAt: "desc" },
     include: {
-      user1: { select: { id: true, name: true, tier: true } },
-      user2: { select: { id: true, name: true, tier: true } },
+      user1: { select: { id: true, name: true, image: true, tier: true } },
+      user2: { select: { id: true, name: true, image: true, tier: true } },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,

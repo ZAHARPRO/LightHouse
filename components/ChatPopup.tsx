@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
 import { Send, Maximize2, X, MessageSquare, Zap, Reply } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
 
 type Message = {
   id: string;
@@ -21,9 +22,6 @@ const DEMO_MESSAGES: Message[] = [
   { id: "d4", content: "Anyone here from the beta? 👋", createdAt: new Date(Date.now() - 20000), author: { id: "u3", name: "Marco V.", image: null, tier: "BASIC" } },
 ];
 
-const TIER_COLORS: Record<string, string> = {
-  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
-};
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   FREE:  { label: "Free",  color: "#888" },
   BASIC: { label: "Basic", color: "#818cf8" },
@@ -31,19 +29,6 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
   ELITE: { label: "Elite", color: "#fbbf24" },
 };
 
-function Avatar({ name, tier }: { name: string; tier: string }) {
-  const color = TIER_COLORS[tier] ?? "#666";
-  return (
-    <div
-      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-      style={{ background: `${color}22`, border: `2px solid ${color}44` }}
-    >
-      <span className="font-display font-bold text-[0.6875rem]" style={{ color }}>
-        {name?.[0]?.toUpperCase() ?? "?"}
-      </span>
-    </div>
-  );
-}
 
 interface ChatPopupProps {
   onClose: () => void;
@@ -180,7 +165,7 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
               onMouseLeave={() => setHoveredId(null)}
             >
               <Link href={`/profile/${msg.author.id}`} className="no-underline">
-                <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
+                <UserAvatar name={msg.author.name ?? "?"} tier={msg.author.tier} image={msg.author.image} />
               </Link>
 
               <div className={["max-w-[75%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>

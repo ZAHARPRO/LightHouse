@@ -2,10 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, Lock, ArrowRight } from "lucide-react";
-
-const TIER_COLORS: Record<string, string> = {
-  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
-};
+import UserAvatar from "@/components/UserAvatar";
 
 function timeAgo(date: Date): string {
   const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -20,10 +17,10 @@ function timeAgo(date: Date): string {
 }
 
 const MOCK_POSTS = [
-  { id: "mp1", title: "New level dropping next week!", content: "Get ready for the toughest boss yet — we've been cooking this one for months. Stay tuned for the full reveal on Friday.", isPremium: false, createdAt: new Date(Date.now() - 3_600_000), author: { id: "a1", name: "Shovel Knight", tier: "ELITE" } },
-  { id: "mp2", title: "Behind the scenes of Tokyo Night Walk", content: "Shot entirely on a single mirrorless camera at 4AM. Here's what went wrong and what saved the footage in the end.", isPremium: true, createdAt: new Date(Date.now() - 86_400_000), author: { id: "a2", name: "Marco Visuals", tier: "PRO" } },
-  { id: "mp3", title: "Prisma ORM tips I wish I knew earlier", content: "After two years of production usage, here are the patterns that actually matter and the ones that will get you into trouble.", isPremium: false, createdAt: new Date(Date.now() - 172_800_000), author: { id: "a3", name: "DB Wizard", tier: "BASIC" } },
-  { id: "mp4", title: "Deep Focus playlist — August edition", content: "New 4-hour mix is up. Handpicked for late-night coding sessions and study blocks.", isPremium: false, createdAt: new Date(Date.now() - 259_200_000), author: { id: "a4", name: "LoFi Lab", tier: "PRO" } },
+  { id: "mp1", title: "New level dropping next week!", content: "Get ready for the toughest boss yet — we've been cooking this one for months. Stay tuned for the full reveal on Friday.", isPremium: false, createdAt: new Date(Date.now() - 3_600_000), author: { id: "a1", name: "Shovel Knight", image: null, tier: "ELITE" } },
+  { id: "mp2", title: "Behind the scenes of Tokyo Night Walk", content: "Shot entirely on a single mirrorless camera at 4AM. Here's what went wrong and what saved the footage in the end.", isPremium: true, createdAt: new Date(Date.now() - 86_400_000), author: { id: "a2", name: "Marco Visuals", image: null, tier: "PRO" } },
+  { id: "mp3", title: "Prisma ORM tips I wish I knew earlier", content: "After two years of production usage, here are the patterns that actually matter and the ones that will get you into trouble.", isPremium: false, createdAt: new Date(Date.now() - 172_800_000), author: { id: "a3", name: "DB Wizard", image: null, tier: "BASIC" } },
+  { id: "mp4", title: "Deep Focus playlist — August edition", content: "New 4-hour mix is up. Handpicked for late-night coding sessions and study blocks.", isPremium: false, createdAt: new Date(Date.now() - 259_200_000), author: { id: "a4", name: "LoFi Lab", image: null, tier: "PRO" } },
 ];
 
 type Post = {
@@ -32,7 +29,7 @@ type Post = {
   content: string;
   isPremium: boolean;
   createdAt: Date;
-  author: { id: string; name: string | null; tier: string };
+  author: { id: string; name: string | null; image: string | null; tier: string };
 };
 
 export default async function CommunityPage() {
@@ -64,7 +61,7 @@ export default async function CommunityPage() {
           take: 30,
           select: {
             id: true, title: true, content: true, isPremium: true, createdAt: true,
-            author: { select: { id: true, name: true, tier: true } },
+            author: { select: { id: true, name: true, image: true, tier: true } },
           },
         })) as Post[];
       }
@@ -119,7 +116,6 @@ export default async function CommunityPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {posts.map((post) => {
-            const color = TIER_COLORS[post.author.tier] ?? "#666";
             return (
               <Link
                 key={post.id}
@@ -128,12 +124,7 @@ export default async function CommunityPage() {
               >
                 {/* Author row */}
                 <div className="flex items-center gap-[0.625rem] mb-3">
-                  <div
-                    className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.75rem]"
-                    style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                  >
-                    {(post.author.name ?? "?")[0].toUpperCase()}
-                  </div>
+                  <UserAvatar name={post.author.name ?? "?"} image={post.author.image} tier={post.author.tier} size="md" />
                   <span className="font-display font-semibold text-[0.875rem] text-[var(--text-primary)]">
                     {post.author.name}
                   </span>

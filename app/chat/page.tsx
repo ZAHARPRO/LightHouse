@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage, getChatMessages } from "@/actions/chat";
 import { Send, MessageSquare, Users, Zap, ArrowLeft, Reply, X } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
 
 type Message = {
   id: string;
@@ -33,22 +34,6 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
   ELITE: { label: "Elite", color: "#fbbf24" },
 };
 
-function Avatar({ name, tier }: { name: string; tier: string }) {
-  const colors: Record<string, string> = {
-    ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
-  };
-  const color = colors[tier] ?? "#666";
-  return (
-    <div
-      style={{ width: 34, height: 34, background: `${color}22`, border: `2px solid ${color}44` }}
-      className="rounded-full flex items-center justify-center shrink-0"
-    >
-      <span style={{ color }} className="font-display font-bold text-[0.75rem]">
-        {name?.[0]?.toUpperCase() ?? "?"}
-      </span>
-    </div>
-  );
-}
 
 export default function ChatPage() {
   const { data: session } = useSession();
@@ -172,7 +157,7 @@ export default function ChatPage() {
                 onMouseEnter={() => setHoveredId(msg.id)}
                 onMouseLeave={() => setHoveredId(null)}
               >
-                <Avatar name={msg.author.name ?? "?"} tier={msg.author.tier} />
+                <UserAvatar name={msg.author.name ?? "?"} image={msg.author.image} tier={msg.author.tier} size="md" />
 
                 <div className={["max-w-[70%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
                   {/* Name + badge + time */}

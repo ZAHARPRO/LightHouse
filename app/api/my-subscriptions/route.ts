@@ -15,14 +15,15 @@ export async function GET() {
       },
       orderBy: { startedAt: "desc" },
       take: 20,
-      include: { creator: { select: { id: true, name: true, tier: true } } },
+      include: { creator: { select: { id: true, name: true, tier: true, image: true } } },
     });
 
     return NextResponse.json(
-      rows.map((r: { creator: { id: string; name: string | null; tier: string } }) => ({
-        id:   r.creator.id,
+      rows.map((r: { creator: { id: string; name: string | null; tier: string; image: string | null } }) => ({
+        id: r.creator.id,
         name: r.creator.name ?? "Unknown",
         tier: r.creator.tier,
+        image: r.creator.image,
       }))
     );
   } catch {

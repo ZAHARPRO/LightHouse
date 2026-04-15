@@ -3,18 +3,24 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Play, Eye, Lock, Clock,
+  Play, Lock,
   MessageSquare, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import ChatPopup from "./ChatPopup";
+import UserAvatar from "./UserAvatar";
 
 const THUMB_COLORS = [
-  ["#1a1a2e", "#f97316"],
-  ["#0a1628", "#6366f1"],
-  ["#1a0a0a", "#ef4444"],
-  ["#0a1a0a", "#10b981"],
-  ["#1a1a0a", "#fbbf24"],
+  ["#0d0d1a", "#f97316"],
+  ["#060e1c", "#6366f1"],
+  ["#150606", "#ef4444"],
+  ["#061509", "#10b981"],
+  ["#14120a", "#fbbf24"],
+  ["#0d0618", "#a855f7"],
+  ["#06100e", "#14b8a6"],
+  ["#160a06", "#fb923c"],
 ];
+
+const CATEGORIES = ["All", "Gaming", "Music", "Programming", "Art", "IRL", "Tech", "Science", "Sports"];
 
 function formatDuration(secs: number) {
   const h = Math.floor(secs / 3600);
@@ -33,14 +39,16 @@ function formatViews(n: number) {
 type Video = {
   id: string;
   title: string;
+  thumbnail?: string | null;
   author: { name: string | null; image: string | null } | null;
   views: number;
   isPremium: boolean;
   duration: number | null;
+  createdAt?: Date;
   _count: { likes: number; comments: number };
 };
 
-type Sub = { id: string; name: string; initials: string; color: string };
+type Sub = { id: string; name: string; initials: string; color: string; image?: string | null };
 
 type CommunityPost = {
   id: string;
@@ -48,7 +56,7 @@ type CommunityPost = {
   content: string;
   isPremium: boolean;
   createdAt: Date;
-  author: { id: string; name: string | null; tier: string };
+  author: { id: string; name: string | null; image: string | null; tier: string };
 };
 
 interface Props {
@@ -59,105 +67,214 @@ interface Props {
   isLoggedIn: boolean;
 }
 
-/* ── Shared video card ── */
-function VideoCard({ video, index, userTier, featured = false }: {
+/* ── YouTube-style video card ── */
+function VideoCard({ video, index, userTier }: {
   video: Video;
   index: number;
   userTier: string | null;
-  featured?: boolean;
 }) {
   const [bg, accent] = THUMB_COLORS[index % THUMB_COLORS.length];
   const locked = video.isPremium && userTier === "FREE";
 
   return (
-    <Link
-      href={`/watch/${video.id}`}
-      className={[
-        "block no-underline rounded-xl overflow-hidden bg-[var(--bg-card)] cursor-pointer transition-[border-color] duration-200",
-        featured
-          ? "border-2 border-[var(--accent-orange)] shadow-[0_0_20px_rgba(249,115,22,0.15)]"
-          : "border border-[var(--border-subtle)]",
-      ].join(" ")}
-    >
+    <Link href={`/watch/${video.id}`} className="block no-underline group cursor-pointer rounded-lg overflow-hidden transition-transform duration-200 hover:scale-[1.02]">
       {/* Thumbnail */}
       <div
-        className="relative flex items-center justify-center overflow-hidden"
-        style={{ aspectRatio: "16/9", background: `linear-gradient(135deg, ${bg} 0%, ${accent}33 100%)` }}
+        className="relative rounded-xl overflow-hidden mb-3"
+        style={{ aspectRatio: "16/9", background: `linear-gradient(135deg, ${bg} 0%, ${accent}22 100%)` }}
       >
-        {(video as { thumbnail?: string | null }).thumbnail && (
+        {video.thumbnail && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={(video as { thumbnail?: string | null }).thumbnail!}
+            src={video.thumbnail}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
           />
         )}
 
-        {locked ? (
-          <Lock size={24} style={{ color: accent }} />
-        ) : (
-          <div className="relative z-[1] w-11 h-11 rounded-full flex items-center justify-center bg-black/55 backdrop-blur-[6px] border border-white/15">
-            <Play size={17} color="white" fill="white" className="ml-0.5" />
+        {/* Hover play overlay */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/15">
+          {!locked && (
+            <div className="w-14 h-14 rounded-full bg-black/70 backdrop-blur-sm border border-white/30 flex items-center justify-center shadow-2xl">
+              <Play size={20} color="white" fill="white" className="ml-0.5" />
+            </div>
+          )}
+        </div>
+
+        {/* Lock overlay */}
+        {locked && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full bg-black/70 backdrop-blur-sm border border-white/30 flex items-center justify-center">
+              <Lock size={20} style={{ color: accent }} />
+            </div>
           </div>
         )}
 
-        {/* Duration */}
-        <div className="absolute bottom-[7px] right-[7px] z-[1] flex items-center gap-[0.2rem] bg-black/72 rounded px-[0.4rem] py-[0.125rem]">
-          <Clock size={10} color="#aaa" />
-          <span className="text-[0.6875rem] text-[#ddd] font-body">
-            {formatDuration(video.duration ?? 600)}
-          </span>
+        {/* Duration badge */}
+        <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-sm rounded-md px-1.5 py-0.5 text-[0.65rem] text-white font-mono font-semibold">
+          {formatDuration(video.duration ?? 600)}
         </div>
 
         {/* Premium badge */}
         {video.isPremium && (
           <div
-            className="absolute top-[7px] left-[7px] z-[1] rounded px-[0.4rem] py-[0.1rem]"
+            className="absolute top-2 left-2 rounded-md px-2 py-1 shadow-lg"
             style={{ background: "linear-gradient(90deg,#f97316,#fbbf24)" }}
           >
-            <span className="text-[0.625rem] font-bold text-white font-display tracking-[0.04em]">PRO</span>
+            <span className="text-[0.6rem] font-bold text-white tracking-wider font-display">PRO</span>
           </div>
         )}
       </div>
 
-      {/* Info */}
-      <div className="p-[0.875rem]">
-        <h3
-          className="font-display font-bold text-sm text-[var(--text-primary)] leading-[1.3] mb-2 overflow-hidden"
-          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-        >
-          {video.title}
-        </h3>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-[0.375rem] min-w-0">
-            <div
-              className="w-[22px] h-[22px] shrink-0 rounded-full flex items-center justify-center text-[0.5625rem] font-bold font-display"
-              style={{
-                background: `${accent}22`,
-                border: `1px solid ${accent}40`,
-                color: accent,
-              }}
-            >
-              {(video.author?.name ?? "?")[0]}
-            </div>
-            <span className="text-xs text-[var(--text-secondary)] font-body truncate">
-              {video.author?.name}
-            </span>
-          </div>
-          <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] shrink-0 ml-2">
-            <Eye size={11} /> {formatViews(video.views ?? 0)}
-          </span>
+      {/* Metadata row */}
+      <div className="flex gap-3">
+        <div className="shrink-0">
+          <UserAvatar name={video.author?.name ?? "?"} image={video.author?.image} size="sm" />
+        </div>
+        <div className="flex-1 min-w-0 pt-0.5">
+          <h3
+            className="font-display font-bold text-[0.9rem] text-[var(--text-primary)] leading-[1.4] mb-1 overflow-hidden"
+            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+          >
+            {video.title}
+          </h3>
+          <p className="text-[0.8rem] text-[var(--text-secondary)] font-medium truncate mb-0.5">
+            {video.author?.name}
+          </p>
+          <p className="text-[0.75rem] text-[var(--text-muted)]">
+            {formatViews(video.views ?? 0)} views · {video.createdAt ? timeAgo(video.createdAt) : "recently"}
+          </p>
         </div>
       </div>
     </Link>
   );
 }
 
-/* ── Main layout ── */
-const TIER_COLORS: Record<string, string> = {
-  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
-};
+/* ── Hero / featured card — first video, full-width horizontal ── */
+function HeroCard({ video, index, userTier }: { video: Video; index: number; userTier: string | null }) {
+  const [bg, accent] = THUMB_COLORS[index % THUMB_COLORS.length];
+  const locked = video.isPremium && userTier === "FREE";
 
+  return (
+    <Link href={`/watch/${video.id}`} className="block no-underline group mb-8">
+      <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-elevated)] transition-all duration-300 group-hover:shadow-xl border border-[var(--border-subtle)] group-hover:border-orange-500/40">
+        {/* Thumbnail */}
+        <div
+          className="relative overflow-hidden shrink-0"
+          style={{
+            width: "min(100%, 380px)",
+            aspectRatio: "16/9",
+            background: `linear-gradient(135deg, ${bg} 0%, ${accent}22 100%)`,
+          }}
+        >
+          {video.thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={video.thumbnail}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06]"
+            />
+          )}
+
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/20">
+            {!locked && (
+              <div
+                className="rounded-full bg-black/75 backdrop-blur-md border-2 border-white/40 flex items-center justify-center shadow-2xl"
+                style={{ width: 60, height: 60 }}
+              >
+                <Play size={26} color="white" fill="white" className="ml-1" />
+              </div>
+            )}
+          </div>
+
+          {locked && (
+            <div className="absolute inset-0 bg-black/65 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-black/70 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center">
+                <Lock size={28} style={{ color: accent }} />
+              </div>
+            </div>
+          )}
+
+          <div className="absolute bottom-3 right-3 bg-black/90 backdrop-blur-sm rounded-lg px-2.5 py-1 text-[0.7rem] text-white font-mono font-bold shadow-lg">
+            {formatDuration(video.duration ?? 600)}
+          </div>
+
+          {video.isPremium && (
+            <div
+              className="absolute top-3 left-3 rounded-lg px-3 py-1.5 shadow-lg backdrop-blur-sm"
+              style={{ background: "linear-gradient(135deg,#f97316,#fbbf24)" }}
+            >
+              <span className="text-[0.65rem] font-extrabold text-white tracking-widest font-display">EXCLUSIVE</span>
+            </div>
+          )}
+        </div>
+
+        {/* Info panel */}
+        <div className="flex-1 p-5 sm:p-6 flex flex-col justify-center gap-3.5">
+          <span className="self-start text-[0.62rem] font-display font-bold tracking-[0.15em] uppercase text-[var(--accent-orange)] bg-orange-500/15 border border-orange-500/30 px-3 py-1.5 rounded-full shadow-sm">
+            🔥 Trending Now
+          </span>
+
+          <h2
+            className="font-display font-extrabold text-[1.1rem] text-[var(--text-primary)] leading-[1.25] overflow-hidden"
+            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+          >
+            {video.title}
+          </h2>
+
+          <div className="flex items-center gap-2.5">
+            <UserAvatar name={video.author?.name ?? "?"} image={video.author?.image} size="sm" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[0.85rem] text-[var(--text-secondary)] font-display font-semibold truncate">
+                {video.author?.name}
+              </p>
+              <p className="text-[0.75rem] text-[var(--text-muted)]">
+                {formatViews(video.views ?? 0)} views · {video.createdAt ? timeAgo(video.createdAt) : "recently"}
+              </p>
+            </div>
+          </div>
+
+          {/* Engagement metrics */}
+          <div className="flex gap-4 text-[0.75rem] text-[var(--text-muted)]">
+            <span className="flex items-center gap-1">
+              <span className="text-orange-500 font-bold">{formatViews(video._count.likes ?? 0)}</span> likes
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="text-blue-400 font-bold">{formatViews(video._count.comments ?? 0)}</span> comments
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* ── Category chips ── */
+function CategoryChips({ active, setActive }: { active: string; setActive: (c: string) => void }) {
+  return (
+    <div
+      className="flex gap-2.5 overflow-x-auto pb-2 mb-6 -mx-6 px-6 sm:-mx-0 sm:px-0"
+      style={{ scrollbarWidth: "none", scrollBehavior: "smooth" }}
+    >
+      {CATEGORIES.map((cat) => (
+        <button
+          key={cat}
+          onClick={() => setActive(cat)}
+          className={[
+            "shrink-0 px-4 py-2 rounded-full text-[0.8rem] font-display font-semibold transition-all duration-150 border cursor-pointer whitespace-nowrap",
+            active === cat
+              ? "bg-[var(--text-primary)] text-[var(--bg-primary)] border-transparent shadow-md scale-105"
+              : "bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] hover:border-[var(--text-muted)]",
+          ].join(" ")}
+        >
+          {cat}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── timeAgo helper ── */
 function timeAgo(date: Date): string {
   const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
   if (s < 60) return "just now";
@@ -169,11 +286,13 @@ function timeAgo(date: Date): string {
   return `${d}d`;
 }
 
+/* ── Main layout ── */
 export default function FeedLayout({ videos, userTier, subs, communityPosts, isLoggedIn }: Props) {
-  const [showRight, setShowRight]       = useState(true);
+  const [showRight, setShowRight] = useState(true);
   const [leftExpanded, setLeftExpanded] = useState(false);
-  const [chatOpen, setChatOpen]         = useState(false);
-  const [chatClosing, setChatClosing]   = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatClosing, setChatClosing] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("All");
 
   function closeChat() {
     setChatClosing(true);
@@ -181,22 +300,27 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
   }
 
   const leftW = leftExpanded ? 130 : 52;
+  const hero = videos[0] ?? null;
+  const rest = videos.slice(1);
 
   return (
     <>
-      {/* ── MOBILE layout (< lg): single column, no sidebars ── */}
+      {/* ── MOBILE layout (< lg) ── */}
       <div className="lg:hidden px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)]">Videos</h2>
+          <h2 className="font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">For You</h2>
           {!isLoggedIn && (
-            <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4">
+            <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4 shadow-md">
               Join Free
             </Link>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <CategoryChips active={activeCategory} setActive={setActiveCategory} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-8">
           {videos.map((video, i) => (
-            <VideoCard key={video.id} video={video} index={i} userTier={userTier} featured={i === 0} />
+            <VideoCard key={video.id} video={video} index={i} userTier={userTier} />
           ))}
         </div>
       </div>
@@ -283,10 +407,18 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
                     }}
                   >
                     <div
-                      className="w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center text-[0.6875rem] font-bold font-display"
-                      style={{ background: `${sub.color}22`, border: `1.5px solid ${sub.color}50`, color: sub.color }}
+                      className="w-[40px] h-[40px] rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[0.6875rem] font-bold font-display"
+                      style={
+                        sub.image
+                          ? { border: `1.5px solid ${sub.color}50` }
+                          : { background: `${sub.color}22`, border: `1.5px solid ${sub.color}50`, color: sub.color }
+                      }
                     >
-                      {sub.initials}
+                      {sub.image ? (
+                        <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                      ) : (
+                        sub.initials
+                      )}
                     </div>
                     <span
                       className="font-body text-xs text-[var(--text-secondary)] whitespace-nowrap overflow-hidden"
@@ -307,9 +439,10 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
 
         {/* ── CENTER: VIDEOS ── */}
         <main>
-          <div className="flex items-center justify-between mb-5">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)]">
-              Videos
+              For You
             </h2>
             {!isLoggedIn && (
               <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4">
@@ -318,15 +451,23 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
             )}
           </div>
 
-          {/* Responsive video grid: 2 cols normally, 3 when right panel is visible */}
-          <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: `repeat(${showRight ? 3 : 4}, 1fr)` }}
-          >
-            {videos.map((video, i) => (
-              <VideoCard key={video.id} video={video} index={i} userTier={userTier} featured={i === 0} />
-            ))}
-          </div>
+          {/* Category chips */}
+          <CategoryChips active={activeCategory} setActive={setActiveCategory} />
+
+          {/* Hero card — first video */}
+          {hero && <HeroCard video={hero} index={0} userTier={userTier} />}
+
+          {/* Video grid — remaining videos */}
+          {rest.length > 0 && (
+            <div
+              className="grid gap-x-4 gap-y-7"
+              style={{ gridTemplateColumns: `repeat(${showRight ? 2 : 3}, 1fr)` }}
+            >
+              {rest.map((video, i) => (
+                <VideoCard key={video.id} video={video} index={i + 1} userTier={userTier} />
+              ))}
+            </div>
+          )}
         </main>
 
         {/* ── RIGHT SIDEBAR ── */}
@@ -374,49 +515,39 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
                 </div>
               ) : (
                 <div className="flex flex-col gap-[0.625rem]">
-                  {communityPosts.map((p) => {
-                    const color = TIER_COLORS[p.author.tier] ?? "#666";
-                    return (
-                      <Link
-                        key={p.id}
-                        href={`/post/${p.id}`}
-                        className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-[0.875rem] py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                  {communityPosts.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/post/${p.id}`}
+                      className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-[0.875rem] py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                    >
+                      {/* Author row */}
+                      <div className="flex items-center gap-2 mb-[0.5rem]">
+                        <UserAvatar name={p.author.name ?? "?"} image={p.author.image} tier={p.author.tier} size="xs" />
+                        <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
+                          {p.author.name}
+                        </span>
+                        <span className="ml-auto text-[0.6875rem] text-[var(--text-muted)] shrink-0">
+                          {timeAgo(p.createdAt)}
+                        </span>
+                      </div>
+                      {/* Title */}
+                      <p
+                        className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] mb-1 overflow-hidden"
+                        style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
                       >
-                        {/* Author row */}
-                        <div className="flex items-center gap-2 mb-[0.5rem]">
-                          <div
-                            className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.5625rem]"
-                            style={{ background: `${color}22`, border: `1.5px solid ${color}50`, color }}
-                          >
-                            {(p.author.name ?? "?")[0].toUpperCase()}
-                          </div>
-                          <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">
-                            {p.author.name}
-                          </span>
-                          <span className="ml-auto text-[0.6875rem] text-[var(--text-muted)] shrink-0">
-                            {timeAgo(p.createdAt)}
-                          </span>
-                        </div>
-                        {/* Title */}
-                        <p
-                          className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] mb-1 overflow-hidden"
-                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-                        >
-                          {p.isPremium && (
-                            <span className="text-[var(--accent-orange)] mr-1">★</span>
-                          )}
-                          {p.title}
-                        </p>
-                        {/* Preview */}
-                        <p
-                          className="text-[0.75rem] text-[var(--text-muted)] leading-snug overflow-hidden"
-                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-                        >
-                          {p.content}
-                        </p>
-                      </Link>
-                    );
-                  })}
+                        {p.isPremium && <span className="text-[var(--accent-orange)] mr-1">★</span>}
+                        {p.title}
+                      </p>
+                      {/* Preview */}
+                      <p
+                        className="text-[0.75rem] text-[var(--text-muted)] leading-snug overflow-hidden"
+                        style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                      >
+                        {p.content}
+                      </p>
+                    </Link>
+                  ))}
                 </div>
               )}
 

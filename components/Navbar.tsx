@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -16,6 +17,15 @@ const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 export default function Navbar() {
   const { data: session } = useSession();
   const isStaff = session?.user?.role && STAFF_ROLES.includes(session.user.role);
+
+  const router = useRouter();
+  const [searchQ, setSearchQ] = useState("");
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchQ.trim();
+    if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
+  }
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -222,17 +232,19 @@ export default function Navbar() {
           </div>
 
           {/* Search */}
-          <div className="relative">
+          <form onSubmit={handleSearch} className="relative">
             <Search
               size={15}
-              className="absolute left-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
+              className="absolute  top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
             />
             <input
               type="text"
-              placeholder="Search"
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder="Search videos, creators, posts…"
               className="input-field w-full pl-10 h-[42px] rounded-[10px]"
             />
-          </div>
+          </form>
 
           {/* Right */}
           <div className="flex items-center gap-[0.625rem]">

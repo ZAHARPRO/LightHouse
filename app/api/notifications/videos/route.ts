@@ -31,7 +31,7 @@ export async function GET() {
         isPremium: true,
         duration: true,
         createdAt: true,
-        author: { select: { id: true, name: true, tier: true } },
+        author: { select: { id: true, name: true, image: true, tier: true } },
       },
     });
 

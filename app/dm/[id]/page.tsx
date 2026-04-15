@@ -7,11 +7,12 @@ import {
   blockUser, unblockUser,
 } from "@/actions/dm";
 import {
-  ArrowLeft, Reply, Send, X, ShieldOff, Pin, PinOff,
+  ArrowLeft, ArrowDown, Reply, Send, X, ShieldOff, Pin, PinOff,
   Pencil, Trash2, MoreHorizontal, Check, ChevronUp, ChevronDown,
-  UserX, UserCheck,
+  UserX, UserCheck, Search,
 } from "lucide-react";
 import Link from "next/link";
+import UserAvatar from "@/components/UserAvatar";
 
 type DMSender = { id: string; name: string | null; username: string | null; tier: string; image: string | null };
 type ReplyInfo = { id: string; content: string; sender: { id: string; name: string | null } } | null;
@@ -26,9 +27,6 @@ type DMsg = {
   replyTo: ReplyInfo;
 };
 
-const TIER_COLORS: Record<string, string> = {
-  ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#818cf8", FREE: "#888",
-};
 
 function timeAgo(d: Date) {
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -54,12 +52,17 @@ export default function DMConversationPage({ params }: { params: { id: string } 
   const [editingId, setEditingId]     = useState<string | null>(null);
   const [editInput, setEditInput]     = useState("");
   const [pinnedIdx, setPinnedIdx]     = useState(0);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIdx, setSearchIdx]     = useState(0);
   const [pending, start]              = useTransition();
 
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
-  const editRef    = useRef<HTMLInputElement>(null);
-  const msgRefs    = useRef<Map<string, HTMLDivElement>>(new Map());
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const editRef     = useRef<HTMLInputElement>(null);
+  const msgRefs     = useRef<Map<string, HTMLDivElement>>(new Map());
+  const messagesRef   = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDMMessages(convId).then((res) => {
@@ -77,6 +80,17 @@ export default function DMConversationPage({ params }: { params: { id: string } 
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollBtn(!entry.isIntersecting),
+      { root: messagesRef.current, threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [messages.length]);
+
   // Close menu on outside click
   useEffect(() => {
     if (!menuId) return;
@@ -84,6 +98,35 @@ export default function DMConversationPage({ params }: { params: { id: string } 
     window.addEventListener("click", handler);
     return () => window.removeEventListener("click", handler);
   }, [menuId]);
+
+  /* ── Search ── */
+  const searchResults = searchQuery.trim().length > 0
+    ? messages
+        .filter((m) => !m.isDeleted && m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map((m) => m.id)
+    : [];
+
+  function navigate(dir: 1 | -1) {
+    if (!searchResults.length) return;
+    const next = (searchIdx + dir + searchResults.length) % searchResults.length;
+    setSearchIdx(next);
+    scrollToMsg(searchResults[next]);
+  }
+
+  function closeSearch() {
+    setSearchQuery("");
+    setSearchIdx(0);
+  }
+
+  function highlight(text: string, query: string): React.ReactNode {
+    if (!query.trim()) return text;
+    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <mark key={i} style={{ background: "rgba(249,115,22,0.4)", color: "inherit", borderRadius: 2, padding: "0 1px" }}>{part}</mark>
+        : part
+    );
+  }
 
   const other   = messages.find((m) => m.sender.id !== myId)?.sender ?? null;
   const pinned  = messages.filter((m) => m.isPinned && !m.isDeleted);
@@ -173,10 +216,13 @@ export default function DMConversationPage({ params }: { params: { id: string } 
   }
 
   return (
-    <div className="w-full px-6 py-6 h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+    <div className="fixed inset-x-0 top-16 bottom-0 flex flex-col overflow-hidden bg-[var(--bg-primary)] z-10">
+
+      {/* ── Fixed top ── */}
+      <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col gap-3">
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4 shrink-0">
+      <div className="flex items-center gap-3">
         {/* Back */}
         <Link
           href="/dm"
@@ -186,23 +232,10 @@ export default function DMConversationPage({ params }: { params: { id: string } 
         </Link>
 
         {other && (
-          <div className="flex items-center gap-2.5">
+          <div className="flex w-full items-center gap-2.5">
             {/* Avatar */}
-            <Link
-              href={`/profile/${other.id}`}
-              className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs shrink-0 overflow-hidden no-underline"
-              style={{
-                background: `${TIER_COLORS[other.tier] ?? "#888"}20`,
-                border: `2px solid ${TIER_COLORS[other.tier] ?? "#888"}40`,
-                color: TIER_COLORS[other.tier] ?? "#888",
-              }}
-            >
-              {other.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={other.image} alt={other.name ?? "avatar"} className="w-full h-full object-cover" />
-              ) : (
-                (other.name ?? "?")[0].toUpperCase()
-              )}
+            <Link href={`/profile/${other.id}`} className="no-underline shrink-0">
+              <UserAvatar name={other.name ?? "?"} image={other.image} tier={other.tier} size="md" />
             </Link>
 
             {/* Name + username */}
@@ -215,7 +248,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
               )}
             </Link>
 
-            {/* Block button */}
+                        {/* Block button */}
             {isBlockedByMe ? (
               <button
                 onClick={handleUnblock}
@@ -235,13 +268,49 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                 <UserX size={15} />
               </button>
             )}
-          </div>
+
+
+          {/* Search bar */}
+        <div className="flex w-3/4 items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+          <Search size={13} className="text-[var(--text-muted)] shrink-0" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setSearchIdx(0); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") closeSearch();
+              if (e.key === "Enter") { e.preventDefault(); navigate(e.shiftKey ? -1 : 1); }
+            }}
+            placeholder="Search messages…"
+            className="flex-1 w3/4 bg-transparent text-[0.8125rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+          />
+          {searchQuery.trim().length > 0 && (
+            <span className="text-[0.7rem] text-[var(--text-muted)] shrink-0 font-display">
+              {searchResults.length === 0 ? "0 / 0" : `${searchIdx + 1} / ${searchResults.length}`}
+            </span>
+          )}
+          <button onClick={() => navigate(-1)} disabled={!searchResults.length}
+            className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--accent-orange)] disabled:opacity-30 bg-transparent border-none cursor-pointer transition-colors">
+            <ChevronUp size={13} />
+          </button>
+          <button onClick={() => navigate(1)} disabled={!searchResults.length}
+            className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--accent-orange)] disabled:opacity-30 bg-transparent border-none cursor-pointer transition-colors">
+            <ChevronDown size={13} />
+          </button>
+          <button onClick={closeSearch}
+            className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-red-400 bg-transparent border-none cursor-pointer transition-colors">
+            <X size={12} />
+          </button>
+        </div>
+       </div>
         )}
       </div>
 
+
+
       {/* Block banners */}
       {isBlockedByMe && (
-        <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl mb-3 text-[0.8rem]"
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-[0.8rem]"
           style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", color: "#fca5a5" }}>
           <UserX size={14} style={{ color: "#f87171", flexShrink: 0 }} />
           <span>You have blocked this user. They can&apos;t send you messages.</span>
@@ -251,7 +320,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
         </div>
       )}
       {isBlockedByThem && !isBlockedByMe && (
-        <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl mb-3 text-[0.8rem]"
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-[0.8rem]"
           style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", color: "#fca5a5" }}>
           <UserX size={14} style={{ color: "#f87171", flexShrink: 0 }} />
           <span>You can&apos;t send messages to this user.</span>
@@ -261,7 +330,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
       {/* Ban notice */}
       {otherBan && (
         <div
-          className="shrink-0 flex items-start gap-2.5 px-4 py-3 rounded-xl mb-3 text-[0.8125rem]"
+          className="flex items-start gap-2.5 px-4 py-3 rounded-xl text-[0.8125rem]"
           style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}
         >
           <ShieldOff size={15} className="shrink-0 mt-0.5" style={{ color: "#f87171" }} />
@@ -282,7 +351,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
       {/* Pinned messages bar */}
       {pinned.length > 0 && (
         <div
-          className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl mb-3"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl"
           style={{ background: "rgba(249,115,22,0.07)", border: "1px solid rgba(249,115,22,0.18)" }}
         >
           <Pin size={12} className="shrink-0" style={{ color: "var(--accent-orange)" }} />
@@ -316,11 +385,13 @@ export default function DMConversationPage({ params }: { params: { id: string } 
         </div>
       )}
 
+      </div>{/* end fixed top */}
+
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pb-2">
+      <div className="relative flex-1 min-h-0">
+      <div ref={messagesRef} className="h-full overflow-y-auto flex flex-col gap-3 px-6 py-4">
         {messages.map((msg, msgIndex) => {
           const isMe      = msg.sender.id === myId;
-          const color     = TIER_COLORS[msg.sender.tier] ?? "#888";
           const menuBelow = msgIndex < 3;
 
           return (
@@ -331,12 +402,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
             >
               {/* Avatar */}
               {!isMe && (
-                <div
-                  className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[0.625rem] mb-0.5"
-                  style={{ background: `${color}20`, border: `1.5px solid ${color}40`, color }}
-                >
-                  {(msg.sender.name ?? "?")[0].toUpperCase()}
-                </div>
+                <UserAvatar name={msg.sender.name ?? "?"} image={msg.sender.image} tier={msg.sender.tier} size="sm" className="mb-0.5" />
               )}
 
               <div className={["flex flex-col max-w-[72%]", isMe ? "items-end" : "items-start"].join(" ")}>
@@ -386,7 +452,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                         fontStyle: msg.isDeleted ? "italic" : undefined,
                       }}
                     >
-                      {msg.isDeleted ? "Message deleted" : msg.content}
+                      {msg.isDeleted ? "Message deleted" : highlight(msg.content, searchQuery)}
                     </div>
                     {/* Pinned badge */}
                     {msg.isPinned && !msg.isDeleted && (
@@ -400,7 +466,7 @@ export default function DMConversationPage({ params }: { params: { id: string } 
                           right: isMe ? "6px" : undefined,
                         }}
                       >
-                        <Pin size={7} /> pinned
+                        <Pin size={14} />
                       </span>
                     )}
                   </div>
@@ -482,10 +548,22 @@ export default function DMConversationPage({ params }: { params: { id: string } 
           );
         })}
         <div ref={bottomRef} />
-      </div>
+      </div>{/* end messagesRef scroll */}
+
+      {/* Scroll to bottom button */}
+      {showScrollBtn && (
+        <button
+          onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+          className="absolute bottom-4 left-6 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.75rem] font-display font-semibold text-white shadow-lg transition-all duration-200"
+          style={{ background: "var(--accent-orange)" }}
+        >
+          <ArrowDown size={13} />
+        </button>
+      )}
+      </div>{/* end relative wrapper */}
 
       {/* Input */}
-      <div className="shrink-0 border-t border-[var(--border-subtle)] pt-3">
+      <div className="shrink-0 border-t border-[var(--border-subtle)] px-6 py-3">
         {(isBlockedByMe || isBlockedByThem) ? (
           <div className="h-10 flex items-center justify-center text-[0.8rem] text-[var(--text-muted)] italic">
             {isBlockedByMe ? "Unblock this user to send messages." : "You can't reply to this conversation."}

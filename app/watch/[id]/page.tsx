@@ -7,11 +7,13 @@ import Link from "next/link";
 import {
   ArrowLeft, Eye, Clock, Play, Lock,
   Calendar, Users,
+  User,
 } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
 import LikeButtons from "@/components/LikeButtons";
 import CommentsSection from "@/components/CommentsSection";
 import ReportButton from "@/components/ReportButton";
+import UserAvatar from "@/components/UserAvatar";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -114,11 +116,11 @@ export default async function WatchPage({
   const rawComments = await prisma.comment.findMany({
     where: { videoId: id, parentId: null },
     include: {
-      author: { select: { id: true, name: true } },
+      author: { select: { id: true, name: true, image: true, tier: true } },
       likes:  { select: { userId: true } },
       replies: {
         include: {
-          author: { select: { id: true, name: true } },
+          author: { select: { id: true, name: true , image: true, tier: true } },
           likes:  { select: { userId: true } },
         },
         orderBy: { createdAt: "asc" },
@@ -286,12 +288,10 @@ export default async function WatchPage({
           <div className="flex items-center justify-between flex-wrap gap-4">
             <Link href={`/profile/${video.author.id}`} className="flex items-center gap-3.5 no-underline">
               <div
-                style={{ background: `${authorColor}22`, border: `2.5px solid ${authorColor}50` }}
+                
                 className="w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center"
               >
-                <span style={{ color: authorColor }} className="font-display font-extrabold text-lg">
-                  {(video.author.name ?? "?")[0].toUpperCase()}
-                </span>
+                <UserAvatar name={video.author.name ?? "?"} image={video.author.image} tier={video.author.tier} size="md" />
               </div>
               <div>
                 <p className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)] mb-0.5">

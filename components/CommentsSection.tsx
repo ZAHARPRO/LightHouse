@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ThumbsUp, Pin, PinOff, Reply, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { addComment, toggleCommentLike, togglePinComment } from "@/actions/comments";
+import UserAvatar from "@/components/UserAvatar";
 
-type Author = { id: string; name: string | null };
+type Author = { id: string; name: string | null; image?: string; tier?: string; };
 
 type ReplyData = {
   id: string; content: string; createdAt: Date;
@@ -231,13 +232,11 @@ function CommentItem({
 
         {/* Author row */}
         <div className="flex items-center gap-[0.625rem] mb-2">
-          <Link href={`/profile/${comment.author.id}`} className={[
-            "w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center font-display font-extrabold text-[0.6875rem]",
-            isAuthorComment
-              ? "bg-orange-500/15 border-[1.5px] border-orange-500/40 text-[var(--accent-orange)]"
-              : "bg-[var(--bg-elevated)] border-[1.5px] border-[var(--border-default)] text-[var(--text-secondary)]",
-          ].join(" ")}>
-            {(comment.author.name ?? "?")[0].toUpperCase()}
+          <Link href={`/profile/${comment.author.id}`}>
+          <div className={"w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center"}>
+            <UserAvatar name={comment.author.name ?? "?"} image={comment.author.image} tier={comment.author.tier} size="sm" />
+          </div>
+            
           </Link>
           <Link href={`/profile/${comment.author.id}`} className="font-display font-bold text-sm text-[var(--text-primary)]">
             {comment.author.name}

@@ -1,20 +1,34 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { auth } from "@/auth";
 import Navbar from "@/components/Navbar";
 import BadgeNotifier from "@/components/BadgeNotifier";
 import SupportChatBubble from "@/components/SupportChatBubble";
+import PwaInit from "@/components/PwaInit";
 
 export const metadata: Metadata = {
   title: "LightHouse — Illuminate Your World",
   description:
     "A premium video platform with global chat, creator subscriptions, and a reward system.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "LightHouse",
+    statusBarStyle: "black-translucent",
+  },
   openGraph: {
     title: "LightHouse",
     description: "Illuminate Your World",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f97316",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
 };
 
 export default async function RootLayout({
@@ -29,6 +43,7 @@ export default async function RootLayout({
       <body>
         <SessionProvider session={session}>
           <div className="min-h-screen flex flex-col">
+            <PwaInit />
             <Navbar />
             <BadgeNotifier />
             <SupportChatBubble />

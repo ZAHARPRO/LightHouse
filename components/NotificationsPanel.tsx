@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   X, Bell, GitCommit, Loader, AlertCircle, ExternalLink,
   Megaphone, Cog, FileText, Video, ChevronDown, Lock, Play, MessageCircle,
+  ThumbsUp, ThumbsDown, Reply, Pin, Activity,
 } from "lucide-react";
 import UserAvatar from "./UserAvatar";
 
@@ -67,6 +68,19 @@ function fmtDuration(secs: number | null): string {
 
 const TIER_COLORS: Record<string, string> = {
   ELITE: "#fbbf24", PRO: "#f97316", BASIC: "#6366f1", FREE: "#666",
+};
+
+type ActivityItem = {
+  id: string;
+  type: "like" | "dislike" | "comment" | "reply" | "pinned";
+  createdAt: string;
+  actor?: { id: string; name: string | null; image: string | null } | null;
+  videoId?: string | null;
+  videoTitle?: string | null;
+  postId?: string | null;
+  postTitle?: string | null;
+  content?: string | null;
+  parentContent?: string | null;
 };
 
 type SiteNewsItem = {
@@ -167,6 +181,9 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   const [dms, setDms]                 = useState<NotifDM[]>([]);
   const [dmsLoading, setDmsLoading]   = useState(true);
 
+  const [activity, setActivity]               = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+
   const [siteNews, setSiteNews]           = useState<SiteNewsItem[]>([]);
   const [siteNewsLoading, setSiteNewsLoading] = useState(true);
 
@@ -183,6 +200,9 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   const [dmsSeenAt, setDmsSeenAt]           = useState<number>(
     () => parseInt(localStorage.getItem("lh_notif_dms_seen") ?? "0", 10)
   );
+  const [activitySeenAt, setActivitySeenAt] = useState<number>(
+    () => parseInt(localStorage.getItem("lh_notif_activity_seen") ?? "0", 10)
+  );
 
   function markSeen(key: string, setter: (n: number) => void) {
     const now = Date.now();
@@ -192,19 +212,20 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
 
   // Call onAllSeen when every section's unread count drops to zero
   useEffect(() => {
-    if (commitsLoading || postsLoading || videosLoading || dmsLoading || siteNewsLoading) return;
+    if (commitsLoading || postsLoading || videosLoading || dmsLoading || siteNewsLoading || activityLoading) return;
 
     const unread =
       siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAt).length +
       commits.filter(c => new Date(c.date).getTime() > devNewsSeenAt).length +
       (posts.filter(p => new Date(p.createdAt).getTime() > contentSeenAt).length +
        videos.filter(v => new Date(v.createdAt).getTime() > contentSeenAt).length) +
-      dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length;
+      dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length +
+      activity.filter(a => new Date(a.createdAt).getTime() > activitySeenAt).length;
 
     if (unread === 0) onAllSeen();
-  }, [siteNewsSeenAt, devNewsSeenAt, contentSeenAt, dmsSeenAt,
-      siteNews, commits, posts, videos, dms,
-      siteNewsLoading, commitsLoading, postsLoading, videosLoading, dmsLoading]);
+  }, [siteNewsSeenAt, devNewsSeenAt, contentSeenAt, dmsSeenAt, activitySeenAt,
+      siteNews, commits, posts, videos, dms, activity,
+      siteNewsLoading, commitsLoading, postsLoading, videosLoading, dmsLoading, activityLoading]);
 
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -256,6 +277,13 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
       .then((data) => setDms(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setDmsLoading(false));
+
+    // Activity (likes, comments, replies, pins)
+    fetch("/api/notifications/activity")
+      .then((r) => r.json())
+      .then((data) => setActivity(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -557,32 +585,85 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
           })}
         </Section>
 
-        {/* ══ 3. Direct Messages ══ */}
+        {/* ══ 3. Direct Notifications ══ */}
         <Section
-          icon={<MessageCircle size={14} />}
-          label="Direct Messages"
-          badge={dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length}
-          onOpen={() => markSeen("lh_notif_dms_seen", setDmsSeenAt)}
+          icon={<Activity size={14} />}
+          label="Direct Notifications"
+          badge={
+            dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length +
+            activity.filter(a => new Date(a.createdAt).getTime() > activitySeenAt).length
+          }
+          onOpen={() => {
+            markSeen("lh_notif_dms_seen", setDmsSeenAt);
+            markSeen("lh_notif_activity_seen", setActivitySeenAt);
+          }}
         >
-          {dmsLoading && (
+          {(dmsLoading || activityLoading) && (
             <div className="py-5 text-center">
               <Loader size={16} className="mx-auto text-[var(--accent-orange)] animate-spin" />
             </div>
           )}
 
-          {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length === 0 && (
-            <p className="px-4 py-5 text-center text-sm text-[var(--text-muted)] italic">
-              cry baby you're alone 👶
-            </p>
-          )}
+          {/* ── Activity items ── */}
+          {!activityLoading && activity.map((item, i, arr) => {
+            const href = item.videoId
+              ? `/watch/${item.videoId}`
+              : item.postId
+                ? `/post/${item.postId}`
+                : "#";
+            const target = item.videoTitle ?? item.postTitle ?? "your content";
+            const isLast = i === arr.length - 1 && dms.filter(d => !d.lastIsMe).length === 0;
 
+            const META: Record<ActivityItem["type"], { icon: React.ReactNode; color: string; label: string }> = {
+              like:    { icon: <ThumbsUp size={12} />,   color: "#10b981", label: "liked"           },
+              dislike: { icon: <ThumbsDown size={12} />, color: "#ef4444", label: "disliked"        },
+              comment: { icon: <MessageCircle size={12}/>,color: "#6366f1", label: "commented on"   },
+              reply:   { icon: <Reply size={12} />,      color: "#f97316", label: "replied to you on" },
+              pinned:  { icon: <Pin size={12} />,        color: "#fbbf24", label: "Your comment was pinned in" },
+            };
+            const m = META[item.type];
+
+            return (
+              <Link
+                key={item.id}
+                href={href}
+                onClick={onClose}
+                className={[
+                  "flex items-start gap-3 px-4 py-3 no-underline transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]",
+                  !isLast ? "border-b border-[var(--border-subtle)]" : "",
+                ].join(" ")}
+              >
+                {/* Type icon bubble */}
+                <div
+                  className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-[2px]"
+                  style={{ background: `${m.color}18`, color: m.color, border: `1px solid ${m.color}30` }}
+                >
+                  {m.icon}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.8rem] text-[var(--text-primary)] leading-snug">
+                    {item.type !== "pinned" && item.actor && (
+                      <span className="font-semibold font-display">{item.actor.name ?? "Someone"} </span>
+                    )}
+                    <span style={{ color: m.color }}>{m.label} </span>
+                    <span className="font-semibold font-display truncate">&ldquo;{target}&rdquo;</span>
+                  </p>
+                  {item.content && (
+                    <p className="text-[0.72rem] text-[var(--text-muted)] truncate mt-0.5">
+                      {item.content}
+                    </p>
+                  )}
+                  <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">{timeAgo(item.createdAt)}</p>
+                </div>
+              </Link>
+            );
+          })}
+
+          {/* ── DMs ── */}
           {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).map((dm, i, arr) => {
             const preview = dm.lastMessage
-              ? dm.lastMessage.isDeleted
-                ? "Message deleted"
-                : dm.lastIsMe
-                  ? `You: ${dm.lastMessage.content}`
-                  : dm.lastMessage.content
+              ? dm.lastMessage.isDeleted ? "Message deleted" : dm.lastMessage.content
               : "No messages yet";
             return (
               <Link
@@ -594,29 +675,23 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
                   i < arr.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
                 ].join(" ")}
               >
-                {/* Avatar */}
-                <UserAvatar name={dm.other.name ?? "?"} image={dm.other.image} tier={dm.other.tier} size="sm" />
-
+                <div className="relative shrink-0">
+                  <UserAvatar name={dm.other.name ?? "?"} image={dm.other.image} tier={dm.other.tier} size="sm" />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#6366f1] flex items-center justify-center border border-[var(--bg-card)]">
+                    <MessageCircle size={9} color="white" />
+                  </div>
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-1 mb-[0.15rem]">
                     <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] truncate">
                       {dm.other.name}
-                      {dm.other.username && (
-                        <span className="font-normal text-[0.7rem] text-[var(--text-muted)] ml-1">
-                          @{dm.other.username}
-                        </span>
-                      )}
                     </span>
                     {dm.lastMessage && (
-                      <span className="text-[0.6rem] text-[var(--text-muted)] shrink-0">
-                        {timeAgo(dm.lastMessage.createdAt)}
-                      </span>
+                      <span className="text-[0.6rem] text-[var(--text-muted)] shrink-0">{timeAgo(dm.lastMessage.createdAt)}</span>
                     )}
                   </div>
-                  <p
-                    className="text-[0.75rem] text-[var(--text-muted)] truncate"
-                    style={{ fontStyle: dm.lastMessage?.isDeleted ? "italic" : undefined }}
-                  >
+                  <p className="text-[0.75rem] text-[var(--text-muted)] truncate"
+                    style={{ fontStyle: dm.lastMessage?.isDeleted ? "italic" : undefined }}>
                     {preview}
                   </p>
                 </div>
@@ -624,13 +699,20 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
             );
           })}
 
-          {!dmsLoading && dms.filter(d => new Date(d.updatedAt).getTime() > dmsSeenAt && !d.lastIsMe).length > 0 && (
+          {/* Empty state */}
+          {!dmsLoading && !activityLoading &&
+            activity.length === 0 &&
+            dms.filter(d => !d.lastIsMe).length === 0 && (
+            <p className="px-4 py-5 text-center text-sm text-[var(--text-muted)]">
+              No notifications yet.
+            </p>
+          )}
+
+          {/* Footer links */}
+          {!dmsLoading && dms.filter(d => !d.lastIsMe).length > 0 && (
             <div className="px-4 py-2 flex items-center justify-end border-t border-[var(--border-subtle)]">
-              <Link
-                href="/dm"
-                onClick={onClose}
-                className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] no-underline font-display hover:text-[var(--accent-orange)] transition-colors duration-150"
-              >
+              <Link href="/dm" onClick={onClose}
+                className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] no-underline font-display hover:text-[var(--accent-orange)] transition-colors duration-150">
                 <MessageCircle size={11} /> All messages
               </Link>
             </div>

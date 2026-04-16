@@ -85,37 +85,52 @@ export default function ProfileTabs({
   return (
     <div>
       {/* Tab bar */}
-      <div className="flex items-center gap-1 mb-6 border-b border-[var(--border-subtle)]">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={[
-              "flex items-center gap-[0.4rem] px-4 py-[0.625rem] -mb-px",
-              "bg-transparent border-none cursor-pointer",
-              "font-display font-bold text-sm transition-colors duration-150",
-              "border-b-2",
-              tab === id
-                ? "text-[var(--accent-orange)] border-[var(--accent-orange)]"
-                : "text-[var(--text-muted)] border-transparent",
-            ].join(" ")}
-          >
-            <Icon size={14} /> {label}
-            {id !== "stats" && (
-              <span className="ml-0.5 text-xs opacity-70">
-                ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="mb-6">
+        <div className="flex items-end border-b border-[var(--border-subtle)]">
+          {/* Scrollable tab strip */}
+          <div className="flex flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={[
+                  "flex items-center gap-[0.4rem] px-3 sm:px-4 py-[0.625rem] -mb-px shrink-0 whitespace-nowrap",
+                  "bg-transparent border-none cursor-pointer",
+                  "font-display font-bold text-xs sm:text-sm transition-colors duration-150",
+                  "border-b-2",
+                  tab === id
+                    ? "text-[var(--accent-orange)] border-[var(--accent-orange)]"
+                    : "text-[var(--text-muted)] border-transparent",
+                ].join(" ")}
+              >
+                <Icon size={13} /> {label}
+                {id !== "stats" && (
+                  <span className="ml-0.5 text-xs opacity-70">
+                    ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
-        {/* Quick create buttons */}
-        <div className="ml-auto flex gap-2">
-          <Link href="/upload" className={quickBtn}>
-            <Upload size={13} /> Video
+          {/* Quick create — desktop only */}
+          <div className="hidden sm:flex gap-2 shrink-0 pb-1.5 pl-3">
+            <Link href="/upload" className={quickBtn}>
+              <Upload size={13} /> Video
+            </Link>
+            <Link href="/post/new" className={quickBtn}>
+              <Plus size={13} /> Post
+            </Link>
+          </div>
+        </div>
+
+        {/* Quick create — mobile only */}
+        <div className="flex sm:hidden gap-2 mt-3">
+          <Link href="/upload" className={quickBtn + " flex-1 justify-center"}>
+            <Upload size={13} /> Upload Video
           </Link>
-          <Link href="/post/new" className={quickBtn}>
-            <Plus size={13} /> Post
+          <Link href="/post/new" className={quickBtn + " flex-1 justify-center"}>
+            <Plus size={13} /> New Post
           </Link>
         </div>
       </div>
@@ -130,13 +145,13 @@ export default function ProfileTabs({
       {tab === "badges" && (
         <div>
           {/* Header row */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <p className="text-[var(--text-muted)] text-sm">
               {rewards.length === 0
                 ? "Watch videos, comment, and engage to earn badges."
                 : `${rewards.length} badge${rewards.length === 1 ? "" : "s"} earned`}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setShowcaseOpen((v) => !v)}
                 className={[
@@ -175,7 +190,7 @@ export default function ProfileTabs({
               </Link>
             </div>
           ) : (
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))" }}>
               {rewards.map((r) => {
                 const customMeta = r.customBadge
                   ? { icon: r.customBadge.icon, color: r.customBadge.color, label: r.customBadge.label }

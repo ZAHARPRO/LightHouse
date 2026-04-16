@@ -50,7 +50,7 @@ export default async function ProfilePage() {
   const pctToNext  = (((user.points ?? 0) % 100) / 100) * 100;
 
   return (
-    <div className="max-w-[900px] mx-auto px-6 py-12">
+    <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
       {/* Ban notice */}
       {user.isBanned && <BanBanner reason={user.banReason ?? null} isOwn />}
@@ -62,7 +62,7 @@ export default async function ProfilePage() {
         <BannerUpload currentBanner={user.banner ?? null} />
 
         {/* Info section */}
-        <div className="flex gap-8 items-start flex-wrap px-8 pt-6 pb-8">
+        <div className="flex gap-6 sm:gap-8 items-start flex-wrap px-4 sm:px-8 pt-6 pb-6 sm:pb-8">
 
           {/* Avatar */}
           <div className="shrink-0 -mt-10 relative z-10">
@@ -73,10 +73,10 @@ export default async function ProfilePage() {
             />
           </div>
 
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-0 w-full sm:w-auto">
             {/* Name row */}
             <div className="flex items-center gap-3 flex-wrap mb-1">
-              <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.02em]">
+              <h1 className="font-display font-extrabold text-[1.35rem] sm:text-[1.75rem] tracking-[-0.02em]">
                 {user.name}
               </h1>
               <span
@@ -114,7 +114,7 @@ export default async function ProfilePage() {
             </div>
 
             {/* Level bar */}
-            <div className="max-w-[320px] mb-4">
+            <div className="max-w-full sm:max-w-[320px] mb-4">
               <div className="flex justify-between mb-1.5">
                 <span className="flex items-center gap-1.5 font-display font-bold text-sm text-[var(--accent-orange)]">
                   <TrendingUp size={14}/> Level {level}
@@ -132,7 +132,7 @@ export default async function ProfilePage() {
             </div>
 
             {/* Quick stats */}
-            <div className="flex gap-5 pt-3 border-t border-[var(--border-subtle)]">
+            <div className="flex flex-wrap gap-4 sm:gap-5 pt-3 border-t border-[var(--border-subtle)]">
               {[
                 { icon: Star,  value: user.points,         label: "Points" },
                 { icon: Award, value: user.rewards.length, label: "Badges" },
@@ -173,7 +173,7 @@ export default async function ProfilePage() {
 
       {/* Upgrade CTA */}
       {user.tier === "FREE" && (
-        <div className="mt-8 p-8 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),transparent)] border border-orange-500/15 rounded-xl flex items-center justify-between flex-wrap gap-4">
+        <div className="mt-8 p-5 sm:p-8 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),transparent)] border border-orange-500/15 rounded-xl flex items-center justify-between flex-wrap gap-4">
           <div>
             <h3 className="font-display font-bold text-lg mb-1">Upgrade your plan</h3>
             <p className="text-[var(--text-secondary)] text-sm">Earn more points, unlock exclusive content, and get a premium badge.</p>

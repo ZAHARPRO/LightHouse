@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Play, Lock,
-  MessageSquare, ChevronRight, ChevronLeft,
+  MessageSquare, ChevronRight, ChevronLeft, ArrowUp,
 } from "lucide-react";
 import ChatPopup from "./ChatPopup";
 import UserAvatar from "./UserAvatar";
@@ -252,24 +252,23 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
 /* ── Category chips ── */
 function CategoryChips({ active, setActive }: { active: string; setActive: (c: string) => void }) {
   return (
-    <div
-      className="flex gap-2.5 overflow-x-auto pb-2 mb-6 -mx-6 px-6 sm:-mx-0 sm:px-0"
-      style={{ scrollbarWidth: "none", scrollBehavior: "smooth" }}
-    >
-      {CATEGORIES.map((cat) => (
-        <button
-          key={cat}
-          onClick={() => setActive(cat)}
-          className={[
-            "shrink-0 px-4 py-2 rounded-full text-[0.8rem] font-display font-semibold transition-all duration-150 border cursor-pointer whitespace-nowrap",
-            active === cat
-              ? "bg-[var(--text-primary)] text-[var(--bg-primary)] border-transparent shadow-md scale-105"
-              : "bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] hover:border-[var(--text-muted)]",
-          ].join(" ")}
-        >
-          {cat}
-        </button>
-      ))}
+    <div className="mb-6 overflow-hidden">
+      <div className="flex gap-2 overflow-x-auto scroll-smooth pb-1 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setActive(cat)}
+            className={[
+              "shrink-0 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[0.75rem] sm:text-[0.8rem] font-display font-semibold transition-all duration-150 border cursor-pointer whitespace-nowrap",
+              active === cat
+                ? "bg-[var(--text-primary)] text-[var(--bg-primary)] border-transparent shadow-md scale-105"
+                : "bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] hover:border-[var(--text-muted)]",
+            ].join(" ")}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -293,6 +292,19 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
   const [chatOpen, setChatOpen] = useState(false);
   const [chatClosing, setChatClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const subsStripRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = subsStripRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollTop(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   function closeChat() {
     setChatClosing(true);
@@ -307,23 +319,130 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
     <>
       {/* ── MOBILE layout (< lg) ── */}
       <div className="lg:hidden px-4 sm:px-6 py-6">
+
+        {/* Header row */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">For You</h2>
-          {!isLoggedIn && (
-            <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4 shadow-md">
-              Join Free
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Chat button */}
+            <button
+              onClick={() => setChatOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-[0.4rem] rounded-lg border cursor-pointer font-display font-semibold text-xs transition-colors duration-150"
+              style={{
+                background: chatOpen ? "rgba(249,115,22,0.08)" : "var(--bg-card)",
+                borderColor: chatOpen ? "rgba(249,115,22,0.35)" : "var(--border-subtle)",
+                color: chatOpen ? "var(--accent-orange)" : "var(--text-secondary)",
+              }}
+            >
+              <MessageSquare size={13} />
+              <span className="hidden sm:inline">Chat</span>
+            </button>
+            {!isLoggedIn && (
+              <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4 shadow-md">
+                Join Free
+              </Link>
+            )}
+          </div>
         </div>
 
         <CategoryChips active={activeCategory} setActive={setActiveCategory} />
 
+        {/* Subscriptions strip (mobile) */}
+        {subs.length > 0 && (
+          <div ref={subsStripRef} className="flex gap-3 overflow-x-auto pb-3 mb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:-mx-6 sm:px-6">
+            {subs.map((sub) => (
+              <Link
+                key={sub.id}
+                href={`/profile/${sub.id}`}
+                className="flex flex-col items-center gap-1 shrink-0 no-underline"
+              >
+                <div
+                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-[0.6875rem] font-bold font-display"
+                  style={
+                    sub.image
+                      ? { border: `2px solid ${sub.color}50` }
+                      : { background: `${sub.color}22`, border: `2px solid ${sub.color}50`, color: sub.color }
+                  }
+                >
+                  {sub.image
+                    ? <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                    : sub.initials
+                  }
+                </div>
+                <span className="text-[0.6rem] text-[var(--text-muted)] max-w-[40px] truncate text-center">{sub.name}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Hero card — first video */}
+        {hero && <HeroCard video={hero} index={0} userTier={userTier} />}
+
+        {/* Video grid — rest */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-8">
-          {videos.map((video, i) => (
-            <VideoCard key={video.id} video={video} index={i} userTier={userTier} />
+          {rest.map((video, i) => (
+            <VideoCard key={video.id} video={video} index={i + 1} userTier={userTier} />
           ))}
         </div>
+
+        {/* Community section (mobile) */}
+        {communityPosts.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-display font-extrabold text-base text-[var(--text-primary)]">Community</span>
+              <Link href="/community" className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline">
+                See all
+              </Link>
+            </div>
+            <div className="flex flex-col gap-3">
+              {communityPosts.slice(0, 4).map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/post/${p.id}`}
+                  className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-4 py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <UserAvatar name={p.author.name ?? "?"} image={p.author.image} tier={p.author.tier} size="xs" />
+                    <span className="font-display font-semibold text-[0.75rem] text-[var(--text-secondary)] truncate">{p.author.name}</span>
+                    <span className="ml-auto text-[0.6875rem] text-[var(--text-muted)] shrink-0">{timeAgo(p.createdAt)}</span>
+                  </div>
+                  <p
+                    className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] leading-[1.3] overflow-hidden"
+                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                  >
+                    {p.isPremium && <span className="text-[var(--accent-orange)] mr-1">★</span>}
+                    {p.title}
+                  </p>
+                </Link>
+              ))}
+            </div>
+            <Link
+              href="/community"
+              className="block text-center mt-4 px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)]"
+            >
+              See more posts →
+            </Link>
+          </div>
+        )}
       </div>
+
+      {/* ── Scroll-to-top button (mobile/tablet only) ── */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Scroll to top"
+        className={[
+          "lg:hidden fixed bottom-6 right-1/2 z-[200]",
+          "w-11 h-11 rounded-full flex items-center justify-center",
+          "bg-[var(--accent-orange)] text-white shadow-[0_4px_20px_rgba(249,115,22,0.45)]",
+          "border border-orange-400/40",
+          "transition-[opacity,transform] duration-300 ease-out",
+          showScrollTop
+            ? "opacity-50 translate-y-0 pointer-events-auto"
+            : "opacity-0 translate-y-4 pointer-events-none",
+        ].join(" ")}
+      >
+        <ArrowUp size={18} strokeWidth={2.5} />
+      </button>
 
       {/* ── DESKTOP layout (≥ lg): 3-column grid with sidebars ── */}
       <div

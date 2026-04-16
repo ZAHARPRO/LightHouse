@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X, MessageSquare, Maximize2, Users } from "lucide-react";
+import { X, MessageSquare, Maximize2, Users, Newspaper } from "lucide-react";
 
 type Sub = { id: string; name: string; tier: string; image: string | null; initials: string; color: string };
 
@@ -113,6 +113,22 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
               <Maximize2 size={13} />
             </Link>
           </div>
+        </div>
+
+        {/* Community button */}
+        <div className="px-[0.875rem] pb-2">
+          <Link
+            href="/community"
+            onClick={onClose}
+            className="flex items-center gap-[0.625rem] px-[0.875rem] py-[0.625rem] rounded-[10px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] no-underline transition-colors duration-150 hover:border-orange-500/30 hover:bg-orange-500/[0.05]"
+          >
+            <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-subtle)] shrink-0">
+              <Newspaper size={16} className="text-[var(--text-secondary)]" />
+            </div>
+            <span className="font-display font-bold text-sm text-[var(--text-primary)]">
+              Community
+            </span>
+          </Link>
         </div>
 
         {/* Subscriptions */}

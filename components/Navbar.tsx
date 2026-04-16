@@ -278,7 +278,7 @@ export default function Navbar() {
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--accent-orange)] shrink-0">
                 <Zap size={18} color="white" strokeWidth={2.5} />
               </div>
-              <span className="hidden sm:block font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">
+              <span className="hidden md:block font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">
                 Light<span className="text-[var(--accent-orange)]">House</span>
               </span>
             </Link>
@@ -297,7 +297,7 @@ export default function Navbar() {
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
                 onKeyDown={handleKeyDown}
-                placeholder="Search videos, creators, posts…"
+                placeholder="Search…"
                 className="input-field w-full h-[42px] rounded-[10px]"
                 style={{ paddingLeft: "2.25rem" }}
                 autoComplete="off"
@@ -306,56 +306,77 @@ export default function Navbar() {
 
             {/* Suggestions dropdown */}
             {suggestOpen && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[200] rounded-xl border border-[var(--border-subtle)] bg-[rgba(12,12,12,0.97)] backdrop-blur-xl shadow-2xl overflow-hidden">
+              <div
+                className={[
+                  /* < lg: fixed full-width below navbar */
+                  "fixed left-2 right-2 top-[70px]",
+                  /* lg+: absolute, anchored to search input */
+                  "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
+                  "z-[200] rounded-xl border border-[var(--border-subtle)]",
+                  "bg-[rgba(12,12,12,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden",
+                  "flex flex-col",
+                ].join(" ")}
+                style={{ animation: "slideDownIn 0.15s ease both" }}
+              >
                 {/* "Search for" shortcut */}
                 <button
                   onMouseDown={() => { router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`); closeSuggest(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] transition-colors border-b border-[var(--border-subtle)] cursor-pointer"
+                  className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors border-b border-[var(--border-subtle)] cursor-pointer shrink-0"
                 >
                   <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
-                  <span className="text-[0.8125rem] text-[var(--text-secondary)]">
-                    Search for <span className="text-[var(--text-primary)] font-semibold font-display">"{searchQ}"</span>
+                  <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
+                    Search for{" "}
+                    <span className="text-[var(--text-primary)] font-semibold font-display">
+                      &ldquo;{searchQ}&rdquo;
+                    </span>
                   </span>
                 </button>
 
-                {/* Results */}
-                {suggestions.map((s, i) => (
-                  <button
-                    key={`${s.type}-${s.id}`}
-                    onMouseDown={() => { router.push(s.href); closeSuggest(); setSearchQ(s.label); }}
-                    onMouseEnter={() => setActiveIdx(i)}
-                    className={[
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer",
-                      activeIdx === i ? "bg-white/[0.06]" : "hover:bg-white/[0.04]",
-                    ].join(" ")}
-                  >
-                    {/* Type icon */}
-                    <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
-                      {TYPE_ICON[s.type]}
-                    </div>
+                {/* Scrollable results */}
+                <div className="overflow-y-auto max-h-[55vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={`${s.type}-${s.id}`}
+                      onMouseDown={() => { router.push(s.href); closeSuggest(); setSearchQ(s.label); }}
+                      onMouseEnter={() => setActiveIdx(i)}
+                      className={[
+                        "w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left transition-colors cursor-pointer",
+                        i < suggestions.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
+                        activeIdx === i ? "bg-white/[0.06]" : "hover:bg-white/[0.04] active:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      {/* Type icon */}
+                      <div className="shrink-0 w-8 h-8 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
+                        {TYPE_ICON[s.type]}
+                      </div>
 
-                    {/* Label + sub */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
-                        {s.label}
-                      </p>
-                      {s.sub && (
-                        <p className="text-[0.72rem] text-[var(--text-muted)] truncate">{s.sub}</p>
-                      )}
-                    </div>
+                      {/* Label + sub */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
+                          {s.label}
+                        </p>
+                        {s.sub && (
+                          <p className="text-[0.72rem] text-[var(--text-muted)] truncate">{s.sub}</p>
+                        )}
+                      </div>
 
-                    {/* Type badge */}
-                    <span className="shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
-                      {TYPE_LABEL[s.type]}
-                    </span>
-                  </button>
-                ))}
+                      {/* Type badge — hidden on xs, visible on sm+ */}
+                      <span className="hidden sm:inline-block shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
+                        {TYPE_LABEL[s.type]}
+                      </span>
+                      {/* Type badge — xs only, just a colored dot */}
+                      <span className="sm:hidden shrink-0 text-[0.6rem] font-display font-medium text-[var(--text-muted)]">
+                        {TYPE_LABEL[s.type]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           {/* Right */}
-          <div className="flex items-center gap-[0.625rem]">
+          <div className="flex items-center gap-1 sm:gap-[0.625rem]">
 
             {/* Nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
@@ -414,7 +435,7 @@ export default function Navbar() {
                   ].join(" ")}
                 >
                   <Plus size={15} />
-                  <span className="hidden sm:inline">Create</span>
+                  <span className="hidden md:inline">Create</span>
                 </button>
 
                 {createOpen && (
@@ -472,7 +493,7 @@ export default function Navbar() {
                 </Link>
                 <button
                   onClick={() => signOut()}
-                  className="flex items-center p-[0.375rem] rounded-md bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-red-500 transition-colors duration-150"
+                  className="hidden sm:flex items-center p-[0.375rem] rounded-md bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-red-500 transition-colors duration-150"
                   title="Sign out"
                 >
                   <LogOut size={15} />
@@ -480,7 +501,7 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link href="/auth/signin" className="btn-ghost hidden sm:inline-flex no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
+                <Link href="/auth/signin" className="btn-ghost hidden md:inline-flex no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
                   Sign In
                 </Link>
                 <Link href="/auth/register" className="btn-primary no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
@@ -517,7 +538,17 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
-            {!session && (
+            {session ? (
+              <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                <button
+                  onClick={() => { signOut(); setMobileOpen(false); }}
+                  className="flex items-center gap-2 w-full px-4 py-3 rounded-lg bg-transparent border-none cursor-pointer text-[var(--text-muted)] font-display font-medium text-[0.95rem] hover:bg-red-500/10 hover:text-red-500 transition-colors duration-150"
+                >
+                  <LogOut size={16} />
+                  Sign Out
+                </button>
+              </div>
+            ) : (
               <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--border-subtle)]">
                 <Link href="/auth/signin" className="btn-ghost no-underline flex-1 text-center py-2 text-sm">Sign In</Link>
                 <Link href="/auth/register" className="btn-primary no-underline flex-1 text-center py-2 text-sm">Join Free</Link>

@@ -108,7 +108,7 @@ function Section({
       {/* Section header */}
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-[0.5rem] px-4 py-[0.75rem] bg-transparent border-none cursor-pointer text-left transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)]"
+        className="w-full flex items-center gap-[0.5rem] px-4 py-[0.75rem] min-h-[48px] bg-transparent border-none cursor-pointer text-left transition-colors duration-[120ms] hover:bg-[var(--bg-elevated)] active:bg-[var(--bg-elevated)]"
       >
         <span className="text-[var(--accent-orange)]">{icon}</span>
         <span className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] flex-1">
@@ -280,12 +280,12 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
       ref={ref}
       onMouseLeave={handleMouseLeave}
       onMouseEnter={handleMouseEnter}
-      className="fixed z-[3000] flex flex-col bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[14px] shadow-[0_8px_40px_rgba(0,0,0,0.45)] overflow-hidden"
+      className="fixed z-[3000] flex flex-col bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[14px] shadow-[0_8px_40px_rgba(0,0,0,0.45)] overflow-hidden max-[600px]:!left-2 max-[600px]:!right-2 max-[600px]:!w-auto max-[600px]:!rounded-xl"
       style={{
         top: 64 + 8,
         right: anchorRight,
         width: "min(360px, calc(100vw - 16px))",
-        maxHeight: "calc(100vh - 88px)",
+        maxHeight: "calc(100svh - 88px)",
         transformOrigin: "top right",
         animation: isClosing ? "slideUpOut 0.18s ease both" : "slideDownIn 0.2s ease both",
       }}
@@ -305,7 +305,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="overflow-y-auto flex-1">
+      <div className="overflow-y-auto flex-1 overscroll-contain">
 
         {/* ══ 0. Site News (from DB) ══ */}
         <Section

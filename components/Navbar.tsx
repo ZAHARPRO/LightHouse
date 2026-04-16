@@ -284,96 +284,133 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* Search */}
-          <div ref={searchRef} className="relative">
-            <form onSubmit={handleSearch} className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
-              />
-              <input
-                type="text"
-                value={searchQ}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
-                onKeyDown={handleKeyDown}
-                placeholder="Search…"
-                className="input-field w-full h-[42px] rounded-[10px]"
-                style={{ paddingLeft: "2.25rem" }}
-                autoComplete="off"
-              />
-            </form>
+{/* Overlay (mobile/tablet only) */}
+{searchQ.trim().length > 0 && (
+  <div
+    className="fixed inset-0 z-[900] bg-black/50 backdrop-blur-sm lg:hidden"
+    onClick={() => {
+      setSearchQ("");
+      closeSuggest();
+    }}
+  />
+)}
 
-            {/* Suggestions dropdown */}
-            {suggestOpen && suggestions.length > 0 && (
-              <div
-                className={[
-                  /* < lg: fixed full-width below navbar */
-                  "fixed left-2 right-2 top-[70px]",
-                  /* lg+: absolute, anchored to search input */
-                  "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
-                  "z-[200] rounded-xl border border-[var(--border-subtle)]",
-                  "bg-[rgba(12,12,12,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden",
-                  "flex flex-col",
-                ].join(" ")}
-                style={{ animation: "slideDownIn 0.15s ease both" }}
-              >
-                {/* "Search for" shortcut */}
-                <button
-                  onMouseDown={() => { router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`); closeSuggest(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors border-b border-[var(--border-subtle)] cursor-pointer shrink-0"
-                >
-                  <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
-                  <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
-                    Search for{" "}
-                    <span className="text-[var(--text-primary)] font-semibold font-display">
-                      &ldquo;{searchQ}&rdquo;
-                    </span>
-                  </span>
-                </button>
+{/* Search */}
+<div
+  ref={searchRef}
+  className={[
+    "transition-all duration-300",
 
-                {/* Scrollable results */}
-                <div className="overflow-y-auto max-h-[55vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={`${s.type}-${s.id}`}
-                      onMouseDown={() => { router.push(s.href); closeSuggest(); setSearchQ(s.label); }}
-                      onMouseEnter={() => setActiveIdx(i)}
-                      className={[
-                        "w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left transition-colors cursor-pointer",
-                        i < suggestions.length - 1 ? "border-b border-[var(--border-subtle)]" : "",
-                        activeIdx === i ? "bg-white/[0.06]" : "hover:bg-white/[0.04] active:bg-white/[0.06]",
-                      ].join(" ")}
-                    >
-                      {/* Type icon */}
-                      <div className="shrink-0 w-8 h-8 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
-                        {TYPE_ICON[s.type]}
-                      </div>
+    // 📱 mobile/tablet: overlay mode
+    searchQ.trim().length > 0
+      ? "fixed left-1/2 -translate-x-1/2 top-[12px] z-[999] w-[85%]"
+      : "relative w-full",
 
-                      {/* Label + sub */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
-                          {s.label}
-                        </p>
-                        {s.sub && (
-                          <p className="text-[0.72rem] text-[var(--text-muted)] truncate">{s.sub}</p>
-                        )}
-                      </div>
+    // 💻 desktop: normal
+    "lg:static lg:translate-x-0 lg:w-full",
+  ].join(" ")}
+>
+  <form onSubmit={handleSearch} className="relative">
+    <Search
+      size={14}
+      className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
+    />
 
-                      {/* Type badge — hidden on xs, visible on sm+ */}
-                      <span className="hidden sm:inline-block shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
-                        {TYPE_LABEL[s.type]}
-                      </span>
-                      {/* Type badge — xs only, just a colored dot */}
-                      <span className="sm:hidden shrink-0 text-[0.6rem] font-display font-medium text-[var(--text-muted)]">
-                        {TYPE_LABEL[s.type]}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+    <input
+      type="text"
+      value={searchQ}
+      onChange={(e) => handleSearchChange(e.target.value)}
+      onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
+      onKeyDown={handleKeyDown}
+      placeholder="Search…"
+      className="input-field w-full h-[42px] rounded-[10px] shadow-2xl"
+      style={{ paddingLeft: "2.25rem" }}
+      autoComplete="off"
+    />
+  </form>
+
+  {/* Suggestions */}
+  {suggestOpen && suggestions.length > 0 && (
+    <div
+      className={[
+        // 📱 mobile: под search overlay
+        "absolute left-0 right-0 top-[calc(100%+6px)] z-[1000]",
+
+        // 💻 desktop: как было
+        "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
+
+        "rounded-xl border border-[var(--border-subtle)]",
+        "bg-[rgba(12,12,12,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden",
+        "flex flex-col",
+      ].join(" ")}
+      style={{ animation: "slideDownIn 0.15s ease both" }}
+    >
+      {/* Search for */}
+      <button
+        onMouseDown={() => {
+          router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`);
+          closeSuggest();
+        }}
+        className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors border-b border-[var(--border-subtle)] cursor-pointer shrink-0"
+      >
+        <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
+        <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
+          Search for{" "}
+          <span className="text-[var(--text-primary)] font-semibold font-display">
+            &ldquo;{searchQ}&rdquo;
+          </span>
+        </span>
+      </button>
+
+      {/* Results */}
+      <div className="overflow-y-auto max-h-[55vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {suggestions.map((s, i) => (
+          <button
+            key={`${s.type}-${s.id}`}
+            onMouseDown={() => {
+              router.push(s.href);
+              closeSuggest();
+              setSearchQ(s.label);
+            }}
+            onMouseEnter={() => setActiveIdx(i)}
+            className={[
+              "w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left transition-colors cursor-pointer",
+              i < suggestions.length - 1
+                ? "border-b border-[var(--border-subtle)]"
+                : "",
+              activeIdx === i
+                ? "bg-white/[0.06]"
+                : "hover:bg-white/[0.04] active:bg-white/[0.06]",
+            ].join(" ")}
+          >
+            <div className="shrink-0 w-8 h-8 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
+              {TYPE_ICON[s.type]}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
+                {s.label}
+              </p>
+              {s.sub && (
+                <p className="text-[0.72rem] text-[var(--text-muted)] truncate">
+                  {s.sub}
+                </p>
+              )}
+            </div>
+
+            <span className="hidden sm:inline-block shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
+              {TYPE_LABEL[s.type]}
+            </span>
+
+            <span className="sm:hidden shrink-0 text-[0.6rem] font-display font-medium text-[var(--text-muted)]">
+              {TYPE_LABEL[s.type]}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )}
+</div>
 
           {/* Right */}
           <div className="flex items-center gap-1 sm:gap-[0.625rem]">

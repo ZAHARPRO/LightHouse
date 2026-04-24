@@ -333,10 +333,9 @@ export default function Navbar() {
   {suggestOpen && suggestions.length > 0 && (
     <div
       className={[
-        // 📱 mobile: под search overlay
+
         "absolute left-0 right-0 top-[calc(100%+6px)] z-[1000]",
 
-        // 💻 desktop: как было
         "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
 
         "rounded-xl border border-[var(--border-subtle)]",
@@ -418,6 +417,7 @@ export default function Navbar() {
             {/* Nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
               {[
+                { href: "/games", label: "Games" },
                 { href: "/subscriptions", label: "Plans" },
                 { href: "/contact",       label: "Contact" },
               ].map(({ href, label }) => (
@@ -563,6 +563,7 @@ export default function Navbar() {
             {[
               { href: "/feed",          label: "Feed" },
               { href: "/chat",          label: "Chat" },
+              { href: "/games", label: "Games" },
               { href: "/subscriptions", label: "Plans" },
               { href: "/contact",       label: "Contact" },
             ].map(({ href, label }) => (

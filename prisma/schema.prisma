@@ -57,6 +57,8 @@ model User {
   blocksReceived       Block[]              @relation("BlocksReceived")
   newsPosts            NewsPost[]           @relation("NewsAuthor")
   newsLikes            NewsLike[]
+  msRoomsAsHost        MinesweeperRoom[]    @relation("MSHost")
+  msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
 }
 
 model Account {
@@ -413,4 +415,43 @@ model SupportMessage {
   conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
   sender         User   @relation("SupportSender", fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model MinesweeperRoom {
+  id         String       @id @default(cuid())
+  hostId     String
+  guestId    String?
+  status     MSRoomStatus @default(WAITING)
+  difficulty String       @default("easy")
+  hostReady  Boolean      @default(true)
+  guestReady Boolean      @default(false)
+  rows       Int?
+  cols       Int?
+  mineCount  Int?
+
+  hostMines     String?  @db.Text
+  guestMines    String?  @db.Text
+  hostRevealed  String?  @db.Text
+  guestRevealed String?  @db.Text
+  hostFlagged   String?  @db.Text
+  guestFlagged  String?  @db.Text
+
+  hostHit    Boolean      @default(false)
+  guestHit   Boolean      @default(false)
+  winner     String?
+  winReason  String?
+
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  host       User         @relation("MSHost",  fields: [hostId],  references: [id], onDelete: Cascade)
+  guest      User?        @relation("MSGuest", fields: [guestId], references: [id], onDelete: Cascade)
+}
+
+enum MSRoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
 }

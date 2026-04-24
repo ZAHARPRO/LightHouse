@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { PlanType } from "@/lib/plans";
 
-export type { PlanType };
-
 export async function subscribeToPlan(plan: PlanType) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated" };

@@ -108,13 +108,12 @@ function Section({
   const [seen, setSeen] = useState(defaultOpen);
 
   function toggle() {
-    setOpen((v) => {
-      if (!v) {
-        setSeen(true);
-        onOpen?.();
-      }
-      return !v;
-    });
+    const willOpen = !open;
+    if (willOpen) {
+      setSeen(true);
+      onOpen?.();
+    }
+    setOpen(willOpen);
   }
 
   return (

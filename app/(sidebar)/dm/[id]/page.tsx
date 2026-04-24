@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useParams } from "next/navigation";
 import {
   getDMMessages, sendDirectMessage,
   editDirectMessage, deleteDirectMessage, pinDirectMessage,
@@ -38,8 +39,8 @@ function timeAgo(d: Date) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default function DMConversationPage({ params }: { params: { id: string } }) {
-  const convId = params.id;
+export default function DMConversationPage() {
+  const { id: convId } = useParams<{ id: string }>();
 
   const [messages, setMessages]       = useState<DMsg[]>([]);
   const [myId, setMyId]               = useState<string>("");

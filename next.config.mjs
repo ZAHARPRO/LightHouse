@@ -9,6 +9,7 @@ const nextConfig = {
       { protocol: "https", hostname: "drive.google.com" },
     ],
   },
+  serverExternalPackages: ["@node-rs/argon2", "@node-rs/bcrypt"],
   experimental: {
     serverActions: {
       allowedOrigins: [
@@ -17,7 +18,6 @@ const nextConfig = {
         "*.vercel.app",
       ],
     },
-    serverComponentsExternalPackages: ["@node-rs/argon2", "@node-rs/bcrypt"],
   },
 };
 

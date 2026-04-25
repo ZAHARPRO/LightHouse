@@ -29,7 +29,7 @@ interface BoardProps {
 }
 
 function ChessBoard({ state, selected, legalDots, lastMove, onSquare, disabled }: BoardProps) {
-  const displayRows = [7,6,5,4,3,2,1,0]; // white at bottom
+  const displayRows = [0,1,2,3,4,5,6,7]; // white at bottom
   return (
     <div className="inline-block select-none" style={{ border: "2px solid #8f7a5a" }}>
       {displayRows.map(r => (
@@ -142,10 +142,10 @@ export default function ChessVsBotPage() {
     setGameState(next);
 
     if (isCheckmate(next)) {
-      setResult(next.turn==="b" ? "Белые победили — мат!" : "Чёрные победили — мат!");
+      setResult(next.turn==="b" ? "White wins!" : "Black wins!");
       setStatus("over");
     } else if (isStalemate(next)) {
-      setResult("Пат — ничья!");
+      setResult("Stalemate — draw!");
       setStatus("over");
     }
     return next;
@@ -216,13 +216,13 @@ export default function ChessVsBotPage() {
                     : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 ].join(" ")}
               >
-                {d==="easy"?"Легко":d==="medium"?"Средне":"Сложно"}
+                {d==="easy"?"Easy":d==="medium"?"Medium":"Hard"}
               </button>
             ))}
           </div>
           <button onClick={startGame}
             className="px-8 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold hover:opacity-90 transition-opacity">
-            Начать игру
+            Start Game
           </button>
         </div>
       )}

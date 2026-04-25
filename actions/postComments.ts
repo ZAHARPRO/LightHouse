@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { awardBadge } from "@/lib/badges";
+
 
 export async function addPostComment(
   postId: string,
@@ -28,11 +28,6 @@ export async function addPostComment(
     },
     include: { author: { select: { id: true, name: true } } },
   });
-
-  const totalComments = await prisma.comment.count({ where: { authorId: session.user.id } });
-  if (totalComments === 1) {
-    await awardBadge(session.user.id, "FIRST_COMMENT");
-  }
 
   revalidatePath(`/post/${postId}`);
   return { comment };

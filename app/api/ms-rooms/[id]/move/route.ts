@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMines, computeNeighbors, floodReveal, checkWin } from "@/lib/minesweeper";
+import { BADGE_DEFS } from "@/lib/badges";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -80,5 +81,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   await prisma.minesweeperRoom.update({ where: { id }, data: updateData });
+
+  // Auto-award badges if game just ended with a clear
+  if (updateData.status === "FINISHED" && updateData.winReason === "cleared") {
+    const winnerId = updateData.winner === "host" ? room.hostId : room.guestId;
+    if (winnerId) {
+      const badgesToAward = ["MINESWEEPER_WIN", "MINESWEEPER_ONLINE_WIN"];
+      for (const type of badgesToAward) {
+        const def = BADGE_DEFS[type];
+        const existing = await prisma.reward.findFirst({ where: { userId: winnerId, type: type as never } });
+        if (!existing) {
+          await prisma.$transaction([
+            prisma.reward.create({ data: { userId: winnerId, type: type as never, pointsValue: def.points, description: def.description } }),
+            prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
+          ]);
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

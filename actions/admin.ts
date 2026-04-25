@@ -246,3 +246,18 @@ export async function searchUsers(query: string) {
     take: 10,
   });
 }
+
+export async function toggleBanUser(userId: string, reason?: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  if (!user) throw new Error("User not found");
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      isBanned: !user.isBanned,
+      bannedAt: !user.isBanned ? new Date() : null,
+      banReason: !user.isBanned ? reason ?? "No reason provided" : null,
+    },
+  });
+}

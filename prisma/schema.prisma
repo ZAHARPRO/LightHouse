@@ -344,6 +344,11 @@ enum RewardType {
   EARLY_ADOPTER
   PREMIUM_MEMBER
   CUSTOM
+  CHESS_WIN
+  CHESS_ONLINE_WIN
+  MINESWEEPER_WIN
+  MINESWEEPER_EXPERT
+  MINESWEEPER_ONLINE_WIN
 }
 
 enum ContactStatus {
@@ -466,8 +471,8 @@ model ChessRoom {
   timeControl  String          @default("none") // "none"|"60"|"300"|"600"|"1500"|"3600" (seconds)
   hostReady    Boolean         @default(true)
   guestReady   Boolean         @default(false)
+  hostColor    String          @default("w") // "w" | "b" — randomly assigned at game start
 
-  // host = white, guest = black
   fen          String?         @db.Text // current FEN
   movesSAN     String?         @db.Text // JSON: string[]
   lastMoveJson String?         @db.Text // JSON: { from:[r,c], to:[r,c] } | null

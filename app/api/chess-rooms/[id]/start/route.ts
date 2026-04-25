@@ -17,11 +17,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const initFen = toFEN(initialState());
   const timeSec = room.timeControl !== "none" ? +room.timeControl * 1000 : null;
+  const hostColor = Math.random() < 0.5 ? "w" : "b";
 
   await prisma.chessRoom.update({
     where: { id },
     data: {
       status: "PLAYING",
+      hostColor,
       fen: initFen,
       movesSAN: "[]",
       lastMoveJson: null,

@@ -18,11 +18,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (isHost) await prisma.chessRoom.delete({ where: { id } });
     else await prisma.chessRoom.update({ where: { id }, data: { guestId: null, guestReady: false } });
   } else if (room.status === "PLAYING") {
+    const hostColor = room.hostColor ?? "w";
+    const myColor = isHost ? hostColor : (hostColor === "w" ? "b" : "w");
     await prisma.chessRoom.update({
       where: { id },
       data: {
         status: "FINISHED",
-        winner: isHost ? "black" : "white",
+        winner: myColor === "w" ? "black" : "white",
         winReason: "resigned",
         endedAt: new Date(),
       },

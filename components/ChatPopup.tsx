@@ -16,9 +16,9 @@ type Message = {
 };
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  FREE:  { label: "Free",  color: "#888" },
+  FREE: { label: "Free", color: "#888" },
   BASIC: { label: "Basic", color: "#818cf8" },
-  PRO:   { label: "Pro",   color: "#fb923c" },
+  PRO: { label: "Pro", color: "#fb923c" },
   ELITE: { label: "Elite", color: "#fbbf24" },
 };
 
@@ -131,18 +131,79 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
     setSending(false);
   }
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640); // tailwind sm
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const [position, setPosition] = useState({ x: leftOffset, y: 64 });
+  const dragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+function onMouseDown(e: React.MouseEvent) {
+  if (isMobile) return;
+
+  dragging.current = true;
+
+  dragOffset.current = {
+    x: e.clientX - position.x,
+    y: e.clientY - position.y,
+  };
+}
+
+function onMouseUp() {
+  dragging.current = false;
+}
+
+function onMouseMove(e: MouseEvent) {
+  if (!dragging.current || isMobile) return;
+
+  const maxX = window.innerWidth - 320;
+  const maxY = window.innerHeight - 100;
+
+  setPosition({
+    x: Math.max(0, Math.min(e.clientX - dragOffset.current.x, maxX)),
+    y: Math.max(0, Math.min(e.clientY - dragOffset.current.y, maxY)),
+  });
+}
+
+
+
+  useEffect(() => {
+  if (isMobile) return;
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+
+  return () => {
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
+}, [isMobile]);
+
+
   return (
     <div
       ref={ref}
       className="fixed top-16 flex flex-col w-full sm:w-[300px] bg-[var(--bg-card)] border-r border-[var(--border-subtle)] shadow-[6px_0_40px_rgba(0,0,0,0.45)] z-[3000]"
       style={{
-        left: leftOffset,
-        height: "calc(100vh - 64px)",
+        left: isMobile ? leftOffset : position.x,
+        top: isMobile ? undefined : position.y,
+        height:"calc(100vh - 64px)",
         animation: isClosing ? "slideOutLeft 0.18s ease both" : "slideInLeft 0.2s ease both",
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)] shrink-0">
+      <div
+        onMouseDown={onMouseDown}
+  style={{
+  cursor: dragging.current ? "grabbing" : "grab"
+}}
+      className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)] shrink-0">
         <div className="flex items-center gap-2">
           <MessageSquare size={14} className="text-[var(--accent-orange)]" />
           <span className="font-display font-bold text-sm text-[var(--text-primary)]">Global Chat</span>

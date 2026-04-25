@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { awardBadge } from "@/lib/badges";
+
 
 export async function addComment(
   videoId: string,
@@ -29,11 +29,6 @@ export async function addComment(
     include: { author: { select: { id: true, name: true } } },
   });
 
-  // Award FIRST_COMMENT badge on the very first comment (top-level or reply)
-  const totalComments = await prisma.comment.count({ where: { authorId: session.user.id } });
-  if (totalComments === 1) {
-    await awardBadge(session.user.id, "FIRST_COMMENT");
-  }
 
   revalidatePath(`/watch/${videoId}`);
   return { comment };
@@ -84,3 +79,5 @@ export async function togglePinComment(commentId: string, videoId: string) {
   revalidatePath(`/watch/${videoId}`);
   return { pinned: true };
 }
+
+

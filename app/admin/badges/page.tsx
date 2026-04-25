@@ -10,6 +10,7 @@ import {
   searchUsers,
 } from "@/actions/admin";
 import ActivityPing from "@/components/ActivityPing";
+import { BADGE_DEFS } from "@/lib/badges";
 
 type CustomBadge = {
   id: string;
@@ -25,13 +26,11 @@ type CustomBadge = {
 
 type FoundUser = { id: string; name: string | null; email: string | null };
 
-const BUILTIN_BADGES = [
-  { type: "EARLY_ADOPTER",  icon: "🚀", label: "Early Adopter",  color: "#10b981", points: 200 },
-  { type: "FIRST_COMMENT",  icon: "💬", label: "First Comment",  color: "#6366f1", points: 10  },
-  { type: "WATCH_STREAK",   icon: "🔥", label: "Watch Streak",   color: "#f97316", points: 50  },
-  { type: "SUPER_FAN",      icon: "⭐", label: "Super Fan",      color: "#fbbf24", points: 100 },
-  { type: "PREMIUM_MEMBER", icon: "👑", label: "Premium Member", color: "#fbbf24", points: 150 },
-];
+const GAME_BADGES = Object.entries(BADGE_DEFS)
+  .filter(([, d]) => d.category === "games")
+  .map(([type, d]) => ({ type, ...d }));
+
+const ALL_BUILTIN = Object.entries(BADGE_DEFS).map(([type, d]) => ({ type, ...d }));
 
 const PRESET_COLORS = ["#6366f1", "#f97316", "#10b981", "#fbbf24", "#ec4899", "#3b82f6", "#8b5cf6", "#ef4444"];
 
@@ -52,7 +51,7 @@ export default function AdminBadgesPage() {
   const [foundUsers, setFoundUsers] = useState<FoundUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<FoundUser | null>(null);
   const [badgeType, setBadgeType]   = useState<"builtin" | "custom">("builtin");
-  const [builtinType, setBuiltinType] = useState(BUILTIN_BADGES[0].type);
+  const [builtinType, setBuiltinType] = useState(ALL_BUILTIN[0].type);
   const [customBadgeId, setCustomBadgeId] = useState("");
   const [adminNote, setAdminNote]   = useState("");
   const [awarding, setAwarding]     = useState(false);
@@ -364,7 +363,7 @@ export default function AdminBadgesPage() {
                     onChange={(e) => setBuiltinType(e.target.value)}
                     className="input-field w-full appearance-none pr-8"
                   >
-                    {BUILTIN_BADGES.map((b) => (
+                    {ALL_BUILTIN.map((b) => (
                       <option key={b.type} value={b.type}>{b.icon} {b.label} (+{b.points} pts)</option>
                     ))}
                   </select>
@@ -428,6 +427,30 @@ export default function AdminBadgesPage() {
               {awarding ? "Awarding…" : "Award Badge"}
             </button>
           </form>
+        </div>
+      </div>
+
+      {/* Game badges reference */}
+      <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
+          <h2 className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)]">Game Badges — How to Earn</h2>
+          <p className="text-[var(--text-muted)] text-xs mt-0.5">Awarded automatically when players meet the condition, or manually via the award form above.</p>
+        </div>
+        <div className="divide-y divide-[var(--border-subtle)]">
+          {GAME_BADGES.map((b) => (
+            <div key={b.type} className="flex items-center gap-4 px-5 py-3.5">
+              <span className="text-[1.5rem] shrink-0">{b.icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-bold text-sm" style={{ color: b.color }}>{b.label}</p>
+                <p className="text-[0.75rem] text-[var(--text-muted)]">{b.how}</p>
+              </div>
+              <span className="text-[0.7rem] font-bold font-display shrink-0 px-2 py-0.5 rounded-md"
+                style={{ background: `${b.color}18`, color: b.color, border: `1px solid ${b.color}30` }}>
+                +{b.points} pts
+              </span>
+              <code className="text-[0.65rem] text-[var(--text-muted)] bg-[var(--bg-secondary)] px-2 py-0.5 rounded shrink-0">{b.type}</code>
+            </div>
+          ))}
         </div>
       </div>
     </div>

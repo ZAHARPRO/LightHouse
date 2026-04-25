@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy } from "lucide-react";
 import Image from "next/image";
-import { fromFEN, getLegalMoves, type GameState, type Move, isInCheck } from "@/lib/chess";
+import { fromFEN, getLegalMoves, type GameState, isInCheck } from "@/lib/chess";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -16,6 +17,7 @@ type RoomData = {
   hostId: string; hostName: string|null; hostImage: string|null;
   guestId: string|null; guestName: string|null; guestImage: string|null;
   hostReady: boolean; guestReady: boolean;
+  hostColor: string;
   fen: string|null;
   movesSAN: string[];
   lastMove: { from:[number,number]; to:[number,number] }|null;
@@ -24,6 +26,26 @@ type RoomData = {
   winner: string|null; winReason: string|null;
   startedAt: string|null; endedAt: string|null;
 };
+
+function useCellPx() {
+  const [cellPx, setCellPx] = useState(56);
+  useEffect(() => {
+    function compute() {
+      const isXl = window.innerWidth >= 1280;
+      const SIDE = isXl ? 272 : 0;
+      const RANK = 18;
+      const PAD = isXl ? 32 : 16;
+      const PLAYER_ROWS = 108;
+      const availH = Math.floor((window.innerHeight - 64 - PAD - PLAYER_ROWS) / 8);
+      const availW = Math.floor((window.innerWidth - SIDE - PAD - RANK) / 8);
+      setCellPx(Math.max(36, Math.min(72, availH, availW)));
+    }
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
+  return cellPx;
+}
 
 // ── Chess pieces ────────────────────────────────────────────────────────────
 const PIECE_U: Record<string,string> = {
@@ -35,70 +57,133 @@ const LIGHT = "#f0d9b5", DARK = "#b58863";
 
 interface BoardProps {
   state: GameState;
-  flip: boolean; // true = black at bottom
+  flip: boolean;
   selected: [number,number]|null;
   legalDots: [number,number][];
   lastMove: { from:[number,number]; to:[number,number] }|null;
   onSquare?: (r:number,c:number)=>void;
+  onDrop?: (from:[number,number], to:[number,number])=>void;
   disabled?: boolean;
-  compact?: boolean;
+  cellPx?: number;
 }
 
-function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, disabled, compact }: BoardProps) {
-  const sz = compact ? 44 : 56;
+function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDrop, disabled, cellPx: cellPxProp }: BoardProps) {
+  const sz = cellPxProp ?? 56;
   const base = [0,1,2,3,4,5,6,7];
-
   const displayRows = flip ? [...base].reverse() : base;
   const displayCols = flip ? [...base].reverse() : base;
+
+  const [ghost, setGhost] = useState<{ key: string; x: number; y: number } | null>(null);
+  const dragSrc = useRef<[number,number]|null>(null);
+
+  function startDrag(e: React.PointerEvent, r: number, c: number, key: string) {
+    if (disabled) return;
+    e.preventDefault();
+    onSquare?.(r, c); // select piece so legal dots appear
+    dragSrc.current = [r, c];
+    setGhost({ key, x: e.clientX, y: e.clientY });
+
+    const onMove = (ev: PointerEvent) => {
+      setGhost(g => g ? { ...g, x: ev.clientX, y: ev.clientY } : null);
+    };
+    const onUp = (ev: PointerEvent) => {
+      document.removeEventListener("pointermove", onMove);
+      setGhost(null);
+      const src = dragSrc.current;
+      dragSrc.current = null;
+      if (!src) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
+      if (sq) {
+        const [tr, tc] = sq.split("-").map(Number);
+        if (tr !== src[0] || tc !== src[1]) onDrop?.(src, [tr, tc]);
+      }
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp, { once: true });
+  }
+
   return (
-    <div className="inline-block select-none" style={{ border:"2px solid #8f7a5a" }}>
-      {displayRows.map(r=>(
-        <div key={r} className="flex">
-          <div className="flex items-center justify-center font-mono" style={{ width:18, color:"#8f7a5a", fontSize:10 }}>
-            {8-r}
-          </div>
-          {displayCols.map(c=>{
-            const isLight=(r+c)%2===0;
-            const isSel=selected?.[0]===r&&selected?.[1]===c;
-            const isLM=lastMove&&((lastMove.from[0]===r&&lastMove.from[1]===c)||(lastMove.to[0]===r&&lastMove.to[1]===c));
-            const isDot=legalDots.some(([lr,lc])=>lr===r&&lc===c);
-            const piece=state.board[r][c];
-            let bg=isLight?LIGHT:DARK;
-            if(isSel||isLM) bg="#f6f669";
-            return (
-              <div key={c} className="relative flex items-center justify-center cursor-pointer"
-                style={{ width:sz, height:sz, background:bg, flexShrink:0 }}
-                onClick={()=>!disabled&&onSquare?.(r,c)}
-              >
-                {isDot&&(
-                  <div className={["absolute rounded-full pointer-events-none",
-                    piece?"inset-0 border-[4px] border-black/25":"w-[34%] h-[34%] bg-black/25"
-                  ].join(" ")}/>
-                )}
-                {piece&&(
-                  <span className="pointer-events-none" style={{
-                    fontSize: compact?28:38, lineHeight:1,
-                    color:piece.color==="w"?"#fff":"#1a1a1a",
-                    textShadow:piece.color==="w"
-                      ?"0 0 3px #000,0 0 6px #000,0 1px 2px #000"
-                      :"0 1px 2px rgba(255,255,255,0.25)",
-                  }}>
-                    {PIECE_U[piece.color+piece.type]}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-      <div className="flex" style={{ marginLeft:18 }}>
-        {displayCols.map(c=>(
-          <div key={c} style={{ width:sz, textAlign:"center", fontSize:10, color:"#8f7a5a", fontFamily:"monospace" }}>
-            {FILES[c]}
+    <>
+      <div className="inline-block select-none" style={{ border:"2px solid #8f7a5a" }}>
+        {displayRows.map(r=>(
+          <div key={r} className="flex">
+            <div className="flex items-center justify-center font-mono" style={{ width:18, color:"#8f7a5a", fontSize:10 }}>
+              {8-r}
+            </div>
+            {displayCols.map(c=>{
+              const isLight=(r+c)%2===0;
+              const isSel=selected?.[0]===r&&selected?.[1]===c;
+              const isLM=lastMove&&((lastMove.from[0]===r&&lastMove.from[1]===c)||(lastMove.to[0]===r&&lastMove.to[1]===c));
+              const isDot=legalDots.some(([lr,lc])=>lr===r&&lc===c);
+              const piece=state.board[r][c];
+              let bg=isLight?LIGHT:DARK;
+              if(isSel||isLM) bg="#f6f669";
+              const isDragging = dragSrc.current?.[0]===r && dragSrc.current?.[1]===c;
+              return (
+                <div key={c}
+                  data-sq={`${r}-${c}`}
+                  className="relative flex items-center justify-center cursor-pointer"
+                  style={{ width:sz, height:sz, background:bg, flexShrink:0 }}
+                  onClick={()=>!disabled&&onSquare?.(r,c)}
+                >
+                  {isDot&&(
+                    <div className={["absolute rounded-full pointer-events-none",
+                      piece?"inset-0 border-[4px] border-black/25":"w-[34%] h-[34%] bg-black/25"
+                    ].join(" ")}/>
+                  )}
+                  {piece&&(
+                    <span
+                      className="select-none"
+                      style={{
+                        fontSize: Math.round(sz * 0.68), lineHeight:1,
+                        color:piece.color==="w"?"#fff":"#1a1a1a",
+                        textShadow:piece.color==="w"
+                          ?"0 0 3px #000,0 0 6px #000,0 1px 2px #000"
+                          :"0 1px 2px rgba(255,255,255,0.25)",
+                        opacity: isDragging ? 0.3 : 1,
+                        cursor: disabled ? "default" : "grab",
+                      }}
+                      onPointerDown={e => startDrag(e, r, c, piece.color+piece.type)}
+                    >
+                      {PIECE_U[piece.color+piece.type]}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
+        <div className="flex" style={{ marginLeft:18 }}>
+          {displayCols.map(c=>(
+            <div key={c} style={{ width:sz, textAlign:"center", fontSize:10, color:"#8f7a5a", fontFamily:"monospace" }}>
+              {FILES[c]}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {ghost && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed pointer-events-none z-[9999] select-none"
+          style={{ left: ghost.x - sz/2, top: ghost.y - sz/2, width:sz, height:sz, display:"flex", alignItems:"center", justifyContent:"center" }}
+        >
+          <span style={{
+            fontSize: Math.round(sz * 0.68),
+            lineHeight: 1,
+            color: ghost.key[0]==="w" ? "#fff" : "#1a1a1a",
+            textShadow: ghost.key[0]==="w"
+              ? "0 0 3px #000,0 0 6px #000,0 1px 2px #000"
+              : "0 1px 2px rgba(255,255,255,0.25)",
+            filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.5))",
+            transform: "scale(1.15)",
+          }}>
+            {PIECE_U[ghost.key]}
+          </span>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -160,6 +245,7 @@ function Avatar({ name, image, size=32 }: { name:string|null; image:string|null;
 export default function ChessOnlineRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
+  const cellPx = useCellPx();
   const [room, setRoom] = useState<RoomData|null>(null);
   const [error, setError] = useState<string|null>(null);
   const [selected, setSelected] = useState<[number,number]|null>(null);
@@ -187,10 +273,14 @@ export default function ChessOnlineRoom() {
     fetchRoom();
   }, [roomId, fetchRoom]);
 
+  function getMyColor(r: RoomData): string {
+    return r.myRole === "host" ? r.hostColor : (r.hostColor === "w" ? "b" : "w");
+  }
+
   function handleSquare(r: number, c: number) {
     if (!room || room.status !== "PLAYING" || !room.fen) return;
     const state = fromFEN(room.fen);
-    const myColor = room.myRole === "host" ? "w" : "b";
+    const myColor = getMyColor(room);
     if (state.turn !== myColor) return;
 
     if (selected) {
@@ -204,16 +294,25 @@ export default function ChessOnlineRoom() {
         return;
       }
     }
-    if (!room.fen) return;
-    const state2 = fromFEN(room.fen);
-    const piece = state2.board[r][c];
-    const myColor2 = room.myRole === "host" ? "w" : "b";
-    if (piece?.color === myColor2) {
+    const piece = state.board[r][c];
+    if (piece?.color === myColor) {
       setSelected([r,c]);
-      setLegalDots(getLegalMoves(state2, r, c).map(m=>m.to));
+      setLegalDots(getLegalMoves(state, r, c).map(m=>m.to));
     } else {
       setSelected(null); setLegalDots([]);
     }
+  }
+
+  function handleDrop(from: [number,number], to: [number,number]) {
+    if (!room || room.status !== "PLAYING" || !room.fen) return;
+    const state = fromFEN(room.fen);
+    const myColor = getMyColor(room);
+    if (state.turn !== myColor) return;
+    const legal = getLegalMoves(state, from[0], from[1]);
+    const move = legal.find(m => m.to[0]===to[0] && m.to[1]===to[1]);
+    if (!move) return;
+    setSelected(null); setLegalDots([]);
+    doAction("move", { from, to, promotion: "Q" });
   }
 
   async function handleResign() {
@@ -241,14 +340,14 @@ export default function ChessOnlineRoom() {
           <button onClick={handleResign} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>
         </div>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Room</h1>
-        <p className="text-[var(--text-muted)] text-sm mb-8">{TC_LABELS[room.timeControl] ?? room.timeControl} · Host = Whites</p>
+        <p className="text-[var(--text-muted)] text-sm mb-8">{TC_LABELS[room.timeControl] ?? room.timeControl} · Colors assigned randomly</p>
 
         <div className="flex flex-col gap-3 mb-8">
           <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
             <Avatar name={room.hostName} image={room.hostImage} />
             <div className="flex-1">
               <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Anonymous"}</p>
-              <p className="text-[0.7rem] text-[var(--text-muted)]">Host · Whites</p>
+              <p className="text-[0.7rem] text-[var(--text-muted)]">Host</p>
             </div>
             <CheckCircle2 size={18} className="text-green-400" />
           </div>
@@ -258,7 +357,7 @@ export default function ChessOnlineRoom() {
                 <Avatar name={room.guestName} image={room.guestImage} />
                 <div className="flex-1">
                   <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Anonymous"}</p>
-                  <p className="text-[0.7rem] text-[var(--text-muted)]">Guest · Blacks</p>
+                  <p className="text-[0.7rem] text-[var(--text-muted)]">Guest</p>
                 </div>
                 {room.guestReady ? <CheckCircle2 size={18} className="text-green-400" /> : <Clock size={18} className="text-[var(--text-muted)]" />}
               </>
@@ -295,12 +394,13 @@ export default function ChessOnlineRoom() {
 
   // ── FINISHED ───────────────────────────────────────────────────────────────
   if (room.status === "FINISHED") {
-    const myColor = room.myRole === "host" ? "white" : "black";
-    const iWon = room.winner === myColor;
+    const myColor = getMyColor(room);
+    const myColorName = myColor === "w" ? "white" : "black";
+    const iWon = room.winner === myColorName;
     const isDraw = room.winner === "draw";
     const reasons: Record<string,string> = { checkmate:"Checkmate",stalemate:"Stalemate — draw",timeout:"Time up",resigned:"Resigned" };
     const state = room.fen ? fromFEN(room.fen) : null;
-    const flip = room.myRole === "guest";
+    const flip = myColor === "b";
 
     return (
       <main className="max-w-4xl mx-auto px-4 py-10">
@@ -323,7 +423,7 @@ export default function ChessOnlineRoom() {
             <ChessBoard
               state={state} flip={flip}
               selected={null} legalDots={[]} lastMove={room.lastMove}
-              disabled compact
+              disabled cellPx={44}
             />
           )}
           <div className="flex flex-col gap-3 w-64">
@@ -347,10 +447,10 @@ export default function ChessOnlineRoom() {
   // ── PLAYING ────────────────────────────────────────────────────────────────
   if (!room.fen) return null;
   const state = fromFEN(room.fen);
-  const myColor = room.myRole === "host" ? "w" : "b";
+  const myColor = getMyColor(room);
   const oppColor = myColor === "w" ? "b" : "w";
   const isMyTurn = state.turn === myColor;
-  const flip = myColor === "b"; // black sees board flipped
+  const flip = myColor === "b";
 
   const myName = myColor === "w" ? room.hostName : room.guestName;
   const myImage = myColor === "w" ? room.hostImage : room.guestImage;
@@ -370,8 +470,8 @@ export default function ChessOnlineRoom() {
           {/* Opponent info */}
           <div className="flex items-center gap-3 mb-3">
             <Avatar name={oppName} image={oppImage} size={28}/>
-            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Соперник"}</span>
-            <span className="text-xs text-[var(--text-muted)] ml-1">{oppColor==="w"?"(белые)":"(чёрные)"}</span>
+            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
+            <span className="text-xs text-[var(--text-muted)] ml-1">{oppColor==="w"?"(white)":"(black)"}</span>
             <div className="ml-auto"><Timer ms={oppTimeMs} active={!isMyTurn && room.timeControl!=="none"}/></div>
           </div>
 
@@ -382,15 +482,17 @@ export default function ChessOnlineRoom() {
             legalDots={legalDots}
             lastMove={room.lastMove}
             onSquare={handleSquare}
+            onDrop={handleDrop}
             disabled={!isMyTurn}
+            cellPx={cellPx}
           />
 
           {/* My info */}
           <div className="flex items-center gap-3 mt-3">
             <Avatar name={myName} image={myImage} size={28}/>
-            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? "Вы"}</span>
-            <span className="text-xs text-[var(--text-muted)] ml-1">{myColor==="w"?"(белые)":"(чёрные)"}</span>
-            {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold ml-2">Шах!</span>}
+            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
+            <span className="text-xs text-[var(--text-muted)] ml-1">{myColor==="w"?"(white)":"(black)"}</span>
+            {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold ml-2">Check!</span>}
             <div className="ml-auto"><Timer ms={myTimeMs} active={isMyTurn && room.timeControl!=="none"}/></div>
           </div>
 

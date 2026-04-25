@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users,
 } from "lucide-react";
@@ -264,7 +265,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-[100] bg-[rgba(10,10,10,0.95)] backdrop-blur-[20px] border-b border-[var(--border-subtle)]">
+      <nav className="sticky top-0 z-[950] bg-[rgba(10,10,10,0.95)] backdrop-blur-[20px] border-b border-[var(--border-subtle)]">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 grid items-center gap-4 sm:gap-6"
           style={{ gridTemplateColumns: "auto 1fr auto" }}>
 
@@ -284,15 +285,16 @@ export default function Navbar() {
             </Link>
           </div>
 
-{/* Overlay (mobile/tablet only) */}
-{searchQ.trim().length > 0 && (
+{/* Overlay (mobile/tablet only) — rendered via portal so it covers the full screen */}
+{searchQ.trim().length > 0 && typeof document !== "undefined" && createPortal(
   <div
     className="fixed inset-0 z-[900] bg-black/50 backdrop-blur-sm lg:hidden"
     onClick={() => {
       setSearchQ("");
       closeSuggest();
     }}
-  />
+  />,
+  document.body
 )}
 
 {/* Search */}

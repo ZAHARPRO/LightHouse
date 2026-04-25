@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, isCheckmate, isStalemate } from "@/lib/chess";
+import { BADGE_DEFS } from "@/lib/badges";
 
 const CAPTURE_BONUS: Record<string, number> = { P: 1000, N: 2000, B: 2000, R: 3000, Q: 4000 };
 
@@ -20,12 +21,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!room.fen) return NextResponse.json({ error: "No FEN" }, { status: 400 });
 
   const userId = session.user.id;
-  const isHost = userId === room.hostId;   // host = white
-  const isGuest = userId === room.guestId; // guest = black
+  const isHost = userId === room.hostId;
+  const isGuest = userId === room.guestId;
   if (!isHost && !isGuest) return NextResponse.json({ error: "Not a player" }, { status: 403 });
 
   const state = fromFEN(room.fen);
-  const myColor = isHost ? "w" : "b";
+  const hostColor = room.hostColor ?? "w";
+  const myColor = isHost ? hostColor : (hostColor === "w" ? "b" : "w");
   if (state.turn !== myColor) return NextResponse.json({ error: "Not your turn" }, { status: 400 });
 
   // Validate move
@@ -96,5 +98,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   await prisma.chessRoom.update({ where: { id }, data: update });
+
+  // Auto-award chess badges on win
+  if (update.status === "FINISHED" && update.winner !== "draw") {
+    const winnerColor = update.winner as string;
+    const hostColor = room.hostColor ?? "w";
+    const winnerId = winnerColor === "white"
+      ? (hostColor === "w" ? room.hostId : room.guestId)
+      : (hostColor === "b" ? room.hostId : room.guestId);
+    if (winnerId) {
+      for (const type of ["CHESS_WIN", "CHESS_ONLINE_WIN"]) {
+        const def = BADGE_DEFS[type];
+        const existing = await prisma.reward.findFirst({ where: { userId: winnerId, type: type as never } });
+        if (!existing) {
+          await prisma.$transaction([
+            prisma.reward.create({ data: { userId: winnerId, type: type as never, pointsValue: def.points, description: def.description } }),
+            prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
+          ]);
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, san });
 }

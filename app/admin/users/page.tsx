@@ -2,14 +2,21 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { Search, Shield, Trash2, ChevronDown } from "lucide-react";
-import { getAdminUsers, changeUserRole, changeUserTier, deleteUser } from "@/actions/admin";
+import { getAdminUsers, changeUserRole, changeUserTier, deleteUser, toggleBanUser  } from "@/actions/admin";
 import ActivityPing from "@/components/ActivityPing";
 
 type User = {
-  id: string; name: string | null; email: string | null;
-  tier: string; role: string; points: number; createdAt: Date;
+  id: string;
+  name: string | null;
+  email: string | null;
+  tier: string;
+  role: string;
+  points: number;
+  createdAt: Date;
+  isBanned: boolean;
   _count: { videos: number; rewards: number };
 };
+
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: "#ef4444", OPERATOR: "#f97316", STAFF: "#fbbf24", USER: "#888",
@@ -42,11 +49,14 @@ function SelectPill({
   );
 }
 
+
+
 export default function AdminUsersPage() {
   const [users, setUsers]   = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [pending, start]    = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [banning, setBanning] = useState<string | null>(null);
 
   useEffect(() => {
     start(async () => {
@@ -77,6 +87,29 @@ export default function AdminUsersPage() {
     setDeleting(null);
   }
 
+  async function handleBan(userId: string, isBanned: boolean) {
+  const reason = !isBanned ? prompt("Ban reason?") : undefined;
+
+  setBanning(userId);
+
+  await toggleBanUser(userId, reason || undefined);
+
+  setUsers((prev) =>
+    prev.map((u) =>
+      u.id === userId
+        ? {
+            ...u,
+            isBanned: !isBanned,
+          }
+        : u
+    )
+  );
+
+  setBanning(null);
+}
+
+  
+
   return (
     <div>
       <ActivityPing activity="Admin — User Management" />
@@ -100,7 +133,7 @@ export default function AdminUsersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-                {["User", "Role", "Tier", "Points", "Videos", "Badges", ""].map((h) => (
+                {["User", "Role", "Tier", "Points", "Videos", "Badges",  "Delete", "Ban"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-[0.75rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-[0.05em]">
                     {h}
                   </th>
@@ -140,6 +173,18 @@ export default function AdminUsersPage() {
                       className="p-1.5 rounded-lg border-none bg-transparent text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-40"
                     >
                       <Trash2 size={14} />
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => handleBan(u.id, u.isBanned)}
+                      disabled={banning === u.id || pending}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isBanned
+                          ? "text-green-500 hover:bg-green-500/10"
+                          : "text-red-500 hover:bg-red-500/10"
+                        }`}
+                    >
+                      <Shield size={14} />
                     </button>
                   </td>
                 </tr>

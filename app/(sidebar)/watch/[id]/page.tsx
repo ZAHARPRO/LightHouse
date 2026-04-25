@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { updateWatchStreak } from "@/lib/badges";
 import { notFound } from "next/navigation";
 import { isGDriveEmbed, isYouTubeEmbed } from "@/lib/videoUrl";
 import Link from "next/link";
@@ -98,9 +97,6 @@ export default async function WatchPage({
       data: { views: { increment: 1 } },
     });
     // Update daily watch streak and potentially award WATCH_STREAK badge
-    if (session?.user?.id) {
-      await updateWatchStreak(session.user.id);
-    }
   }
 
   const likesCount    = await prisma.like.count({ where: { videoId: id, type: "LIKE" } });

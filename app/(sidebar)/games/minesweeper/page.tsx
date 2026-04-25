@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { awardGameBadge } from "@/actions/badges";
 import { Flag, Bomb, RotateCcw, Trophy } from "lucide-react";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -14,9 +15,9 @@ interface Cell {
 }
 
 const DIFFICULTIES: Record<Difficulty, { rows: number; cols: number; mines: number; label: string }> = {
-  easy:   { rows: 9,  cols: 9,  mines: 10, label: "Легко" },
-  medium: { rows: 16, cols: 16, mines: 40, label: "Средне" },
-  hard:   { rows: 16, cols: 30, mines: 99, label: "Сложно" },
+  easy:   { rows: 9,  cols: 9,  mines: 10, label: "Easy" },
+  medium: { rows: 16, cols: 16, mines: 40, label: "Normal" },
+  hard:   { rows: 16, cols: 30, mines: 99, label: "Hard" },
 };
 
 const NEIGHBOR_COLORS: Record<number, string> = {
@@ -46,7 +47,6 @@ function placeMines(board: Cell[][], mines: number, firstR: number, firstC: numb
   const cols = board[0].length;
   const next = board.map(row => row.map(cell => ({ ...cell })));
 
-  // safe zone around first click
   const safe = new Set<string>();
   for (let dr = -1; dr <= 1; dr++)
     for (let dc = -1; dc <= 1; dc++)
@@ -62,7 +62,6 @@ function placeMines(board: Cell[][], mines: number, firstR: number, firstC: numb
     }
   }
 
-  // count neighbors
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (next[r][c].isMine) continue;
@@ -88,6 +87,7 @@ function floodReveal(board: Cell[][], startR: number, startC: number): Cell[][] 
     const [r, c] = queue.shift()!;
     if (next[r][c].isRevealed || next[r][c].isFlagged) continue;
     next[r][c].isRevealed = true;
+
     if (next[r][c].neighborCount === 0) {
       for (let dr = -1; dr <= 1; dr++)
         for (let dc = -1; dc <= 1; dc++) {
@@ -119,6 +119,7 @@ export default function GamesPage() {
 
   const handleReveal = useCallback((r: number, c: number) => {
     if (gameState !== "playing") return;
+
     setBoard(prev => {
       let b = prev.map(row => row.map(cell => ({ ...cell })));
       if (b[r][c].isRevealed || b[r][c].isFlagged) return prev;
@@ -129,7 +130,6 @@ export default function GamesPage() {
       }
 
       if (b[r][c].isMine) {
-        // reveal all mines
         b = b.map(row => row.map(cell => cell.isMine ? { ...cell, isRevealed: true } : cell));
         setGameState("lost");
         return b;
@@ -138,18 +138,24 @@ export default function GamesPage() {
       b = floodReveal(b, r, c);
 
       const unrevealed = b.flat().filter(cell => !cell.isRevealed && !cell.isMine).length;
-      if (unrevealed === 0) setGameState("won");
+      if (unrevealed === 0) {
+        setGameState("won");
+        awardGameBadge("MINESWEEPER_WIN").catch(() => {});
+        if (difficulty === "hard") awardGameBadge("MINESWEEPER_EXPERT").catch(() => {});
+      }
 
       return b;
     });
-  }, [gameState, firstClick, cfg.mines]);
+  }, [gameState, firstClick, cfg.mines, difficulty]);
 
   const handleFlag = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
     if (gameState !== "playing") return;
+
     setBoard(prev => {
       const b = prev.map(row => row.map(cell => ({ ...cell })));
       if (b[r][c].isRevealed) return prev;
+
       b[r][c].isFlagged = !b[r][c].isFlagged;
       setMinesLeft(m => b[r][c].isFlagged ? m - 1 : m + 1);
       return b;
@@ -159,14 +165,13 @@ export default function GamesPage() {
   const cellSize = difficulty === "hard" ? "w-7 h-7 text-xs" : "w-8 h-8 text-sm";
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12">
+    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12 flex flex-col items-center">
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-2">
         Mini Games
       </h1>
       <p className="text-[var(--text-muted)] mb-10">Minesweeper</p>
 
-      {/* Difficulty selector */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6 justify-center">
         {(Object.keys(DIFFICULTIES) as Difficulty[]).map(diff => (
           <button
             key={diff}
@@ -174,12 +179,11 @@ export default function GamesPage() {
               setDifficulty(diff);
               if (gameState !== "idle") startGame(diff);
             }}
-            className={[
-              "px-5 py-2 rounded-lg font-display font-semibold text-sm border transition-all duration-150",
+            className={`px-5 py-2 rounded-lg font-display font-semibold text-sm border transition-all duration-150 ${
               difficulty === diff
                 ? "bg-orange-500/15 border-orange-500/50 text-[var(--accent-orange)]"
-                : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-            ].join(" ")}
+                : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
           >
             {DIFFICULTIES[diff].label}
             <span className="ml-2 text-[0.7rem] opacity-60">
@@ -189,11 +193,10 @@ export default function GamesPage() {
         ))}
       </div>
 
-      {/* Game area */}
       {gameState === "idle" ? (
-        <div className="flex flex-col items-center justify-center gap-6 py-20 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+        <div className="flex flex-col items-center justify-center gap-6 py-20 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] w-full max-w-2xl">
           <Bomb size={48} className="text-[var(--accent-orange)] opacity-60" />
-          <p className="text-[var(--text-secondary)] font-display font-medium">
+          <p className="text-[var(--text-secondary)] font-display font-medium text-center">
             Choose a difficulty and start playing — click cells and avoid the mines!
           </p>
           <button
@@ -204,13 +207,13 @@ export default function GamesPage() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col items-start gap-4">
-          {/* HUD */}
+        <div className="flex flex-col items-center gap-4 w-full">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 text-[var(--text-secondary)] font-display font-semibold text-sm">
               <Flag size={15} className="text-[var(--accent-orange)]" />
               {minesLeft}
             </div>
+
             <button
               onClick={() => startGame()}
               className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-semibold text-sm hover:text-[var(--text-primary)] transition-colors"
@@ -218,6 +221,7 @@ export default function GamesPage() {
               <RotateCcw size={14} />
               New Game
             </button>
+
             {gameState === "won" && (
               <span className="flex items-center gap-2 text-green-400 font-display font-bold text-sm">
                 <Trophy size={15} /> Victory!
@@ -230,14 +234,12 @@ export default function GamesPage() {
             )}
           </div>
 
-          {/* Board */}
-          <div
-            className="overflow-x-auto max-w-full"
-            onContextMenu={e => e.preventDefault()}
-          >
+          {/* CENTERED + RESPONSIVE BOARD WRAPPER */}
+          <div className="w-full flex justify-center overflow-x-auto">
             <div
-              className="inline-grid gap-[2px]"
+              className="inline-grid gap-[2px] mx-auto"
               style={{ gridTemplateColumns: `repeat(${cfg.cols}, minmax(0, 1fr))` }}
+              onContextMenu={e => e.preventDefault()}
             >
               {board.map((row, r) =>
                 row.map((cell, c) => {
@@ -267,11 +269,7 @@ export default function GamesPage() {
                   return (
                     <button
                       key={`${r}-${c}`}
-                      className={[
-                        cellSize,
-                        "flex items-center justify-center rounded border transition-colors duration-75 cursor-pointer",
-                        bg,
-                      ].join(" ")}
+                      className={`${cellSize} flex items-center justify-center rounded border transition-colors duration-75 cursor-pointer ${bg}`}
                       onClick={() => handleReveal(r, c)}
                       onContextMenu={e => handleFlag(e, r, c)}
                     >

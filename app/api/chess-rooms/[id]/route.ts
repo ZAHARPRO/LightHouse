@@ -21,16 +21,42 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Compute time remaining (accounting for time elapsed since last move)
   let whiteTimeMs = room.whiteTimeMs;
   let blackTimeMs = room.blackTimeMs;
+  let liveStatus = room.status;
+  let liveWinner = room.winner;
+  let liveWinReason = room.winReason;
+  let liveEndedAt = room.endedAt;
+
   if (room.status === "PLAYING" && room.lastMoveAt && room.timeControl !== "none") {
     const elapsed = Date.now() - new Date(room.lastMoveAt).getTime();
     const whiteTurn = (room.fen ?? "").split(" ")[1] === "w";
     if (whiteTurn) whiteTimeMs = Math.max(0, (whiteTimeMs ?? 0) - elapsed);
     else blackTimeMs = Math.max(0, (blackTimeMs ?? 0) - elapsed);
+
+    // Auto-timeout: if the current player's time has expired, finish the game
+    const timedOut = whiteTurn ? (whiteTimeMs ?? 1) <= 0 : (blackTimeMs ?? 1) <= 0;
+    if (timedOut) {
+      const now = new Date();
+      const timeoutWinner = whiteTurn ? "black" : "white";
+      await prisma.chessRoom.updateMany({
+        where: { id, status: "PLAYING" },
+        data: {
+          status: "FINISHED",
+          winner: timeoutWinner,
+          winReason: "timeout",
+          endedAt: now,
+          ...(whiteTurn ? { whiteTimeMs: 0 } : { blackTimeMs: 0 }),
+        },
+      });
+      liveStatus = "FINISHED";
+      liveWinner = timeoutWinner;
+      liveWinReason = "timeout";
+      liveEndedAt = now;
+    }
   }
 
   return NextResponse.json({
     id: room.id,
-    status: room.status,
+    status: liveStatus,
     timeControl: room.timeControl,
     myRole,
     hostId: room.hostId,
@@ -41,14 +67,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     guestImage: room.guest?.image ?? null,
     hostReady: room.hostReady,
     guestReady: room.guestReady,
+    hostColor: room.hostColor ?? "w",
     fen: room.fen,
     movesSAN: room.movesSAN ? JSON.parse(room.movesSAN) : [],
     lastMove: room.lastMoveJson ? JSON.parse(room.lastMoveJson) : null,
     whiteTimeMs,
     blackTimeMs,
-    winner: room.winner,
-    winReason: room.winReason,
+    winner: liveWinner,
+    winReason: liveWinReason,
     startedAt: room.startedAt,
-    endedAt: room.endedAt,
+    endedAt: liveEndedAt,
   });
 }

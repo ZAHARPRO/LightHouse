@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { awardBadge } from "@/lib/badges";
+import { BADGE_DEFS } from "@/lib/badges";
 
 export async function toggleLike(videoId: string, type: "LIKE" | "DISLIKE") {
   const session = await auth();
@@ -45,3 +45,7 @@ export async function toggleLike(videoId: string, type: "LIKE" | "DISLIKE") {
 
   return { action: "added", type };
 }
+function awardBadge(id: string, arg1: string) {
+  throw new Error("Function not implemented.");
+}
+

@@ -1,86 +1,72 @@
-import { prisma } from "./prisma";
-
-type RewardType =
-  | "WATCH_STREAK"
-  | "FIRST_COMMENT"
-  | "SUPER_FAN"
-  | "EARLY_ADOPTER"
-  | "PREMIUM_MEMBER";
-
-const BADGE_META: Record<RewardType, { pointsValue: number; description: string }> = {
-  WATCH_STREAK:   { pointsValue: 50,  description: "Watched videos 7 days in a row!" },
-  FIRST_COMMENT:  { pointsValue: 10,  description: "Left your first comment!" },
-  SUPER_FAN:      { pointsValue: 100, description: "Liked 50 videos — you're a Super Fan!" },
-  EARLY_ADOPTER:  { pointsValue: 200, description: "Joined LightHouse early" },
-  PREMIUM_MEMBER: { pointsValue: 150, description: "Became a premium member" },
+export type BadgeDef = {
+  icon: string;
+  label: string;
+  color: string;
+  points: number;
+  description: string;
+  how: string;
+  category: "community" | "activity" | "special" | "games";
 };
 
-/**
- * Awards a badge to a user if they don't already have it.
- * Returns the new reward record, or null if already awarded.
- */
-export async function awardBadge(
-  userId: string,
-  type: RewardType,
-): Promise<{ id: string; type: string; pointsValue: number; description: string; earnedAt: Date } | null> {
-  const already = await prisma.reward.findFirst({ where: { userId, type } });
-  if (already) return null;
-
-  const meta = BADGE_META[type];
-
-  const [reward] = await prisma.$transaction([
-    prisma.reward.create({
-      data: { type, pointsValue: meta.pointsValue, description: meta.description, userId },
-    }),
-    prisma.user.update({
-      where: { id: userId },
-      data: { points: { increment: meta.pointsValue } },
-    }),
-  ]);
-
-  return reward;
-}
-
-/**
- * Updates the daily watch streak for a user and awards WATCH_STREAK badge
- * when the streak reaches 7 consecutive days.
- * Returns the awarded badge or null.
- */
-export async function updateWatchStreak(
-  userId: string,
-): Promise<{ id: string; type: string; pointsValue: number; description: string; earnedAt: Date } | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { watchStreak: true, lastWatchedDate: true },
-  });
-  if (!user) return null;
-
-  // Compare dates at day granularity (UTC)
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const lastStr  = user.lastWatchedDate
-    ? new Date(user.lastWatchedDate).toISOString().slice(0, 10)
-    : null;
-
-  // Already recorded a view today — nothing to update
-  if (lastStr === todayStr) return null;
-
-  const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const isConsecutive = lastStr === yesterdayStr;
-
-  const newStreak = isConsecutive ? user.watchStreak + 1 : 1;
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      watchStreak:     newStreak,
-      lastWatchedDate: new Date(),
-    },
-  });
-
-  // Award badge at 7-day streak (only once)
-  if (newStreak >= 7) {
-    return awardBadge(userId, "WATCH_STREAK");
-  }
-
-  return null;
-}
+export const BADGE_DEFS: Record<string, BadgeDef> = {
+  EARLY_ADOPTER: {
+    icon: "🚀", label: "Early Adopter", color: "#10b981", points: 200,
+    description: "One of the first members of LightHouse",
+    how: "Awarded by admins to early members",
+    category: "special",
+  },
+  FIRST_COMMENT: {
+    icon: "💬", label: "First Comment", color: "#6366f1", points: 10,
+    description: "Left your very first comment",
+    how: "Leave a comment on any video or post",
+    category: "community",
+  },
+  WATCH_STREAK: {
+    icon: "🔥", label: "Watch Streak", color: "#f97316", points: 50,
+    description: "Maintained a consistent watch streak",
+    how: "Watch videos 7 days in a row",
+    category: "activity",
+  },
+  SUPER_FAN: {
+    icon: "⭐", label: "Super Fan", color: "#fbbf24", points: 100,
+    description: "A dedicated fan of a creator",
+    how: "Subscribe and engage regularly with a creator",
+    category: "community",
+  },
+  PREMIUM_MEMBER: {
+    icon: "👑", label: "Premium Member", color: "#fbbf24", points: 150,
+    description: "Upgraded to a premium tier",
+    how: "Subscribe to Basic, Pro, or Elite plan",
+    category: "special",
+  },
+  CHESS_WIN: {
+    icon: "♟️", label: "Chess Victor", color: "#818cf8", points: 50,
+    description: "Won a game of chess against the bot",
+    how: "Beat the bot in Chess (any difficulty)",
+    category: "games",
+  },
+  CHESS_ONLINE_WIN: {
+    icon: "🏆", label: "Online Champion", color: "#a78bfa", points: 100,
+    description: "Won an online 1v1 chess match",
+    how: "Win a real-time online chess game",
+    category: "games",
+  },
+  MINESWEEPER_WIN: {
+    icon: "💣", label: "Bomb Defuser", color: "#34d399", points: 30,
+    description: "Cleared a minesweeper board",
+    how: "Win any minesweeper game",
+    category: "games",
+  },
+  MINESWEEPER_EXPERT: {
+    icon: "🧨", label: "Mine Expert", color: "#f87171", points: 75,
+    description: "Cleared the hard minesweeper board (30×16, 99 mines)",
+    how: "Win minesweeper on Hard difficulty",
+    category: "games",
+  },
+  MINESWEEPER_ONLINE_WIN: {
+    icon: "🎯", label: "Online Sweeper", color: "#22d3ee", points: 60,
+    description: "Won an online minesweeper match",
+    how: "Win a 1v1 online minesweeper game",
+    category: "games",
+  },
+};

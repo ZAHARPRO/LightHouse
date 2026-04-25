@@ -232,25 +232,28 @@ function CapturedRow({ color, captured }: { color:"w"|"b"; captured:string[] }) 
 // ── Timer display ────────────────────────────────────────────────────────────
 function Timer({ ms, active }: { ms: number|null; active: boolean }) {
   const [display, setDisplay] = useState(ms ?? 0);
+  const prevActive = useRef(active);
 
-  // Sync from server only if difference > 1s to avoid visible jumps from polling
+  // Hard-sync to server value on turn change
+  useEffect(() => {
+    if (prevActive.current !== active) {
+      prevActive.current = active;
+      if (ms !== null) setDisplay(ms);
+    }
+  }, [active, ms]);
+
+  // Soft-sync from server: only correct if we've drifted by >2s
   useEffect(() => {
     if (ms === null) return;
-    setDisplay(prev => (Math.abs(prev - ms) > 1000 ? ms : prev));
+    setDisplay(prev => (Math.abs(prev - ms) > 2000 ? ms : prev));
   }, [ms]);
 
-  // Reset fully when timer switches active state (turn change)
-  const prevActive = useRef(active);
+  // Stable countdown — only restarts when active flips, NOT on every poll
   useEffect(() => {
-    if (prevActive.current !== active && ms !== null) setDisplay(ms);
-    prevActive.current = active;
-  }, [active, ms]);
-
-  useEffect(() => {
-    if (!active || ms === null) return;
+    if (!active) return;
     const t = setInterval(() => setDisplay(d => Math.max(0, d - 100)), 100);
     return () => clearInterval(t);
-  }, [active, ms]);
+  }, [active]);
 
   if (ms === null) return null;
   const secs = Math.ceil(display / 1000);
@@ -315,17 +318,20 @@ export default function ChessOnlineRoom() {
 
   useEffect(() => {
     fetchRoom();
-    pollRef.current = setInterval(fetchRoom, 800);
+    pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
+    // Pause polling so an in-flight poll can't overwrite an optimistic update
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     await fetch(`/api/chess-rooms/${roomId}/${path}`, {
       method: "POST",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    fetchRoom();
+    await fetchRoom();
+    pollRef.current = setInterval(fetchRoom, 400);
   }, [roomId, fetchRoom]);
 
   function getMyColor(r: RoomData): string {

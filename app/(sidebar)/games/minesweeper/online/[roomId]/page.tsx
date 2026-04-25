@@ -190,17 +190,19 @@ export default function GameRoomPage() {
 
   useEffect(() => {
     fetchRoom();
-    pollRef.current = setInterval(fetchRoom, 800);
+    pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     await fetch(`/api/ms-rooms/${roomId}/${path}`, {
       method: "POST",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    fetchRoom();
+    await fetchRoom();
+    pollRef.current = setInterval(fetchRoom, 400);
   }, [roomId, fetchRoom]);
 
   const handleReveal = useCallback((idx: number) => {

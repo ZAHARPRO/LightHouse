@@ -3,9 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy } from "lucide-react";
+import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star } from "lucide-react";
 import Image from "next/image";
-import { fromFEN, getLegalMoves, type GameState, isInCheck } from "@/lib/chess";
+import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } from "@/lib/chess";
+import { getRank } from "@/lib/elo";
+import GameReportButton from "@/components/GameReportButton";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -25,6 +27,9 @@ type RoomData = {
   blackTimeMs: number|null;
   winner: string|null; winReason: string|null;
   startedAt: string|null; endedAt: string|null;
+  rated: boolean;
+  hostElo: number|null; guestElo: number|null;
+  hostEloDelta: number|null; guestEloDelta: number|null;
 };
 
 function useCellPx() {
@@ -187,6 +192,43 @@ function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDr
   );
 }
 
+// ── Captured pieces helpers ─────────────────────────────────────────────────
+const PIECE_VALUES: Record<string,number> = { Q:9, R:5, B:3, N:3, P:1 };
+const PIECE_ORDER = ["Q","R","B","N","P"];
+const CAP_UNICODE: Record<"w"|"b", Record<string,string>> = {
+  w: { Q:"♛",R:"♜",B:"♝",N:"♞",P:"♟" },
+  b: { Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙" },
+};
+const INITIAL_COUNTS: Record<string,number> = { Q:1,R:2,B:2,N:2,P:8 };
+
+function getCaptured(state: GameState): { white: string[]; black: string[] } {
+  const cur: Record<string,number> = {};
+  for (const row of state.board)
+    for (const p of row) if (p) cur[p.color+p.type] = (cur[p.color+p.type]??0)+1;
+  const white: string[] = [], black: string[] = [];
+  for (const t of PIECE_ORDER) {
+    const wMiss = INITIAL_COUNTS[t] - (cur["w"+t]??0);
+    const bMiss = INITIAL_COUNTS[t] - (cur["b"+t]??0);
+    for (let i=0;i<bMiss;i++) white.push(t); // white captured black pieces
+    for (let i=0;i<wMiss;i++) black.push(t); // black captured white pieces
+  }
+  return { white, black };
+}
+
+function CapturedRow({ color, captured }: { color:"w"|"b"; captured:string[] }) {
+  if (captured.length === 0) return null;
+  const uni = CAP_UNICODE[color];
+  const adv = captured.reduce((s,p) => s+(PIECE_VALUES[p]??0),0);
+  return (
+    <div className="flex items-center gap-[1px] flex-wrap">
+      {captured.map((p,i)=>(
+        <span key={i} style={{ fontSize:13, lineHeight:1 }} className="opacity-60">{uni[p]}</span>
+      ))}
+      {adv>0&&<span className="text-[0.65rem] text-[var(--text-muted)] ml-1 font-bold">+{adv}</span>}
+    </div>
+  );
+}
+
 // ── Timer display ────────────────────────────────────────────────────────────
 function Timer({ ms, active }: { ms: number|null; active: boolean }) {
   const [display, setDisplay] = useState(ms ?? 0);
@@ -260,7 +302,7 @@ export default function ChessOnlineRoom() {
 
   useEffect(() => {
     fetchRoom();
-    pollRef.current = setInterval(fetchRoom, 1500);
+    pollRef.current = setInterval(fetchRoom, 800);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
 
@@ -277,6 +319,16 @@ export default function ChessOnlineRoom() {
     return r.myRole === "host" ? r.hostColor : (r.hostColor === "w" ? "b" : "w");
   }
 
+  function applyOptimistic(from: [number,number], to: [number,number]) {
+    if (!room?.fen) return;
+    const state = fromFEN(room.fen);
+    const legal = getLegalMoves(state, from[0], from[1]);
+    const move = legal.find(m => m.to[0]===to[0] && m.to[1]===to[1]);
+    if (!move) return;
+    const next = applyMove(state, move.promotion ? { ...move, promotion: "Q" as const } : move);
+    setRoom(r => r ? { ...r, fen: toFEN(next), lastMove: { from, to } } : r);
+  }
+
   function handleSquare(r: number, c: number) {
     if (!room || room.status !== "PLAYING" || !room.fen) return;
     const state = fromFEN(room.fen);
@@ -290,6 +342,7 @@ export default function ChessOnlineRoom() {
       const move = legal.find(m => m.to[0]===r && m.to[1]===c);
       if (move) {
         setSelected(null); setLegalDots([]);
+        applyOptimistic([sr, sc], [r, c]);
         doAction("move", { from: [sr,sc], to: [r,c], promotion: "Q" });
         return;
       }
@@ -309,9 +362,9 @@ export default function ChessOnlineRoom() {
     const myColor = getMyColor(room);
     if (state.turn !== myColor) return;
     const legal = getLegalMoves(state, from[0], from[1]);
-    const move = legal.find(m => m.to[0]===to[0] && m.to[1]===to[1]);
-    if (!move) return;
+    if (!legal.find(m => m.to[0]===to[0] && m.to[1]===to[1])) return;
     setSelected(null); setLegalDots([]);
+    applyOptimistic(from, to);
     doAction("move", { from, to, promotion: "Q" });
   }
 
@@ -416,6 +469,15 @@ export default function ChessOnlineRoom() {
               <h1 className="text-3xl font-display font-extrabold">Defeat</h1></>
           )}
           <p className="text-[var(--text-muted)] mt-1 text-sm">{reasons[room.winReason??""] ?? room.winReason}</p>
+          {room.rated && (() => {
+            const myDelta = room.myRole === "host" ? room.hostEloDelta : room.guestEloDelta;
+            if (myDelta == null) return null;
+            return (
+              <div className={`mt-2 font-display font-bold text-lg ${myDelta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {myDelta >= 0 ? "+" : ""}{myDelta} ELO
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
@@ -461,6 +523,9 @@ export default function ChessOnlineRoom() {
   const oppTimeMs = myColor === "w" ? room.blackTimeMs : room.whiteTimeMs;
 
   const inCheck = isInCheck(state, state.turn);
+  const captured = getCaptured(state);
+  const oppCaptured = oppColor === "w" ? captured.white : captured.black;
+  const myCaptured  = myColor  === "w" ? captured.white : captured.black;
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
@@ -468,12 +533,37 @@ export default function ChessOnlineRoom() {
         {/* Board column */}
         <div>
           {/* Opponent info */}
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-1">
             <Avatar name={oppName} image={oppImage} size={28}/>
-            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
-            <span className="text-xs text-[var(--text-muted)] ml-1">{oppColor==="w"?"(white)":"(black)"}</span>
-            <div className="ml-auto"><Timer ms={oppTimeMs} active={!isMyTurn && room.timeControl!=="none"}/></div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
+                <span className="text-xs text-[var(--text-muted)]">{oppColor==="w"?"(white)":"(black)"}</span>
+                {room.rated && (() => {
+                  const oppElo = myColor === "w" ? room.guestElo : room.hostElo;
+                  const rank = oppElo ? getRank(oppElo) : null;
+                  return oppElo ? (
+                    <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>
+                      {oppElo} ELO{rank ? ` · ${rank.label}` : ""}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
+              <CapturedRow color={oppColor as "w"|"b"} captured={oppCaptured} />
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              {room.guestId && room.guestId !== room.hostId && (
+                <GameReportButton
+                  targetId={myColor === "w" ? (room.guestId ?? "") : room.hostId}
+                  targetName={oppName ?? "Opponent"}
+                  game="chess"
+                  roomId={room.id}
+                />
+              )}
+              <Timer ms={oppTimeMs} active={!isMyTurn && room.timeControl!=="none"}/>
+            </div>
           </div>
+          <div className="mb-2"/>
 
           <ChessBoard
             state={state}
@@ -488,11 +578,25 @@ export default function ChessOnlineRoom() {
           />
 
           {/* My info */}
-          <div className="flex items-center gap-3 mt-3">
+          <div className="flex items-center gap-3 mt-2">
             <Avatar name={myName} image={myImage} size={28}/>
-            <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
-            <span className="text-xs text-[var(--text-muted)] ml-1">{myColor==="w"?"(white)":"(black)"}</span>
-            {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold ml-2">Check!</span>}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
+                <span className="text-xs text-[var(--text-muted)]">{myColor==="w"?"(white)":"(black)"}</span>
+                {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold">Check!</span>}
+                {room.rated && (() => {
+                  const myElo = myColor === "w" ? room.hostElo : room.guestElo;
+                  const rank  = myElo ? getRank(myElo) : null;
+                  return myElo ? (
+                    <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>
+                      {myElo} ELO{rank ? ` · ${rank.label}` : ""}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
+              <CapturedRow color={myColor as "w"|"b"} captured={myCaptured} />
+            </div>
             <div className="ml-auto"><Timer ms={myTimeMs} active={isMyTurn && room.timeControl!=="none"}/></div>
           </div>
 
@@ -504,6 +608,11 @@ export default function ChessOnlineRoom() {
 
         {/* Side panel */}
         <div className="flex flex-col gap-3 w-full xl:w-60 min-h-[400px]">
+          {room.rated && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-display font-bold">
+              <Star size={11}/> Rated Match
+            </div>
+          )}
           <button onClick={handleResign}
             className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
             <LogOut size={12}/> Resign

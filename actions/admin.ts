@@ -173,17 +173,62 @@ export async function getReportedUsers() {
 
   if (reports.length === 0) return [];
 
-  const users = await prisma.user.findMany({
-    where: { id: { in: reports.map((r: { targetId: string; _count: { id: number } }) => r.targetId) } },
-    select: { id: true, name: true, email: true, role: true, isBanned: true, banReason: true, bannedAt: true },
-  });
+  const targetIds = reports.map((r: { targetId: string; _count: { id: number } }) => r.targetId);
+
+  const [users, reportDetails] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: targetIds } },
+      select: { id: true, name: true, email: true, role: true, isBanned: true, banReason: true, bannedAt: true, muteExpiresAt: true },
+    }),
+    prisma.report.findMany({
+      where: { targetId: { in: targetIds } },
+      orderBy: { createdAt: "desc" },
+      include: { reporter: { select: { id: true, name: true } } },
+    }),
+  ]);
 
   const countMap = new Map(
     reports.map((r: { targetId: string; _count: { id: number } }) => [r.targetId, r._count.id])
   );
+  const detailsMap = new Map<string, typeof reportDetails>();
+  for (const r of reportDetails) {
+    if (!detailsMap.has(r.targetId)) detailsMap.set(r.targetId, []);
+    detailsMap.get(r.targetId)!.push(r);
+  }
+
   return users
-    .map((u) => ({ ...u, reportCount: countMap.get(u.id) ?? 0 }))
+    .map((u) => ({
+      ...u,
+      reportCount: countMap.get(u.id) ?? 0,
+      reports: detailsMap.get(u.id) ?? [],
+    }))
     .sort((a, b) => (b.reportCount as number) - (a.reportCount as number));
+}
+
+/* ── Mute a user ── */
+export async function muteUser(userId: string, reason: string, durationMinutes: number | null) {
+  const session = await requireAdmin();
+  if (userId === session.user.id) return { error: "Cannot mute yourself" };
+  const expiresAt = durationMinutes
+    ? new Date(Date.now() + durationMinutes * 60 * 1000)
+    : null;
+  await prisma.$transaction([
+    prisma.mute.create({ data: { userId, reason: reason.trim() || "Muted by admin", expiresAt, mutedById: session.user.id } }),
+    prisma.user.update({ where: { id: userId }, data: { muteExpiresAt: expiresAt } }),
+  ]);
+  revalidatePath("/admin/reports");
+  return { ok: true };
+}
+
+/* ── Unmute a user ── */
+export async function unmuteUser(userId: string) {
+  await requireAdmin();
+  await prisma.$transaction([
+    prisma.mute.deleteMany({ where: { userId } }),
+    prisma.user.update({ where: { id: userId }, data: { muteExpiresAt: null } }),
+  ]);
+  revalidatePath("/admin/reports");
+  return { ok: true };
 }
 
 /* ── Ban a user ── */

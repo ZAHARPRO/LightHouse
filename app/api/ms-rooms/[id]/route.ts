@@ -75,5 +75,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     winReason: room.winReason,
     startedAt: room.startedAt,
     endedAt: room.endedAt,
+    rated: room.rated,
+    hostEloDelta: room.hostEloDelta,
+    guestEloDelta: room.guestEloDelta,
   });
 }

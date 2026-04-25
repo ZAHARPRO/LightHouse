@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateEloDelta } from "@/lib/elo";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,15 +21,33 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   } else if (room.status === "PLAYING") {
     const hostColor = room.hostColor ?? "w";
     const myColor = isHost ? hostColor : (hostColor === "w" ? "b" : "w");
+    const winnerColor = myColor === "w" ? "black" : "white";
     await prisma.chessRoom.update({
       where: { id },
-      data: {
-        status: "FINISHED",
-        winner: myColor === "w" ? "black" : "white",
-        winReason: "resigned",
-        endedAt: new Date(),
-      },
+      data: { status: "FINISHED", winner: winnerColor, winReason: "resigned", endedAt: new Date() },
     });
+
+    // ELO update
+    if (room.rated && room.guestId) {
+      const loserId  = session.user.id;
+      const winnerId = loserId === room.hostId ? room.guestId : room.hostId;
+      const [winner, loser] = await Promise.all([
+        prisma.user.findUnique({ where: { id: winnerId }, select: { chessElo: true } }),
+        prisma.user.findUnique({ where: { id: loserId  }, select: { chessElo: true } }),
+      ]);
+      if (winner && loser) {
+        const [delta] = calculateEloDelta(winner.chessElo, loser.chessElo);
+        const hostIsWinner = winnerId === room.hostId;
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: winnerId }, data: { chessElo: Math.max(100, winner.chessElo + delta) } }),
+          prisma.user.update({ where: { id: loserId  }, data: { chessElo: Math.max(100, loser.chessElo  - delta) } }),
+          prisma.chessRoom.update({ where: { id }, data: {
+            hostEloDelta:  hostIsWinner ?  delta : -delta,
+            guestEloDelta: hostIsWinner ? -delta :  delta,
+          }}),
+        ]);
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -61,6 +61,11 @@ model User {
   msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
   chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
   chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
+  chessElo             Int                  @default(400)
+  minesweeperElo       Int                  @default(400)
+  muteExpiresAt        DateTime?
+  mutes                Mute[]               @relation("MuteTarget")
+  mutesMade            Mute[]               @relation("MutedBy")
 }
 
 model Account {
@@ -297,6 +302,8 @@ model Block {
 model Report {
   id        String   @id @default(cuid())
   reason    String
+  game      String?  // "chess" | "minesweeper" | null
+  roomId    String?
   createdAt DateTime @default(now())
 
   reporterId String
@@ -306,6 +313,18 @@ model Report {
   target     User   @relation("ReportsReceived", fields: [targetId],  references: [id], onDelete: Cascade)
 
   @@unique([reporterId, targetId])
+}
+
+model Mute {
+  id        String    @id @default(cuid())
+  reason    String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  userId    String
+  user      User   @relation("MuteTarget", fields: [userId],    references: [id], onDelete: Cascade)
+  mutedById String
+  mutedBy   User   @relation("MutedBy",    fields: [mutedById], references: [id])
 }
 
 model ContactMessage {
@@ -435,6 +454,11 @@ model MinesweeperRoom {
   rows       Int?
   cols       Int?
   mineCount  Int?
+  rated      Boolean      @default(false)
+  hostEloSnapshot  Int?
+  guestEloSnapshot Int?
+  hostEloDelta     Int?
+  guestEloDelta    Int?
 
   hostMines     String?  @db.Text
   guestMines    String?  @db.Text
@@ -472,6 +496,11 @@ model ChessRoom {
   hostReady    Boolean         @default(true)
   guestReady   Boolean         @default(false)
   hostColor    String          @default("w") // "w" | "b" — randomly assigned at game start
+  rated            Boolean         @default(false)
+  hostEloSnapshot  Int?
+  guestEloSnapshot Int?
+  hostEloDelta     Int?
+  guestEloDelta    Int?
 
   fen          String?         @db.Text // current FEN
   movesSAN     String?         @db.Text // JSON: string[]

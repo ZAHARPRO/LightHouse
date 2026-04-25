@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { getReportedUsers, banUser, unbanUser, dismissReports } from "@/actions/admin";
+import { getReportedUsers, banUser, unbanUser, dismissReports, muteUser, unmuteUser } from "@/actions/admin";
 import { getUserTickets, staffReply, closeConversation } from "@/actions/support";
-import { Flag, Ban, ShieldOff, Trash2, RefreshCw, ChevronDown, ChevronUp, ShieldAlert, MessageCircle, Send, CheckCircle, Inbox } from "lucide-react";
+import { Flag, Ban, ShieldOff, Trash2, RefreshCw, ChevronDown, ChevronUp, ShieldAlert, MessageCircle, Send, CheckCircle, Inbox, VolumeX, Volume2 } from "lucide-react";
 import ActivityPing from "@/components/ActivityPing";
+
+type ReportItem = {
+  id: string;
+  reason: string;
+  game: string | null;
+  roomId: string | null;
+  createdAt: Date;
+  reporter: { id: string; name: string | null };
+};
 
 type ReportedUser = {
   id: string;
@@ -14,7 +23,9 @@ type ReportedUser = {
   isBanned: boolean;
   banReason: string | null;
   bannedAt: Date | null;
+  muteExpiresAt: Date | null;
   reportCount: number;
+  reports: ReportItem[];
 };
 
 type TicketMsg = {
@@ -48,10 +59,20 @@ function timeAgo(d: Date) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+const MUTE_DURATIONS = [
+  { label: "1 hour",  value: 60 },
+  { label: "6 hours", value: 360 },
+  { label: "1 day",   value: 1440 },
+  { label: "7 days",  value: 10080 },
+  { label: "30 days", value: 43200 },
+  { label: "Forever", value: null },
+];
+
 export default function AdminReportsPage() {
   const [users, setUsers]         = useState<ReportedUser[]>([]);
   const [pending, start]          = useTransition();
   const [banReasons, setBanReasons] = useState<Record<string, string>>({});
+  const [muteDurations, setMuteDurations] = useState<Record<string, number | null>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tickets, setTickets]     = useState<Record<string, Ticket[]>>({});
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
@@ -92,6 +113,25 @@ export default function AdminReportsPage() {
     start(async () => {
       await unbanUser(userId);
       setUsers((p) => p.map((u) => u.id === userId ? { ...u, isBanned: false, banReason: null, bannedAt: null } : u));
+    });
+  }
+
+  function handleMute(userId: string, name: string | null, reason: string) {
+    const duration = muteDurations[userId] !== undefined ? muteDurations[userId] : 1440;
+    const label = MUTE_DURATIONS.find(d => d.value === duration)?.label ?? "custom";
+    if (!confirm(`Mute "${name ?? userId}" for ${label}?`)) return;
+    start(async () => {
+      await muteUser(userId, reason, duration);
+      setUsers(p => p.map(u => u.id === userId
+        ? { ...u, muteExpiresAt: duration ? new Date(Date.now() + duration * 60000) : null }
+        : u));
+    });
+  }
+
+  function handleUnmute(userId: string) {
+    start(async () => {
+      await unmuteUser(userId);
+      setUsers(p => p.map(u => u.id === userId ? { ...u, muteExpiresAt: null } : u));
     });
   }
 
@@ -236,41 +276,103 @@ export default function AdminReportsPage() {
                   {isExpanded && (
                     <div className="border-t border-[var(--border-subtle)]">
 
+                      {/* Report list */}
+                      {u.reports.length > 0 && (
+                        <div className="px-5 pt-4 pb-2">
+                          <p className="text-[0.7rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wide mb-2">Reports</p>
+                          <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                            {u.reports.map(r => (
+                              <div key={r.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[var(--text-primary)]">{r.reason}</span>
+                                  {r.game && (
+                                    <span className="ml-1.5 px-1 py-[0.1rem] rounded text-[0.6rem] font-bold bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 uppercase">
+                                      {r.game}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[var(--text-muted)] shrink-0">{r.reporter.name ?? "?"} · {timeAgo(r.createdAt)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Actions */}
-                      <div className="px-5 py-4 flex items-center gap-3 flex-wrap bg-[var(--bg-secondary)]">
-                        {!u.isBanned && (
-                          <>
-                            <input
-                              value={banReasons[u.id] ?? ""}
-                              onChange={(e) => setBanReasons((p) => ({ ...p, [u.id]: e.target.value }))}
-                              placeholder="Ban reason (optional)"
-                              className="input-field flex-1 min-w-[180px] text-sm py-1.5"
-                            />
+                      <div className="px-5 py-4 flex flex-col gap-3 bg-[var(--bg-secondary)]">
+                        {/* Ban / unban */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {!u.isBanned && (
+                            <>
+                              <input
+                                value={banReasons[u.id] ?? ""}
+                                onChange={(e) => setBanReasons((p) => ({ ...p, [u.id]: e.target.value }))}
+                                placeholder="Ban reason (optional)"
+                                className="input-field flex-1 min-w-[150px] text-sm py-1.5"
+                              />
+                              <button
+                                onClick={() => handleBan(u.id, u.name)}
+                                disabled={pending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-red-400 bg-red-500/8 hover:bg-red-500/15 border border-red-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
+                              >
+                                <Ban size={13} /> Ban
+                              </button>
+                            </>
+                          )}
+                          {u.isBanned && (
                             <button
-                              onClick={() => handleBan(u.id, u.name)}
+                              onClick={() => handleUnban(u.id)}
                               disabled={pending}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-red-400 bg-red-500/8 hover:bg-red-500/15 border border-red-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-green-400 bg-green-500/8 hover:bg-green-500/15 border border-green-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
                             >
-                              <Ban size={13} /> Ban User
+                              <ShieldOff size={13} /> Unban
                             </button>
-                          </>
-                        )}
-                        {u.isBanned && (
+                          )}
                           <button
-                            onClick={() => handleUnban(u.id)}
+                            onClick={() => handleDismiss(u.id)}
                             disabled={pending}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-green-400 bg-green-500/8 hover:bg-green-500/15 border border-green-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
                           >
-                            <ShieldOff size={13} /> Unban
+                            <Trash2 size={13} /> Dismiss
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDismiss(u.id)}
-                          disabled={pending}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
-                        >
-                          <Trash2 size={13} /> Dismiss Reports
-                        </button>
+                        </div>
+
+                        {/* Mute / unmute */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {!u.muteExpiresAt || new Date(u.muteExpiresAt) < new Date() ? (
+                            <>
+                              <select
+                                value={muteDurations[u.id] !== undefined ? String(muteDurations[u.id]) : "1440"}
+                                onChange={e => setMuteDurations(p => ({ ...p, [u.id]: e.target.value === "null" ? null : Number(e.target.value) }))}
+                                className="input-field text-sm py-1.5"
+                              >
+                                {MUTE_DURATIONS.map(d => (
+                                  <option key={String(d.value)} value={String(d.value)}>{d.label}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => handleMute(u.id, u.name, banReasons[u.id] || (u.reports[0]?.reason ?? "Muted by admin"))}
+                                disabled={pending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-orange-400 bg-orange-500/8 hover:bg-orange-500/15 border border-orange-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
+                              >
+                                <VolumeX size={13} /> Mute
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs text-orange-400 font-display">
+                                Muted until {new Date(u.muteExpiresAt).toLocaleString()}
+                              </span>
+                              <button
+                                onClick={() => handleUnmute(u.id)}
+                                disabled={pending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-display font-semibold text-green-400 bg-green-500/8 hover:bg-green-500/15 border border-green-500/20 transition-colors cursor-pointer disabled:opacity-40 bg-transparent"
+                              >
+                                <Volume2 size={13} /> Unmute
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       {/* Tickets */}

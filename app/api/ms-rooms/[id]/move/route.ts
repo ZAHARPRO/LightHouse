@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMines, computeNeighbors, floodReveal, checkWin } from "@/lib/minesweeper";
 import { BADGE_DEFS } from "@/lib/badges";
+import { calculateEloDelta } from "@/lib/elo";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -82,12 +83,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await prisma.minesweeperRoom.update({ where: { id }, data: updateData });
 
-  // Auto-award badges if game just ended with a clear
-  if (updateData.status === "FINISHED" && updateData.winReason === "cleared") {
+  // Auto-award badges + ELO if game just ended
+  if (updateData.status === "FINISHED") {
     const winnerId = updateData.winner === "host" ? room.hostId : room.guestId;
-    if (winnerId) {
-      const badgesToAward = ["MINESWEEPER_WIN", "MINESWEEPER_ONLINE_WIN"];
-      for (const type of badgesToAward) {
+    const loserId  = winnerId === room.hostId ? room.guestId : room.hostId;
+
+    if (winnerId && updateData.winReason === "cleared") {
+      for (const type of ["MINESWEEPER_WIN", "MINESWEEPER_ONLINE_WIN"]) {
         const def = BADGE_DEFS[type];
         const existing = await prisma.reward.findFirst({ where: { userId: winnerId, type: type as never } });
         if (!existing) {
@@ -96,6 +98,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
           ]);
         }
+      }
+    }
+
+    if (room.rated && winnerId && loserId) {
+      const [winner, loser] = await Promise.all([
+        prisma.user.findUnique({ where: { id: winnerId }, select: { minesweeperElo: true } }),
+        prisma.user.findUnique({ where: { id: loserId  }, select: { minesweeperElo: true } }),
+      ]);
+      if (winner && loser) {
+        const [delta] = calculateEloDelta(winner.minesweeperElo, loser.minesweeperElo);
+        const hostIsWinner = winnerId === room.hostId;
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: winnerId }, data: { minesweeperElo: Math.max(100, winner.minesweeperElo + delta) } }),
+          prisma.user.update({ where: { id: loserId  }, data: { minesweeperElo: Math.max(100, loser.minesweeperElo  - delta) } }),
+          prisma.minesweeperRoom.update({ where: { id }, data: {
+            hostEloDelta:  hostIsWinner ?  delta : -delta,
+            guestEloDelta: hostIsWinner ? -delta :  delta,
+          }}),
+        ]);
       }
     }
   }

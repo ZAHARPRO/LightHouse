@@ -9,8 +9,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const room = await prisma.chessRoom.findUnique({
     where: { id },
     include: {
-      host:  { select: { id: true, name: true, image: true } },
-      guest: { select: { id: true, name: true, image: true } },
+      host:  { select: { id: true, name: true, image: true, chessElo: true } },
+      guest: { select: { id: true, name: true, image: true, chessElo: true } },
     },
   });
   if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -77,5 +77,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     winReason: liveWinReason,
     startedAt: room.startedAt,
     endedAt: liveEndedAt,
+    rated: room.rated,
+    hostElo: room.host.chessElo,
+    guestElo: room.guest?.chessElo ?? null,
+    hostEloDelta: room.hostEloDelta,
+    guestEloDelta: room.guestEloDelta,
   });
 }

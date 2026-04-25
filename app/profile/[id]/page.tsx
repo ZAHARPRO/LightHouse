@@ -6,6 +6,7 @@ import {
   Play, Eye, Clock, Lock, Users, Star, Crown,
   Award, TrendingUp, Zap, ArrowLeft, AlignLeft,
 } from "lucide-react";
+import { getRank } from "@/lib/elo";
 import SubscribeButton from "@/components/SubscribeButton";
 import ReportButton from "@/components/ReportButton";
 import BanBanner from "@/components/BanBanner";
@@ -228,6 +229,33 @@ export default async function PublicProfilePage({
                     </p>
                   </div>
                 )}
+
+                {/* ELO ranks */}
+                {(() => {
+                  const chessRank = getRank((user as { chessElo?: number })?.chessElo ?? 0);
+                  const msRank    = getRank((user as { minesweeperElo?: number })?.minesweeperElo ?? 0);
+                  if (!chessRank && !msRank) return null;
+                  const chessElo = (user as { chessElo?: number })?.chessElo;
+                  const msElo    = (user as { minesweeperElo?: number })?.minesweeperElo;
+                  return (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {chessRank && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-bold"
+                          style={{ background: `${chessRank.color}18`, color: chessRank.color, border: `1px solid ${chessRank.color}30` }}>
+                          ♟ Chess — {chessRank.label}
+                          <span className="font-normal opacity-70 ml-0.5">({chessElo} ELO)</span>
+                        </div>
+                      )}
+                      {msRank && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-bold"
+                          style={{ background: `${msRank.color}18`, color: msRank.color, border: `1px solid ${msRank.color}30` }}>
+                          💣 Minesweeper — {msRank.label}
+                          <span className="font-normal opacity-70 ml-0.5">({msElo} ELO)</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="profile-level-bar">
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.375rem" }}>

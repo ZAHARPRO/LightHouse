@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi } from "lucide-react";
+import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star } from "lucide-react";
 import Image from "next/image";
-import { computeNeighbors } from "@/lib/minesweeper";
+import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
+import { getRank } from "@/lib/elo";
+import GameReportButton from "@/components/GameReportButton";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -36,6 +38,9 @@ type RoomData = {
   winReason: string | null;
   startedAt: string | null;
   endedAt: string | null;
+  rated: boolean;
+  hostEloDelta: number | null;
+  guestEloDelta: number | null;
 };
 
 const NUM_COLORS: Record<number, string> = {
@@ -185,7 +190,7 @@ export default function GameRoomPage() {
 
   useEffect(() => {
     fetchRoom();
-    pollRef.current = setInterval(fetchRoom, 1500);
+    pollRef.current = setInterval(fetchRoom, 800);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
 
@@ -198,8 +203,38 @@ export default function GameRoomPage() {
     fetchRoom();
   }, [roomId, fetchRoom]);
 
-  const handleReveal = useCallback((idx: number) => doAction("move", { type: "reveal", idx }), [doAction]);
-  const handleFlag   = useCallback((e: React.MouseEvent, idx: number) => { e.preventDefault(); doAction("move", { type: "flag", idx }); }, [doAction]);
+  const handleReveal = useCallback((idx: number) => {
+    setRoom(r => {
+      if (!r) return r;
+      // Optimistic reveal only when mines are already placed
+      if (r.myMines) {
+        const mineSet   = new Set(r.myMines);
+        const revealed  = new Set(r.myRevealed);
+        if (mineSet.has(idx)) {
+          // Hit a mine — reveal all mines immediately
+          const exploded = new Set(revealed);
+          for (const m of mineSet) exploded.add(m);
+          return { ...r, myRevealed: [...exploded], myHit: true };
+        }
+        const neighbors = computeNeighbors(r.rows!, r.cols!, mineSet);
+        const next = floodReveal(r.rows!, r.cols!, mineSet, neighbors, revealed, idx);
+        return { ...r, myRevealed: [...next] };
+      }
+      return r; // first click — can't predict, wait for server
+    });
+    doAction("move", { type: "reveal", idx });
+  }, [doAction]);
+
+  const handleFlag = useCallback((e: React.MouseEvent, idx: number) => {
+    e.preventDefault();
+    setRoom(r => {
+      if (!r) return r;
+      const flagged = new Set(r.myFlagged);
+      if (flagged.has(idx)) flagged.delete(idx); else flagged.add(idx);
+      return { ...r, myFlagged: [...flagged] };
+    });
+    doAction("move", { type: "flag", idx });
+  }, [doAction]);
 
   async function handleLeave() {
     await doAction("leave");
@@ -327,6 +362,15 @@ export default function GameRoomPage() {
           <p className="text-[var(--text-muted)] mt-2 text-sm">
             <span className="font-semibold text-[var(--text-secondary)]">{winnerName ?? "Someone"}</span> won — {reason}
           </p>
+          {room.rated && (() => {
+            const myDelta = room.myRole === "host" ? room.hostEloDelta : room.guestEloDelta;
+            if (myDelta == null) return null;
+            return (
+              <div className={`mt-2 font-display font-bold text-xl ${myDelta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {myDelta >= 0 ? "+" : ""}{myDelta} ELO
+              </div>
+            );
+          })()}
         </div>
 
         <div className={`grid grid-cols-1 ${fBreak} gap-6 mb-8`}>
@@ -378,12 +422,25 @@ export default function GameRoomPage() {
         <span className="flex items-center gap-1.5 text-xs text-green-400 font-display font-semibold">
           <Wifi size={12} /> Online
         </span>
+        {room.rated && (
+          <span className="flex items-center gap-1 text-xs text-yellow-400 font-display font-bold bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
+            <Star size={10} /> Rated
+          </span>
+        )}
         <span className="text-[var(--text-muted)] text-xs">{DIFF_LABEL[room.difficulty]} · {cols}×{rows}</span>
         <div className="ml-auto flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-sm font-display font-semibold text-[var(--text-secondary)]">
             <Flag size={13} className="text-[var(--accent-orange)]" />
             {myFlagsLeft}
           </span>
+          {room.guestId && (
+            <GameReportButton
+              targetId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId}
+              targetName={oppName ?? "Opponent"}
+              game="minesweeper"
+              roomId={room.id}
+            />
+          )}
           <button onClick={handleLeave}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
             <LogOut size={12} /> Surrender

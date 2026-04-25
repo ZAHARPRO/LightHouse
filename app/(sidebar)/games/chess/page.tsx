@@ -189,19 +189,48 @@ function MovePanel({ moves }: { moves: string[] }) {
   );
 }
 
-function PlayerRow({ label, color, active, check }: { label: string; color: "w"|"b"; active?: boolean; check?: boolean }) {
+const PIECE_VALUES: Record<string, number> = { Q: 9, R: 5, B: 3, N: 3, P: 1 };
+const PIECE_ORDER = ["Q", "R", "B", "N", "P"];
+// Each color's captures are opponent pieces, shown in opponent's unicode style
+const CAP_UNICODE: Record<"w"|"b", Record<string, string>> = {
+  w: { Q:"♛", R:"♜", B:"♝", N:"♞", P:"♟" }, // white captured black pieces
+  b: { Q:"♕", R:"♖", B:"♗", N:"♘", P:"♙" }, // black captured white pieces
+};
+
+function PlayerRow({
+  label, color, active, check, captured = [], advantage = 0,
+}: {
+  label: string; color: "w"|"b"; active?: boolean; check?: boolean;
+  captured?: string[]; advantage?: number;
+}) {
+  const sorted = [...captured].sort((a, b) => PIECE_ORDER.indexOf(a) - PIECE_ORDER.indexOf(b));
+  const uni = CAP_UNICODE[color];
   return (
-    <div className="flex items-center gap-2.5 py-2">
-      <div className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-base leading-none"
+    <div className="flex items-center gap-2.5 py-2 min-h-[44px]">
+      <div className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-base leading-none shrink-0"
         style={{
           background: color === "w" ? "#f0d9b5" : "#1a1a1a",
           borderColor: active ? "#f97316" : "var(--border-subtle)",
         }}>
         {color === "w" ? "♙" : "♟"}
       </div>
-      <span className="font-display font-semibold text-sm text-[var(--text-primary)]">{label}</span>
-      {active && <span className="text-[0.7rem] text-[var(--accent-orange)] font-semibold">● Your turn</span>}
-      {check && <span className="text-[0.7rem] text-red-400 font-bold ml-1">Check!</span>}
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-display font-semibold text-sm text-[var(--text-primary)]">{label}</span>
+          {active && <span className="text-[0.7rem] text-[var(--accent-orange)] font-semibold">● Your turn</span>}
+          {check && <span className="text-[0.7rem] text-red-400 font-bold">Check!</span>}
+        </div>
+        {sorted.length > 0 && (
+          <div className="flex items-center gap-[1px] flex-wrap mt-[1px]">
+            {sorted.map((p, i) => (
+              <span key={i} className="leading-none opacity-60" style={{ fontSize: 13 }}>{uni[p]}</span>
+            ))}
+            {advantage > 0 && (
+              <span className="text-[0.65rem] text-[var(--text-muted)] ml-1 font-bold">+{advantage}</span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -216,18 +245,25 @@ export default function ChessVsBotPage() {
   const [moveList, setMoveList] = useState<string[]>([]);
   const [result, setResult] = useState<string>("");
   const [botThinking, setBotThinking] = useState(false);
+  const [whiteCaptured, setWhiteCaptured] = useState<string[]>([]);
+  const [blackCaptured, setBlackCaptured] = useState<string[]>([]);
   const cellPx = useCellPx();
 
   function startGame() {
     setGameState(initialState());
     setSelected(null); setLegalDots([]); setLastMove(null);
     setMoveList([]); setResult(""); setBotThinking(false);
+    setWhiteCaptured([]); setBlackCaptured([]);
     setStatus("playing");
   }
 
   const doMove = useCallback((state: GameState, move: Move): GameState => {
     const san = toSAN(state, move);
     const next = applyMove(state, move);
+    if (move.captured) {
+      if (state.turn === "w") setWhiteCaptured(p => [...p, move.captured!]);
+      else setBlackCaptured(p => [...p, move.captured!]);
+    }
     setLastMove(move);
     setMoveList(prev => [...prev, san]);
     setGameState(next);
@@ -281,6 +317,9 @@ export default function ChessVsBotPage() {
   const isMyTurn = status === "playing" && gameState.turn === "w" && !botThinking;
   const isBotTurn = status === "playing" && (gameState.turn === "b" || botThinking);
 
+  const whiteValue = whiteCaptured.reduce((s, p) => s + (PIECE_VALUES[p] ?? 0), 0);
+  const blackValue = blackCaptured.reduce((s, p) => s + (PIECE_VALUES[p] ?? 0), 0);
+
   // ── IDLE ────────────────────────────────────────────────────────────────────
   if (status === "idle") {
     return (
@@ -320,7 +359,7 @@ export default function ChessVsBotPage() {
         {/* Board column */}
         <div className="flex flex-col shrink-0">
           {/* Opponent */}
-          <PlayerRow label={`Bot · ${difficulty === "easy" ? "Easy" : difficulty === "medium" ? "Medium" : "Hard"}`} color="b" active={isBotTurn} />
+          <PlayerRow label={`Bot · ${difficulty === "easy" ? "Easy" : difficulty === "medium" ? "Medium" : "Hard"}`} color="b" active={isBotTurn} captured={blackCaptured} advantage={Math.max(0, blackValue - whiteValue)} />
 
           <ChessBoard
             state={gameState}
@@ -334,7 +373,7 @@ export default function ChessVsBotPage() {
           />
 
           {/* Player */}
-          <PlayerRow label="You (White)" color="w" active={isMyTurn} check={inCheck && isMyTurn} />
+          <PlayerRow label="You (White)" color="w" active={isMyTurn} check={inCheck && isMyTurn} captured={whiteCaptured} advantage={Math.max(0, whiteValue - blackValue)} />
         </div>
 
         {/* Side panel */}

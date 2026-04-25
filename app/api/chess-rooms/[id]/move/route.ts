@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, isCheckmate, isStalemate } from "@/lib/chess";
 import { BADGE_DEFS } from "@/lib/badges";
+import { calculateEloDelta } from "@/lib/elo";
 
 const CAPTURE_BONUS: Record<string, number> = { P: 1000, N: 2000, B: 2000, R: 3000, Q: 4000 };
 
@@ -99,13 +100,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await prisma.chessRoom.update({ where: { id }, data: update });
 
-  // Auto-award chess badges on win
+  // Auto-award badges + ELO on finish
   if (update.status === "FINISHED" && update.winner !== "draw") {
     const winnerColor = update.winner as string;
-    const hostColor = room.hostColor ?? "w";
+    const hColor = room.hostColor ?? "w";
     const winnerId = winnerColor === "white"
-      ? (hostColor === "w" ? room.hostId : room.guestId)
-      : (hostColor === "b" ? room.hostId : room.guestId);
+      ? (hColor === "w" ? room.hostId : room.guestId)
+      : (hColor === "b" ? room.hostId : room.guestId);
+    const loserId = winnerId === room.hostId ? room.guestId : room.hostId;
+
     if (winnerId) {
       for (const type of ["CHESS_WIN", "CHESS_ONLINE_WIN"]) {
         const def = BADGE_DEFS[type];
@@ -116,6 +119,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
           ]);
         }
+      }
+    }
+
+    // ELO update for rated games
+    if (room.rated && winnerId && loserId) {
+      const [winner, loser] = await Promise.all([
+        prisma.user.findUnique({ where: { id: winnerId }, select: { chessElo: true } }),
+        prisma.user.findUnique({ where: { id: loserId  }, select: { chessElo: true } }),
+      ]);
+      if (winner && loser) {
+        const [delta] = calculateEloDelta(winner.chessElo, loser.chessElo);
+        const winnerNew = Math.max(100, winner.chessElo + delta);
+        const loserNew  = Math.max(100, loser.chessElo  - delta);
+        const hostIsWinner = winnerId === room.hostId;
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: winnerId }, data: { chessElo: winnerNew } }),
+          prisma.user.update({ where: { id: loserId  }, data: { chessElo: loserNew  } }),
+          prisma.chessRoom.update({ where: { id }, data: {
+            hostEloDelta:  hostIsWinner ? delta  : -delta,
+            guestEloDelta: hostIsWinner ? -delta :  delta,
+          }}),
+        ]);
       }
     }
   }

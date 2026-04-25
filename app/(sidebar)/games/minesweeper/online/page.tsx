@@ -77,8 +77,8 @@ export default function OnlineLobbyPage() {
   return (
     <main className="max-w-2xl mx-auto px-4 py-12">
       <div className="flex items-center gap-3 mb-2">
-        <Link href="/games/minesweeper" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">
-          ← Minesweeper
+        <Link href="/games/games" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">
+          ← Games
         </Link>
       </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">

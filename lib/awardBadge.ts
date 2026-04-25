@@ -1,10 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { BADGE_DEFS, BadgeDef } from "./badges";
 
-type PrismaLike = Pick<PrismaClient, "reward" | "user">;
-
 export async function awardBadge(
-  prisma: PrismaLike,
+  prisma: PrismaClient,
   userId: string,
   type: string,
 ): Promise<{ awarded: boolean; badge?: BadgeDef }> {

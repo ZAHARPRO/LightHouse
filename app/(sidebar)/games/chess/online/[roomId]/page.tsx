@@ -232,7 +232,20 @@ function CapturedRow({ color, captured }: { color:"w"|"b"; captured:string[] }) 
 // ── Timer display ────────────────────────────────────────────────────────────
 function Timer({ ms, active }: { ms: number|null; active: boolean }) {
   const [display, setDisplay] = useState(ms ?? 0);
-  useEffect(() => { setDisplay(ms ?? 0); }, [ms]);
+
+  // Sync from server only if difference > 1s to avoid visible jumps from polling
+  useEffect(() => {
+    if (ms === null) return;
+    setDisplay(prev => (Math.abs(prev - ms) > 1000 ? ms : prev));
+  }, [ms]);
+
+  // Reset fully when timer switches active state (turn change)
+  const prevActive = useRef(active);
+  useEffect(() => {
+    if (prevActive.current !== active && ms !== null) setDisplay(ms);
+    prevActive.current = active;
+  }, [active, ms]);
+
   useEffect(() => {
     if (!active || ms === null) return;
     const t = setInterval(() => setDisplay(d => Math.max(0, d - 100)), 100);

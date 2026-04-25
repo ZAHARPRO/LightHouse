@@ -56,7 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Time control
   if (room.timeControl !== "none" && room.lastMoveAt) {
     const elapsed = Date.now() - new Date(room.lastMoveAt).getTime();
-    const white = isHost;
+    const white = myColor === "w";
     let remaining = (white ? room.whiteTimeMs : room.blackTimeMs) ?? 0;
     remaining = Math.max(0, remaining - elapsed);
 

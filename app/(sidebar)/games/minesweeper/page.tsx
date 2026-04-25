@@ -163,7 +163,7 @@ export default function GamesPage() {
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-2">
         Mini Games
       </h1>
-      <p className="text-[var(--text-muted)] mb-10">Сапёр</p>
+      <p className="text-[var(--text-muted)] mb-10">Minesweeper</p>
 
       {/* Difficulty selector */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -194,13 +194,13 @@ export default function GamesPage() {
         <div className="flex flex-col items-center justify-center gap-6 py-20 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
           <Bomb size={48} className="text-[var(--accent-orange)] opacity-60" />
           <p className="text-[var(--text-secondary)] font-display font-medium">
-            Выбери сложность и начинай
+            Choose a difficulty and start playing — click cells and avoid the mines!
           </p>
           <button
             onClick={() => startGame()}
             className="px-8 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 transition-opacity"
           >
-            Начать игру
+            Start Game
           </button>
         </div>
       ) : (
@@ -216,16 +216,16 @@ export default function GamesPage() {
               className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-semibold text-sm hover:text-[var(--text-primary)] transition-colors"
             >
               <RotateCcw size={14} />
-              Заново
+              New Game
             </button>
             {gameState === "won" && (
               <span className="flex items-center gap-2 text-green-400 font-display font-bold text-sm">
-                <Trophy size={15} /> Победа!
+                <Trophy size={15} /> Victory!
               </span>
             )}
             {gameState === "lost" && (
               <span className="flex items-center gap-2 text-red-400 font-display font-bold text-sm">
-                <Bomb size={15} /> Взрыв!
+                <Bomb size={15} /> Blast!
               </span>
             )}
           </div>

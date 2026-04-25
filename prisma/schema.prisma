@@ -59,6 +59,8 @@ model User {
   newsLikes            NewsLike[]
   msRoomsAsHost        MinesweeperRoom[]    @relation("MSHost")
   msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
+  chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
+  chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
 }
 
 model Account {
@@ -451,6 +453,42 @@ model MinesweeperRoom {
 }
 
 enum MSRoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
+}
+
+model ChessRoom {
+  id           String          @id @default(cuid())
+  hostId       String
+  guestId      String?
+  status       ChessRoomStatus @default(WAITING)
+  timeControl  String          @default("none") // "none"|"60"|"300"|"600"|"1500"|"3600" (seconds)
+  hostReady    Boolean         @default(true)
+  guestReady   Boolean         @default(false)
+
+  // host = white, guest = black
+  fen          String?         @db.Text // current FEN
+  movesSAN     String?         @db.Text // JSON: string[]
+  lastMoveJson String?         @db.Text // JSON: { from:[r,c], to:[r,c] } | null
+
+  whiteTimeMs  Int?            // ms remaining for white (host)
+  blackTimeMs  Int?            // ms remaining for black (guest)
+  lastMoveAt   DateTime?
+
+  winner       String?         // "white" | "black" | "draw"
+  winReason    String?         // "checkmate" | "stalemate" | "timeout" | "resigned"
+
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  host         User            @relation("ChessHost",  fields: [hostId],  references: [id], onDelete: Cascade)
+  guest        User?           @relation("ChessGuest", fields: [guestId], references: [id], onDelete: Cascade)
+}
+
+enum ChessRoomStatus {
   WAITING
   PLAYING
   FINISHED

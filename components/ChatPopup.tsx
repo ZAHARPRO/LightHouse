@@ -1,26 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, forwardRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { sendChatMessage, getChatMessages } from "@/actions/chat";
+import { sendChatMessage } from "@/actions/chat";
 import { Send, Maximize2, X, MessageSquare, Zap, Reply } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 
 type Message = {
   id: string;
   content: string;
-  createdAt: Date;
-  author: { id: string; name: string | null; image: string | null; tier: string };
+  createdAt: string | Date;
+  author: { id: string; name: string | null; image: string | null; tier: string; lastActiveAt?: string | Date | null };
   isError?: boolean;
 };
-
-const DEMO_MESSAGES: Message[] = [
-  { id: "d1", content: "Welcome to the LightHouse global chat! 🔥", createdAt: new Date(Date.now() - 180000), author: { id: "bot", name: "LightHouse Bot", image: null, tier: "ELITE" } },
-  { id: "d2", content: "The new video feed update looks amazing!", createdAt: new Date(Date.now() - 120000), author: { id: "u1", name: "Alex Chen", image: null, tier: "PRO" } },
-  { id: "d3", content: "Just subscribed to Elite — totally worth it", createdAt: new Date(Date.now() - 60000), author: { id: "u2", name: "Sarah M.", image: null, tier: "ELITE" } },
-  { id: "d4", content: "Anyone here from the beta? 👋", createdAt: new Date(Date.now() - 20000), author: { id: "u3", name: "Marco V.", image: null, tier: "BASIC" } },
-];
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   FREE:  { label: "Free",  color: "#888" },
@@ -29,6 +22,19 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
   ELITE: { label: "Elite", color: "#fbbf24" },
 };
 
+function isOnline(lastActiveAt?: string | Date | null): boolean {
+  if (!lastActiveAt) return false;
+  return Date.now() - new Date(lastActiveAt).getTime() < 2 * 60 * 1000;
+}
+
+function getSessionStart(): string {
+  const key = "chatSessionStart";
+  const stored = sessionStorage.getItem(key);
+  if (stored) return stored;
+  const now = new Date().toISOString();
+  sessionStorage.setItem(key, now);
+  return now;
+}
 
 interface ChatPopupProps {
   onClose: () => void;
@@ -38,60 +44,88 @@ interface ChatPopupProps {
 
 const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup({ onClose, isClosing, leftOffset = 0 }, ref) {
   const { data: session } = useSession();
-  const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Stable ref to the session-start ISO string — set once on mount
+  const sinceRef = useRef<string | null>(null);
+  const optimisticsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    sinceRef.current = getSessionStart();
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const fetchMessages = useCallback(async () => {
+    if (!sinceRef.current) return;
+    try {
+      const res = await fetch(`/api/chat-messages?since=${encodeURIComponent(sinceRef.current)}&limit=50`);
+      if (!res.ok) return;
+      const data: Message[] = await res.json();
+      setMessages((prev) => {
+        // Keep any optimistic messages that haven't been confirmed yet
+        const optimistics = prev.filter((m) => optimisticsRef.current.has(m.id));
+        const serverIds = new Set(data.map((m) => m.id));
+        const unconfirmed = optimistics.filter((m) => !serverIds.has(m.id));
+        return [...data, ...unconfirmed];
+      });
+    } catch {
+      // network error — keep existing state
+    }
+  }, []);
+
+  // Poll every 3 seconds while popup is open
   useEffect(() => {
     if (!session) return;
-    getChatMessages(30).then((msgs) => {
-      if (msgs.length > 0) setMessages(msgs as Message[]);
-    });
-  }, [session]);
+    // Small delay so sinceRef is set by the time first fetch runs
+    const first = setTimeout(fetchMessages, 50);
+    const interval = setInterval(fetchMessages, 3000);
+    return () => { clearTimeout(first); clearInterval(interval); };
+  }, [session, fetchMessages]);
 
-  const sorted = [...messages].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  // Ping presence every 30s
+  useEffect(() => {
+    if (!session) return;
+    const ping = () => fetch("/api/presence", { method: "POST" });
+    ping();
+    const t = setInterval(ping, 30000);
+    return () => clearInterval(t);
+  }, [session]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || !session || sending) return;
     setSending(true);
     const content = replyTo ? `@${replyTo.name} ${input.trim()}` : input.trim();
+    const optId = `opt-${Date.now()}`;
     const optimistic: Message = {
-      id: `opt-${Date.now()}`,
+      id: optId,
       content,
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       author: { id: session.user?.id ?? "", name: session.user?.name ?? "You", image: null, tier: "FREE" },
     };
-    setMessages((prev) => [optimistic, ...prev]);
+    optimisticsRef.current.add(optId);
+    setMessages((prev) => [...prev, optimistic]);
     setInput("");
     setReplyTo(null);
+
     const result = await sendChatMessage(optimistic.content);
+    optimisticsRef.current.delete(optId);
     if (result.message) {
-      setMessages((prev) => prev.map((m) => m.id === optimistic.id ? (result.message as Message) : m));
+      setMessages((prev) => prev.map((m) => m.id === optId ? (result.message as Message) : m));
     } else if (result.error) {
-      // Remove the optimistic message and show an error notice
       const errId = `err-${Date.now()}`;
       setMessages((prev) => [
-        ...prev.filter((m) => m.id !== optimistic.id),
-        {
-          id: errId,
-          content: result.error!,
-          createdAt: new Date(),
-          author: { id: "system", name: "System", image: null, tier: "FREE" },
-          isError: true,
-        },
+        ...prev.filter((m) => m.id !== optId),
+        { id: errId, content: result.error!, createdAt: new Date().toISOString(), author: { id: "system", name: "System", image: null, tier: "FREE" }, isError: true },
       ]);
-      // Auto-remove after 6 seconds
       setTimeout(() => setMessages((prev) => prev.filter((m) => m.id !== errId)), 6000);
     }
     setSending(false);
@@ -100,7 +134,6 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
   return (
     <div
       ref={ref}
-      /* On mobile: full-width, starts below navbar. On sm+: fixed 300px width */
       className="fixed top-16 flex flex-col w-full sm:w-[300px] bg-[var(--bg-card)] border-r border-[var(--border-subtle)] shadow-[6px_0_40px_rgba(0,0,0,0.45)] z-[3000]"
       style={{
         left: leftOffset,
@@ -112,13 +145,9 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)] shrink-0">
         <div className="flex items-center gap-2">
           <MessageSquare size={14} className="text-[var(--accent-orange)]" />
-          <span className="font-display font-bold text-sm text-[var(--text-primary)]">
-            Global Chat
-          </span>
+          <span className="font-display font-bold text-sm text-[var(--text-primary)]">Global Chat</span>
         </div>
-
         <div className="flex items-center gap-[0.375rem]">
-          {/* Full-screen → /chat */}
           <Link
             href="/chat"
             title="Open full chat"
@@ -127,8 +156,6 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
           >
             <Maximize2 size={13} />
           </Link>
-
-          {/* Close */}
           <button
             onClick={onClose}
             title="Close chat"
@@ -141,11 +168,13 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-[0.875rem] flex flex-col gap-3">
-        {sorted.map((msg) => {
+        {messages.length === 0 && session && (
+          <p className="text-[var(--text-muted)] text-xs italic text-center py-8">No messages yet. Say something!</p>
+        )}
+        {messages.map((msg) => {
           const tier = TIER_LABELS[msg.author.tier] ?? TIER_LABELS.FREE;
           const isMe = msg.author.id === session?.user?.id;
 
-          // Error system message
           if (msg.isError) {
             return (
               <div key={msg.id} className="flex justify-center">
@@ -165,27 +194,25 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
               onMouseLeave={() => setHoveredId(null)}
             >
               <Link href={`/profile/${msg.author.id}`} className="no-underline">
-                <UserAvatar name={msg.author.name ?? "?"} tier={msg.author.tier} image={msg.author.image} />
+                <UserAvatar
+                  name={msg.author.name ?? "?"}
+                  tier={msg.author.tier}
+                  image={msg.author.image}
+                  online={!isMe && isOnline(msg.author.lastActiveAt)}
+                />
               </Link>
 
               <div className={["max-w-[75%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
-                {/* Name + badge */}
                 <div className={["flex items-center gap-[0.375rem] mb-[0.2rem]", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
-                  <Link
-                    href={`/profile/${msg.author.id}`}
-                    className="no-underline text-[var(--text-primary)] font-semibold text-[0.6875rem]"
-                  >
+                  <Link href={`/profile/${msg.author.id}`} className="no-underline text-[var(--text-primary)] font-semibold text-[0.6875rem]">
                     {isMe ? "You" : msg.author.name}
                   </Link>
-                  <span
-                    className="text-[0.5625rem] font-semibold px-[0.3rem] py-[0.1rem] rounded-[3px]"
-                    style={{ background: `${tier.color}18`, color: tier.color, border: `1px solid ${tier.color}30` }}
-                  >
+                  <span className="text-[0.5625rem] font-semibold px-[0.3rem] py-[0.1rem] rounded-[3px]"
+                    style={{ background: `${tier.color}18`, color: tier.color, border: `1px solid ${tier.color}30` }}>
                     {tier.label}
                   </span>
                 </div>
 
-                {/* Bubble + reply button */}
                 <div className={["flex items-end gap-1.5", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
                   <div
                     className="px-[0.625rem] py-2 text-[0.8125rem] text-[var(--text-primary)] leading-[1.45] break-words"
@@ -198,13 +225,9 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
                     {msg.content}
                   </div>
 
-                  {/* Reply button — shown on hover for others' messages */}
                   {!isMe && session && hoveredId === msg.id && (
                     <button
-                      onClick={() => {
-                        setReplyTo({ id: msg.id, name: msg.author.name ?? "?" });
-                        setTimeout(() => inputRef.current?.focus(), 50);
-                      }}
+                      onClick={() => { setReplyTo({ id: msg.id, name: msg.author.name ?? "?" }); setTimeout(() => inputRef.current?.focus(), 50); }}
                       className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150 mb-[2px]"
                       title={`Reply to ${msg.author.name}`}
                     >
@@ -222,45 +245,35 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
       {/* Input area */}
       {session ? (
         <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)] shrink-0">
-          {/* Replying-to banner */}
           {replyTo && (
             <div className="flex items-center justify-between px-[0.875rem] pt-[0.5rem] pb-[0.25rem]">
               <span className="flex items-center gap-1.5 text-[0.75rem] text-[var(--accent-orange)]">
                 <Reply size={11} />
                 Replying to <strong>{replyTo.name}</strong>
               </span>
-              <button
-                onClick={() => setReplyTo(null)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150"
-              >
+              <button onClick={() => setReplyTo(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150">
                 <X size={12} />
               </button>
             </div>
           )}
-        <form
-          onSubmit={handleSend}
-          className="flex gap-2 px-[0.875rem] py-[0.625rem]"
-        >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Say something…"}
-            maxLength={500}
-            className="input-field flex-1 bg-[var(--bg-elevated)] text-[0.8125rem] h-9"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || sending}
-            className={[
-              "flex items-center justify-center shrink-0 h-9 px-[0.625rem] rounded-[7px]",
-              "bg-[var(--accent-orange)] border-none cursor-pointer text-white transition-opacity duration-200",
-              !input.trim() || sending ? "opacity-50" : "opacity-100",
-            ].join(" ")}
-          >
-            <Send size={15} />
-          </button>
-        </form>
+          <form onSubmit={handleSend} className="flex gap-2 px-[0.875rem] py-[0.625rem]">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Say something…"}
+              maxLength={500}
+              className="input-field flex-1 bg-[var(--bg-elevated)] text-[0.8125rem] h-9"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || sending}
+              className={["flex items-center justify-center shrink-0 h-9 px-[0.625rem] rounded-[7px] bg-[var(--accent-orange)] border-none cursor-pointer text-white transition-opacity duration-200",
+                !input.trim() || sending ? "opacity-50" : "opacity-100"].join(" ")}
+            >
+              <Send size={15} />
+            </button>
+          </form>
         </div>
       ) : (
         <div className="border-t border-[var(--border-subtle)] px-[0.875rem] py-3 bg-[var(--bg-secondary)] shrink-0">
@@ -269,12 +282,8 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
             Sign in to chat
           </p>
           <div className="flex gap-[0.375rem]">
-            <Link href="/auth/signin" className="btn-ghost no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">
-              Sign In
-            </Link>
-            <Link href="/auth/register" className="btn-primary no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">
-              Join
-            </Link>
+            <Link href="/auth/signin" className="btn-ghost no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">Sign In</Link>
+            <Link href="/auth/register" className="btn-primary no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">Join</Link>
           </div>
         </div>
       )}

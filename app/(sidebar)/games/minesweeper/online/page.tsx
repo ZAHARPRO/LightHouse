@@ -51,7 +51,7 @@ export default function OnlineLobbyPage() {
         router.push(`/games/minesweeper/online/${id}`);
       } else {
         const { error } = await res.json();
-        alert(error ?? "Ошибка");
+        alert(error ?? "Error");
       }
     } finally {
       setCreating(false);
@@ -66,7 +66,7 @@ export default function OnlineLobbyPage() {
         router.push(`/games/minesweeper/online/${roomId}`);
       } else {
         const { error } = await res.json();
-        alert(error ?? "Ошибка");
+        alert(error ?? "Error");
         fetchRooms();
       }
     } finally {
@@ -78,17 +78,17 @@ export default function OnlineLobbyPage() {
     <main className="max-w-2xl mx-auto px-4 py-12">
       <div className="flex items-center gap-3 mb-2">
         <Link href="/games/minesweeper" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">
-          ← Сапёр
+          ← Minesweeper
         </Link>
       </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">
-        Online Сапёр
+        Online Minesweeper
       </h1>
-      <p className="text-[var(--text-muted)] mb-8">Играй против другого игрока в реальном времени</p>
+      <p className="text-[var(--text-muted)] mb-8">Play against another player in real-time</p>
 
       {/* Create room */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5 mb-6">
-        <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Создать комнату</p>
+        <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Create Room</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {(["easy", "medium", "hard"] as const).map(d => (
             <button
@@ -111,7 +111,7 @@ export default function OnlineLobbyPage() {
           className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Создать комнату
+          Create Room
         </button>
       </div>
 
@@ -119,14 +119,14 @@ export default function OnlineLobbyPage() {
       <div className="flex items-center gap-2 mb-3">
         <Wifi size={14} className="text-green-400" />
         <span className="text-[var(--text-muted)] text-sm font-display font-semibold">
-          Открытые комнаты ({rooms.length})
+          Open Rooms ({rooms.length})
         </span>
       </div>
 
       {rooms.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-16 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
           <Users size={32} className="text-[var(--text-muted)] opacity-40" />
-          <p className="text-[var(--text-muted)] text-sm">Пока нет открытых комнат. Создай первую!</p>
+          <p className="text-[var(--text-muted)] text-sm">No open rooms available. Create the first one!</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -154,7 +154,7 @@ export default function OnlineLobbyPage() {
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[var(--accent-orange)] text-white font-display font-bold text-xs hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {joiningId === room.id ? <Loader2 size={12} className="animate-spin" /> : null}
-                Войти
+                Join
               </button>
             </div>
           ))}

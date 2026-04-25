@@ -17,6 +17,14 @@ const SIZE_CLASSES: Record<AvatarSize, string> = {
   xl: "w-16 h-16 text-[1.125rem]",
 };
 
+const DOT_SIZES: Record<AvatarSize, string> = {
+  xs: "w-1.5 h-1.5 border",
+  sm: "w-2 h-2 border",
+  md: "w-2.5 h-2.5 border-2",
+  lg: "w-3 h-3 border-2",
+  xl: "w-3.5 h-3.5 border-2",
+};
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -25,16 +33,12 @@ function getInitials(name: string): string {
 }
 
 interface UserAvatarProps {
-  /** Display name — used for initials fallback */
   name: string;
-  /** Avatar image URL; if absent, initials are shown */
   image?: string | null;
-  /** Tier key: ELITE | PRO | BASIC | FREE (default: FREE) */
   tier?: string;
-  /** Avatar size preset (default: sm) */
   size?: AvatarSize;
-  /** Extra Tailwind classes for the wrapper */
   className?: string;
+  online?: boolean;
 }
 
 export default function UserAvatar({
@@ -43,36 +47,35 @@ export default function UserAvatar({
   tier = "FREE",
   size = "sm",
   className = "",
+  online = false,
 }: UserAvatarProps) {
   const color = TIER_COLORS[tier] ?? TIER_COLORS.FREE;
   const sizeClass = SIZE_CLASSES[size];
+  const dotClass = DOT_SIZES[size];
 
   return (
-    <div
-      className={[
-        "rounded-full flex items-center justify-center shrink-0 overflow-hidden border-orange-700",
-        sizeClass,
-        className,
-      ].join(" ")}
-      style={
-        image
-          ? { border: `2px solid ${color}44` }
-          : { background: `${color}22`, border: `2px solid ${color}44` }
-      }
-    >
-      {image ? (
-        <img
-          src={image}
-          alt={name}
-          className="w-full h-full object-cover"
-        />
-      ) : (
+    <div className={`relative inline-flex shrink-0 ${className}`}>
+      <div
+        className={["rounded-full flex items-center justify-center overflow-hidden", sizeClass].join(" ")}
+        style={
+          image
+            ? { border: `2px solid ${color}44` }
+            : { background: `${color}22`, border: `2px solid ${color}44` }
+        }
+      >
+        {image ? (
+          <img src={image} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <span className="font-display font-bold leading-none select-none" style={{ color }}>
+            {getInitials(name)}
+          </span>
+        )}
+      </div>
+      {online && (
         <span
-          className="font-display font-bold leading-none select-none"
-          style={{ color }}
-        >
-          {getInitials(name)}
-        </span>
+          className={["absolute bottom-0 right-0 rounded-full bg-green-400", dotClass].join(" ")}
+          style={{ borderColor: "var(--bg-card)" }}
+        />
       )}
     </div>
   );

@@ -4,12 +4,13 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function getChatMessages(limit = 50) {
+export async function getChatMessages(limit = 50, since?: string) {
   return prisma.chatMessage.findMany({
     take: limit,
+    where: since ? { createdAt: { gt: new Date(since) } } : undefined,
     orderBy: { createdAt: "desc" },
     include: {
-      author: { select: { id: true, name: true, image: true, tier: true } },
+      author: { select: { id: true, name: true, image: true, tier: true, lastActiveAt: true } },
     },
   });
 }
@@ -28,7 +29,7 @@ export async function sendChatMessage(content: string) {
   const message = await prisma.chatMessage.create({
     data: { content: content.trim(), authorId: session.user.id },
     include: {
-      author: { select: { id: true, name: true, image: true, tier: true } },
+      author: { select: { id: true, name: true, image: true, tier: true, lastActiveAt: true } },
     },
   });
 

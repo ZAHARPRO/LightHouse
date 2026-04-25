@@ -514,10 +514,10 @@ export default function ChessOnlineRoom() {
   const isMyTurn = state.turn === myColor;
   const flip = myColor === "b";
 
-  const myName = myColor === "w" ? room.hostName : room.guestName;
-  const myImage = myColor === "w" ? room.hostImage : room.guestImage;
-  const oppName = myColor === "w" ? room.guestName : room.hostName;
-  const oppImage = myColor === "w" ? room.guestImage : room.hostImage;
+  const myName = room.myRole === "host" ? room.hostName : room.guestName;
+  const myImage = room.myRole === "host" ? room.hostImage : room.guestImage;
+  const oppName = room.myRole === "host" ? room.guestName : room.hostName;
+  const oppImage = room.myRole === "host" ? room.guestImage : room.hostImage;
 
   const myTimeMs = myColor === "w" ? room.whiteTimeMs : room.blackTimeMs;
   const oppTimeMs = myColor === "w" ? room.blackTimeMs : room.whiteTimeMs;
@@ -540,7 +540,7 @@ export default function ChessOnlineRoom() {
                 <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
                 <span className="text-xs text-[var(--text-muted)]">{oppColor==="w"?"(white)":"(black)"}</span>
                 {room.rated && (() => {
-                  const oppElo = myColor === "w" ? room.guestElo : room.hostElo;
+                  const oppElo = room.myRole === "host" ? room.guestElo : room.hostElo;
                   const rank = oppElo ? getRank(oppElo) : null;
                   return oppElo ? (
                     <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>
@@ -554,7 +554,7 @@ export default function ChessOnlineRoom() {
             <div className="ml-auto flex items-center gap-2">
               {room.guestId && room.guestId !== room.hostId && (
                 <GameReportButton
-                  targetId={myColor === "w" ? (room.guestId ?? "") : room.hostId}
+                  targetId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId}
                   targetName={oppName ?? "Opponent"}
                   game="chess"
                   roomId={room.id}
@@ -586,7 +586,7 @@ export default function ChessOnlineRoom() {
                 <span className="text-xs text-[var(--text-muted)]">{myColor==="w"?"(white)":"(black)"}</span>
                 {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold">Check!</span>}
                 {room.rated && (() => {
-                  const myElo = myColor === "w" ? room.hostElo : room.guestElo;
+                  const myElo = room.myRole === "host" ? room.hostElo : room.guestElo;
                   const rank  = myElo ? getRank(myElo) : null;
                   return myElo ? (
                     <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>

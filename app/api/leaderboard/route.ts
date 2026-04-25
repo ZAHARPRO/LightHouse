@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const game = searchParams.get("game") ?? "chess";
-  const limit = Math.min(20, Number(searchParams.get("limit") ?? "10"));
+  const limit = Math.min(100, Number(searchParams.get("limit") ?? "10"));
 
   const isChess = game === "chess";
   const field = isChess ? "chessElo" : "minesweeperElo";
@@ -78,6 +78,7 @@ export async function GET(req: Request) {
       ...u,
       wins: winStreaks[u.id]?.wins ?? 0,
       maxStreak: winStreaks[u.id]?.maxStreak ?? 0,
-    }))
+    })),
+    { headers: { "Cache-Control": "no-store" } }
   );
 }

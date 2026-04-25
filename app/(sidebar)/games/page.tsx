@@ -42,12 +42,17 @@ export default function GamesPage() {
   const current = LEADERBOARDS[lbIndex];
 
   useEffect(() => {
+    function load() {
+      fetch(`/api/leaderboard?game=${current.key}&limit=10`, { cache: "no-store" })
+        .then(r => r.json())
+        .then(d => { setEntries(d); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
     setLoading(true);
-    fetch(`/api/leaderboard?game=${current.key}&limit=10`)
-      .then(r => r.json())
-      .then(d => { setEntries(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    load();
+    const t = setInterval(load, 30000);
     prevIndex.current = lbIndex;
+    return () => clearInterval(t);
   }, [lbIndex, current.key]);
 
   function prev() { setLbIndex(i => (i - 1 + LEADERBOARDS.length) % LEADERBOARDS.length); setExpanded(false); }

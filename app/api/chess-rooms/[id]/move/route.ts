@@ -68,17 +68,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Check timeout
     if (remaining <= 0) {
+      const timeoutWinner = white ? "black" : "white";
       await prisma.chessRoom.update({
         where: { id },
         data: {
           ...update,
           [white ? "whiteTimeMs" : "blackTimeMs"]: 0,
           status: "FINISHED",
-          winner: white ? "black" : "white",
+          winner: timeoutWinner,
           winReason: "timeout",
           endedAt: new Date(),
         },
       });
+
+      if (room.rated && room.guestId) {
+        const hColor = room.hostColor ?? "w";
+        const winnerId = timeoutWinner === "white"
+          ? (hColor === "w" ? room.hostId : room.guestId)
+          : (hColor === "b" ? room.hostId : room.guestId);
+        const loserId = winnerId === room.hostId ? room.guestId : room.hostId;
+        const [winner, loser] = await Promise.all([
+          prisma.user.findUnique({ where: { id: winnerId }, select: { chessElo: true } }),
+          prisma.user.findUnique({ where: { id: loserId! }, select: { chessElo: true } }),
+        ]);
+        if (winner && loser) {
+          const [delta] = calculateEloDelta(winner.chessElo, loser.chessElo);
+          const hostIsWinner = winnerId === room.hostId;
+          await prisma.$transaction([
+            prisma.user.update({ where: { id: winnerId }, data: { chessElo: Math.max(100, winner.chessElo + delta) } }),
+            prisma.user.update({ where: { id: loserId! }, data: { chessElo: Math.max(100, loser.chessElo - delta) } }),
+            prisma.chessRoom.update({ where: { id }, data: {
+              hostEloDelta:  hostIsWinner ?  delta : -delta,
+              guestEloDelta: hostIsWinner ? -delta :  delta,
+            }}),
+          ]);
+        }
+      }
+
       return NextResponse.json({ ok: true });
     }
 

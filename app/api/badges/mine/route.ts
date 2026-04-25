@@ -8,8 +8,8 @@ export async function GET() {
 
   const rewards = await prisma.reward.findMany({
     where: { userId: session.user.id },
-    select: { type: true, customBadgeId: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
+    select: { type: true, customBadgeId: true, earnedAt: true },
+    orderBy: { earnedAt: "desc" },
   });
 
   return NextResponse.json(rewards, {

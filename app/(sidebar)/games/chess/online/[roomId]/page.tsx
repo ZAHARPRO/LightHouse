@@ -309,11 +309,18 @@ export default function ChessOnlineRoom() {
   const [selected, setSelected] = useState<[number,number]|null>(null);
   const [legalDots, setLegalDots] = useState<[number,number][]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const fetchAbortRef = useRef<AbortController|null>(null);
 
   const fetchRoom = useCallback(async () => {
-    const res = await fetch(`/api/chess-rooms/${roomId}`);
-    if (!res.ok) { setError("Room not found"); return; }
-    setRoom(await res.json());
+    const ctrl = new AbortController();
+    fetchAbortRef.current = ctrl;
+    try {
+      const res = await fetch(`/api/chess-rooms/${roomId}`, { signal: ctrl.signal });
+      if (!res.ok) { setError("Room not found"); return; }
+      setRoom(await res.json());
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setError("Room not found");
+    }
   }, [roomId]);
 
   useEffect(() => {
@@ -323,7 +330,8 @@ export default function ChessOnlineRoom() {
   }, [fetchRoom]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
-    // Pause polling so an in-flight poll can't overwrite an optimistic update
+    // Cancel any in-flight poll and stop the interval
+    fetchAbortRef.current?.abort();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     await fetch(`/api/chess-rooms/${roomId}/${path}`, {
       method: "POST",

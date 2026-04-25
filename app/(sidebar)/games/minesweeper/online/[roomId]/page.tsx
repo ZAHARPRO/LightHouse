@@ -181,11 +181,18 @@ export default function GameRoomPage() {
   const [room, setRoom] = useState<RoomData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fetchAbortRef = useRef<AbortController | null>(null);
 
   const fetchRoom = useCallback(async () => {
-    const res = await fetch(`/api/ms-rooms/${roomId}`);
-    if (!res.ok) { setError("Room not found"); return; }
-    setRoom(await res.json());
+    const ctrl = new AbortController();
+    fetchAbortRef.current = ctrl;
+    try {
+      const res = await fetch(`/api/ms-rooms/${roomId}`, { signal: ctrl.signal });
+      if (!res.ok) { setError("Room not found"); return; }
+      setRoom(await res.json());
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setError("Room not found");
+    }
   }, [roomId]);
 
   useEffect(() => {
@@ -195,6 +202,7 @@ export default function GameRoomPage() {
   }, [fetchRoom]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
+    fetchAbortRef.current?.abort();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     await fetch(`/api/ms-rooms/${roomId}/${path}`, {
       method: "POST",

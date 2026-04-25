@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, isCheckmate, isStalemate } from "@/lib/chess";
-import { BADGE_DEFS } from "@/lib/badges";
+import { awardBadge } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 
 const CAPTURE_BONUS: Record<string, number> = { P: 1000, N: 2000, B: 2000, R: 3000, Q: 4000 };
@@ -136,16 +136,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const loserId = winnerId === room.hostId ? room.guestId : room.hostId;
 
     if (winnerId) {
-      for (const type of ["CHESS_WIN", "CHESS_ONLINE_WIN"]) {
-        const def = BADGE_DEFS[type];
-        const existing = await prisma.reward.findFirst({ where: { userId: winnerId, type: type as never } });
-        if (!existing) {
-          await prisma.$transaction([
-            prisma.reward.create({ data: { userId: winnerId, type: type as never, pointsValue: def.points, description: def.description } }),
-            prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
-          ]);
-        }
-      }
+      await awardBadge(prisma, winnerId, "CHESS_WIN");
+      await awardBadge(prisma, winnerId, "CHESS_ONLINE_WIN");
     }
 
     // ELO update for rated games

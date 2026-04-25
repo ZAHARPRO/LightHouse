@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMines, computeNeighbors, floodReveal, checkWin } from "@/lib/minesweeper";
-import { BADGE_DEFS } from "@/lib/badges";
+import { awardBadge } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -89,16 +89,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const loserId  = winnerId === room.hostId ? room.guestId : room.hostId;
 
     if (winnerId && updateData.winReason === "cleared") {
-      for (const type of ["MINESWEEPER_WIN", "MINESWEEPER_ONLINE_WIN"]) {
-        const def = BADGE_DEFS[type];
-        const existing = await prisma.reward.findFirst({ where: { userId: winnerId, type: type as never } });
-        if (!existing) {
-          await prisma.$transaction([
-            prisma.reward.create({ data: { userId: winnerId, type: type as never, pointsValue: def.points, description: def.description } }),
-            prisma.user.update({ where: { id: winnerId }, data: { points: { increment: def.points } } }),
-          ]);
-        }
-      }
+      await awardBadge(prisma, winnerId, "MINESWEEPER_WIN");
+      await awardBadge(prisma, winnerId, "MINESWEEPER_ONLINE_WIN");
     }
 
     if (room.rated && winnerId && loserId) {

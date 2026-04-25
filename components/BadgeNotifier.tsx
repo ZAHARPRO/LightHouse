@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { BADGE_DEFS } from "@/lib/badges";
 
 /* ─── Types ─── */
 
@@ -14,15 +15,11 @@ type BadgeData = {
   earnedAt: string;
 };
 
-/* ─── Badge metadata (mirrors ProfileTabs / badges page) ─── */
+/* ─── Badge metadata — single source: BADGE_DEFS ─── */
 
-const REWARD_META: Record<string, { icon: string; color: string; label: string }> = {
-  WATCH_STREAK:   { icon: "🔥", color: "#f97316", label: "Watch Streak"   },
-  FIRST_COMMENT:  { icon: "💬", color: "#6366f1", label: "First Comment"  },
-  SUPER_FAN:      { icon: "⭐", color: "#fbbf24", label: "Super Fan"       },
-  EARLY_ADOPTER:  { icon: "🚀", color: "#10b981", label: "Early Adopter"  },
-  PREMIUM_MEMBER: { icon: "👑", color: "#fbbf24", label: "Premium Member" },
-};
+const REWARD_META: Record<string, { icon: string; color: string; label: string }> = Object.fromEntries(
+  Object.entries(BADGE_DEFS).map(([type, d]) => [type, { icon: d.icon, color: d.color, label: d.label }])
+);
 
 const STORAGE_KEY = "lh_badge_seen_at";
 const AUTO_DISMISS_MS = 7000;

@@ -46,8 +46,10 @@ interface BoardProps {
 
 function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, disabled, compact }: BoardProps) {
   const sz = compact ? 44 : 56;
-  const displayRows = flip ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
-  const displayCols = flip ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const base = [0,1,2,3,4,5,6,7];
+
+  const displayRows = flip ? [...base].reverse() : base;
+  const displayCols = flip ? [...base].reverse() : base;
   return (
     <div className="inline-block select-none" style={{ border:"2px solid #8f7a5a" }}>
       {displayRows.map(r=>(

@@ -98,7 +98,7 @@ function MovePanel({ moves }: { moves: string[] }) {
   return (
     <div ref={ref} className="flex-1 overflow-y-auto min-h-0">
       {pairs.length===0 && (
-        <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">Ходи появятся здесь</p>
+        <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">No moves yet</p>
       )}
       {pairs.map(([w,b],i)=>(
         <div key={i} className="flex gap-1 text-sm font-mono px-2 py-0.5 rounded hover:bg-[var(--bg-secondary)]">

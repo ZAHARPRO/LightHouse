@@ -4,6 +4,15 @@ import { getSpotifyToken } from "@/lib/spotify";
 
 const BASE = "https://api.spotify.com/v1/me/player";
 
+type Body = {
+  action: string;
+  positionMs?: number;
+  volume?: number;
+  uri?: string;
+  deviceId?: string;
+  play?: boolean;
+};
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,13 +38,17 @@ export async function POST(req: Request) {
   const token = await getSpotifyToken(session.user.id);
   if (!token) return NextResponse.json({ error: "no_spotify" }, { status: 404 });
 
-  const body = await req.json() as {
-    action: string;
-    positionMs?: number;
-    volume?: number;
-    uri?: string;
-  };
+  const body = await req.json() as Body;
   const { action } = body;
+
+  if (action === "transfer") {
+    const res = await fetch(BASE, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ device_ids: [body.deviceId], play: body.play ?? false }),
+    });
+    return NextResponse.json({ ok: res.ok });
+  }
 
   type Endpoint = { url: string; method: string };
   const endpoints: Record<string, Endpoint> = {
@@ -55,8 +68,12 @@ export async function POST(req: Request) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   };
 
-  if (action === "play" && body.uri) {
-    fetchOpts.body = JSON.stringify({ uris: [body.uri], position_ms: body.positionMs ?? 0 });
+  if (action === "play") {
+    if (body.uri) {
+      fetchOpts.body = JSON.stringify({ uris: [body.uri], position_ms: body.positionMs ?? 0 });
+    } else if (body.positionMs !== undefined) {
+      fetchOpts.body = JSON.stringify({ position_ms: body.positionMs });
+    }
   }
 
   const res = await fetch(ep.url, fetchOpts);

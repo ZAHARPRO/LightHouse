@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import BadgeNotifier from "@/components/BadgeNotifier";
 import SupportChatBubble from "@/components/SupportChatBubble";
 import PwaInit from "@/components/PwaInit";
+import { MusicProvider } from "@/contexts/MusicContext";
 
 export const metadata: Metadata = {
   title: "LightHouse — Illuminate Your World",
@@ -42,16 +43,18 @@ export default async function RootLayout({
     <html lang="en">
       <body>
         <SessionProvider session={session}>
-          <div className="min-h-screen flex flex-col">
-            <PwaInit />
-            <Navbar />
-            <BadgeNotifier />
-            <SupportChatBubble />
-            <main className="flex-1">{children}</main>
-            <footer className="border-t border-[var(--border-subtle)] py-8 text-center text-[var(--text-muted)] font-[var(--font-body)] text-sm">
-              © {new Date().getFullYear()} LightHouse — All rights reserved.
-            </footer>
-          </div>
+          <MusicProvider>
+            <div className="min-h-screen flex flex-col">
+              <PwaInit />
+              <Navbar />
+              <BadgeNotifier />
+              <SupportChatBubble />
+              <main className="flex-1">{children}</main>
+              <footer className="border-t border-[var(--border-subtle)] py-8 text-center text-[var(--text-muted)] font-[var(--font-body)] text-sm">
+                © {new Date().getFullYear()} LightHouse — All rights reserved.
+              </footer>
+            </div>
+          </MusicProvider>
         </SessionProvider>
       </body>
     </html>

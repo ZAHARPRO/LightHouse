@@ -17,7 +17,9 @@
       "Bash(cp -r c:/Users/apple/Documets/GitHub/LightHouse/app/post 'c:/Users/apple/Documets/GitHub/LightHouse/app/\\(sidebar\\)/post')",
       "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\api\\\\spotify-lobbies\\\\[id]\\\\join\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\api\\\\spotify-lobbies\\\\[id]\\\\sync\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\\\(sidebar\\)\\\\music\\\\[lobbyId]\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\\\(sidebar\\)\\\\music\\\\[lobbyId]\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\api\\\\youtube\\\\search\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\contexts\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\post",

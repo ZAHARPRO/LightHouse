@@ -12,7 +12,7 @@ import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
 import ChatPopup from "./ChatPopup";
 import SupportInbox from "./SupportInbox";
-import SpotifyPlayer from "./SpotifyPlayer";
+import MusicPlayer from "./MusicPlayer";
 
 const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 
@@ -647,8 +647,8 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Spotify player popup */}
-      {spotifyOpen && <SpotifyPlayer onClose={() => setSpotifyOpen(false)} />}
+      {/* Music player popup */}
+      {spotifyOpen && <MusicPlayer onClose={() => setSpotifyOpen(false)} />}
     </>
   );
 }

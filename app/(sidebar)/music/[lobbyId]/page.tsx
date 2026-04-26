@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   Music2, Users, Lock, Play, Pause, SkipForward, SkipBack,
   Loader2, X, Copy, Check, Volume2,
@@ -207,7 +207,7 @@ export default function MusicLobbyPage() {
       <Music2 size={36} className="mx-auto mb-4 text-[#1DB954]" />
       <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-2">Music Lobby</h1>
       <p className="text-[var(--text-muted)] mb-6">Sign in to join this listening session.</p>
-      <button onClick={() => signIn()} className="btn-primary px-6 py-2">Sign In</button>
+      <Link href="/auth/signin" className="btn-primary px-6 py-2 no-underline">Sign In</Link>
     </main>
   );
 
@@ -299,10 +299,10 @@ export default function MusicLobbyPage() {
             !hasSpotify ? (
               <div className="text-center py-6">
                 <p className="text-[var(--text-muted)] text-sm mb-3">Connect Spotify to broadcast music.</p>
-                <button onClick={() => signIn("spotify")}
-                  className="px-4 py-2 rounded-xl bg-[#1DB954] text-black text-sm font-display font-bold hover:opacity-90 transition-opacity">
+                <a href="/api/spotify/connect"
+                  className="px-4 py-2 rounded-xl bg-[#1DB954] text-black text-sm font-display font-bold hover:opacity-90 transition-opacity no-underline inline-block">
                   Connect Spotify
-                </button>
+                </a>
               </div>
             ) : !myPlayer ? (
               <p className="text-[var(--text-muted)] text-sm text-center py-6">Open Spotify on any device to start playing.</p>
@@ -408,10 +408,10 @@ export default function MusicLobbyPage() {
                 {!hasSpotify ? (
                   <div className="mt-4 p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-center">
                     <p className="text-[var(--text-muted)] text-xs mb-2">Connect Spotify to sync playback</p>
-                    <button onClick={() => signIn("spotify")}
-                      className="px-4 py-1.5 rounded-lg bg-[#1DB954] text-black text-xs font-display font-bold hover:opacity-90 transition-opacity">
+                    <a href="/api/spotify/connect"
+                      className="px-4 py-1.5 rounded-lg bg-[#1DB954] text-black text-xs font-display font-bold hover:opacity-90 transition-opacity no-underline inline-block">
                       Connect Spotify
-                    </button>
+                    </a>
                   </div>
                 ) : (
                   <button onClick={syncToHost} disabled={acting}

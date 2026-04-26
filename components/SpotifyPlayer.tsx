@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   Music2, X, Minus, ChevronDown, SkipBack, SkipForward,
   Play, Pause, Volume2, Users, Plus, Lock, Loader2, ExternalLink,
@@ -230,12 +230,12 @@ export default function SpotifyPlayer({ onClose }: { onClose: () => void }) {
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <Music2 size={28} className="text-[var(--text-muted)] opacity-40" />
                   <p className="text-[var(--text-muted)] text-xs">No Spotify account connected.</p>
-                  <button
-                    onClick={() => signIn("spotify")}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-display font-bold bg-[#1DB954] text-black hover:opacity-90 transition-opacity"
+                  <a
+                    href="/api/spotify/connect"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-display font-bold bg-[#1DB954] text-black hover:opacity-90 transition-opacity no-underline"
                   >
                     Connect Spotify
-                  </button>
+                  </a>
                 </div>
               ) : !state ? (
                 <div className="flex flex-col items-center gap-2 py-6 text-center">

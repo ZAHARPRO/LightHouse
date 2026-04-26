@@ -1,18 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { Bomb, Wifi, Crown, Star, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Star, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+
+function MineIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="m 11.324219,3.07539 -1.21875,1.21875 0.621093,0.6211 c 0.220313,0.22031 0.220313,0.57656 0,0.79453 L 10.31875,6.11758 C 10.595313,6.7293 10.75,7.40899 10.75,8.12383 c 0,2.69297 -2.1820313,4.875 -4.875,4.875 C 3.1820313,12.99883 1,10.81914 1,8.12617 c 0,-2.69296 2.1820312,-4.875 4.875,-4.875 0.7148437,0 1.3945312,0.15469 2.00625,0.43125 L 8.2890625,3.27461 C 8.509375,3.0543 8.865625,3.0543 9.0835937,3.27461 L 9.7046875,3.8957 10.923438,2.67695 11.324219,3.07539 Z m 1.394531,-0.66797 -0.5625,0 c -0.154688,0 -0.28125,0.12657 -0.28125,0.28125 0,0.15469 0.126562,0.28125 0.28125,0.28125 l 0.5625,0 C 12.873438,2.96992 13,2.84336 13,2.68867 13,2.53399 12.873438,2.40742 12.71875,2.40742 Z M 11.3125,1.00117 c -0.154688,0 -0.28125,0.12657 -0.28125,0.28125 l 0,0.5625 c 0,0.15469 0.126562,0.28125 0.28125,0.28125 0.154688,0 0.28125,-0.12656 0.28125,-0.28125 l 0,-0.5625 c 0,-0.15468 -0.126562,-0.28125 -0.28125,-0.28125 z m 0.794531,1.28907 0.398438,-0.39844 c 0.110156,-0.11016 0.110156,-0.28828 0,-0.39844 -0.110157,-0.11016 -0.288281,-0.11016 -0.398438,0 L 11.708594,1.8918 c -0.110157,0.11015 -0.110157,0.28828 0,0.39844 0.1125,0.11015 0.290625,0.11015 0.398437,0 z m -1.589062,0 c 0.110156,0.11015 0.288281,0.11015 0.398437,0 0.110156,-0.11016 0.110156,-0.28829 0,-0.39844 L 10.517969,1.49336 c -0.110156,-0.11016 -0.288281,-0.11016 -0.398438,0 -0.110156,0.11016 -0.110156,0.28828 0,0.39844 l 0.398438,0.39844 z m 1.589062,0.79687 c -0.110156,-0.11016 -0.288281,-0.11016 -0.398437,0 -0.110157,0.11016 -0.110157,0.28828 0,0.39844 l 0.398437,0.39844 c 0.110157,0.11015 0.288281,0.11015 0.398438,0 0.110156,-0.11016 0.110156,-0.28829 0,-0.39844 L 12.107031,3.08711 Z M 3.625,7.37617 c 0,-0.82734 0.6726562,-1.5 1.5,-1.5 0.20625,0 0.375,-0.16875 0.375,-0.375 0,-0.20625 -0.16875,-0.375 -0.375,-0.375 -1.2398438,0 -2.25,1.01016 -2.25,2.25 0,0.20625 0.16875,0.375 0.375,0.375 0.20625,0 0.375,-0.16875 0.375,-0.375 z"/>
+    </svg>
+  );
+}
+
+function ChessIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M255.875 19.47c-33.142 0-59.844 26.822-59.844 60.186 0 33.364 26.703 60.156 59.845 60.156 33.142 0 59.875-26.792 59.875-60.156S289.017 19.47 255.875 19.47zm-50.688 120.343c-2.908 1.23-5.658 2.53-8.187 3.937-14.467 8.046-21.47 17.86-21.47 27.094 0 9.234 7.003 19.08 21.47 27.125 14.467 8.044 35.51 13.436 58.875 13.436 23.365 0 44.408-5.392 58.875-13.437 14.467-8.047 21.47-17.892 21.47-27.126 0-9.234-7.003-19.048-21.47-27.094-2.53-1.406-5.28-2.708-8.188-3.938-13.696 11.647-31.392 18.688-50.687 18.688-19.3 0-36.996-7.034-50.688-18.688zm78.875 87.906c-8.948 1.54-18.394 2.374-28.187 2.374-9.315 0-18.316-.758-26.875-2.156 2.69 6.923 4.36 14.186 4.906 21.656 2.456 33.554-17.04 69.573-58.47 93.594l-.155.093-.155.095c-20.062 10.653-30.28 24.056-30.28 36.97 0 12.9 10.28 26.46 30.343 37.217 20.062 10.76 48.86 17.844 80.75 17.844s60.687-7.085 80.75-17.844c20.062-10.758 30.343-24.318 30.343-37.218 0-13.127-10.773-26.656-31.655-37.406l-.22-.125-.186-.094c-40.344-23.394-58.705-59.676-55.908-93.22.626-7.497 2.31-14.813 5-21.78zM128.845 395.655c-5.592 3.72-10.256 7.61-13.875 11.53-6.9 7.48-9.94 14.64-9.94 21.845 0 7.206 3.04 14.397 9.94 21.876 6.898 7.48 17.6 14.852 31.28 21.125 27.36 12.547 66.42 20.69 109.625 20.69 43.206 0 82.295-8.143 109.656-20.69 13.682-6.27 24.352-13.644 31.25-21.124 6.9-7.48 9.97-14.67 9.97-21.875 0-7.204-3.07-14.363-9.97-21.842-3.597-3.902-8.238-7.767-13.78-11.47-5.638 15.6-19.584 28.706-37.5 38.313-23.533 12.62-54.947 20.095-89.563 20.095-34.615 0-66.06-7.474-89.593-20.094-17.94-9.62-31.887-22.747-37.5-38.374z"/>
+    </svg>
+  );
+}
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { getRank } from "@/lib/elo";
 
 const GAMES = [
-  { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: Bomb,  color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20"  },
-  { href: "/games/minesweeper/online",       title: "MS Online",          description: "1 vs 1",                        icon: Wifi,  color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20"    },
-  { href: "/games/minesweeper/online/rated", title: "MS Rated",           description: "Earn ELO",                      icon: Star,  color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
-  { href: "/games/chess",                    title: "Chess vs Bot",       description: "3 difficulty levels",           icon: Crown, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
-  { href: "/games/chess/online",             title: "Chess Online",       description: "1 vs 1 with timer",             icon: Wifi,  color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
-  { href: "/games/chess/online/rated",       title: "Chess Rated",        description: "Earn ELO",                      icon: Star,  color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: MineIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/minesweeper/online",       title: "MS Online",          description: "1 vs 1",                        icon: MineIcon, color: "text-indigo-400",  bg: "bg-indigo-500/10 border-indigo-500/20"    },
+  { href: "/games/minesweeper/online/rated", title: "MS Rated",           description: "Earn ELO",                      icon: MineIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/chess",                    title: "Chess vs Bot",       description: "3 difficulty levels",           icon: ChessIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/chess/online",             title: "Chess Online",       description: "1 vs 1 with timer",             icon: ChessIcon, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
+  { href: "/games/chess/online/rated",       title: "Chess Rated",        description: "Earn ELO",                      icon: ChessIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
 ];
 
 type LeaderEntry = {
@@ -59,10 +75,7 @@ export default function GamesPage() {
   function next() { setLbIndex(i => (i + 1) % LEADERBOARDS.length); setExpanded(false); }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-10">
-      <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">Mini Games</h1>
-      <p className="text-[var(--text-muted)] mb-8">Choose a game</p>
-
+    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 ">
       {/* ── Leaderboard ─────────────────────────────────────────────────── */}
       <div className="mx-auto max-w-2xl mb-10">
         {/* Header */}
@@ -168,22 +181,30 @@ export default function GamesPage() {
       </div>
 
       {/* ── Game cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {GAMES.map(({ href, title, description, icon: Icon, color, bg }) => (
-          <Link key={href} href={href}
-            className={["flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border no-underline",
-              "transition-all duration-150 hover:scale-[1.03] hover:shadow-lg", bg].join(" ")}
-          >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-black/20 ${color}`}>
-              <Icon size={22} />
-            </div>
-            <div className="text-center">
-              <p className="font-display font-bold text-[var(--text-primary)] text-xs leading-tight">{title}</p>
-              <p className="text-[0.68rem] text-[var(--text-muted)] mt-0.5 leading-tight">{description}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {[
+        { label: "💣 Minesweeper", games: GAMES.filter(g => g.href.includes("minesweeper")) },
+        { label: "♟ Chess",        games: GAMES.filter(g => g.href.includes("chess"))       },
+      ].map(({ label, games }) => (
+        <div key={label} className="mb-6">
+          <p className="text-xs font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">{label}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4" style={{ maxWidth: 480 }}>
+            {games.map(({ href, title, description, icon: Icon, color, bg }) => (
+              <Link key={href} href={href}
+                className={["flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border no-underline",
+                  "transition-all duration-150 hover:scale-[1.03] hover:shadow-lg", bg].join(" ")}
+              >
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-black/20 ${color}`}>
+                  <Icon size={22} />
+                </div>
+                <div className="text-center">
+                  <p className="font-display font-bold text-[var(--text-primary)] text-xs leading-tight">{title}</p>
+                  <p className="text-[0.68rem] text-[var(--text-muted)] mt-0.5 leading-tight">{description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
     </main>
   );
 }

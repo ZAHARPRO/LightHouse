@@ -3,16 +3,43 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { DIFFICULTIES, type Difficulty } from "@/lib/minesweeper";
 
+const TTL = 60_000;
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rated = searchParams.get("rated") === "true";
-  const rooms = await prisma.minesweeperRoom.findMany({
-    where: { status: "WAITING", rated },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    include: { host: { select: { id: true, name: true, image: true, minesweeperElo: true } } },
+
+  const [waiting, playing] = await Promise.all([
+    prisma.minesweeperRoom.findMany({
+      where: { status: "WAITING", rated },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: { id: true, difficulty: true, guestId: true, createdAt: true, rated: true, spectatorsJson: true,
+        host: { select: { id: true, name: true, image: true, minesweeperElo: true } } },
+    }),
+    prisma.minesweeperRoom.findMany({
+      where: { status: "PLAYING", rated },
+      orderBy: { startedAt: "desc" },
+      take: 20,
+      select: { id: true, difficulty: true, guestId: true, createdAt: true, rated: true, spectatorsJson: true,
+        host:  { select: { id: true, name: true, image: true, minesweeperElo: true } },
+        guest: { select: { id: true, name: true, image: true, minesweeperElo: true } } },
+    }),
+  ]);
+
+  const now = Date.now();
+  const fmt = (r: { spectatorsJson?: string | null; [k: string]: unknown }) => ({
+    ...r,
+    spectatorsJson: undefined,
+    spectatorCount: r.spectatorsJson
+      ? (JSON.parse(r.spectatorsJson as string) as { at: number }[]).filter(s => now - s.at < TTL).length
+      : 0,
   });
-  return NextResponse.json(rooms);
+
+  return NextResponse.json({
+    waiting: waiting.map(fmt),
+    playing: playing.map(fmt),
+  });
 }
 
 export async function POST(req: Request) {

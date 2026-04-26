@@ -61,6 +61,7 @@ model User {
   msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
   chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
   chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
+  spotifyLobbies       SpotifyLobby[]       @relation("SpotifyHost")
   chessElo             Int                  @default(400)
   minesweeperElo       Int                  @default(400)
   muteExpiresAt        DateTime?
@@ -471,6 +472,8 @@ model MinesweeperRoom {
   guestHit   Boolean      @default(false)
   winner     String?
   winReason  String?
+  chatJson   String?      @db.Text // JSON: ChatMsg[]
+  spectatorsJson String?  @db.Text // JSON: { id: string; at: number }[]
 
   startedAt  DateTime?
   endedAt    DateTime?
@@ -512,6 +515,8 @@ model ChessRoom {
 
   winner       String?         // "white" | "black" | "draw"
   winReason    String?         // "checkmate" | "stalemate" | "timeout" | "resigned"
+  chatJson     String?         @db.Text // JSON: ChatMsg[]
+  spectatorsJson String?       @db.Text // JSON: { id: string; at: number }[]
 
   startedAt    DateTime?
   endedAt      DateTime?
@@ -526,4 +531,24 @@ enum ChessRoomStatus {
   WAITING
   PLAYING
   FINISHED
+}
+
+model SpotifyLobby {
+  id           String   @id @default(cuid())
+  hostId       String
+  name         String?
+  passwordHash String?
+  trackUri     String?
+  trackName    String?
+  trackArtist  String?
+  trackImage   String?
+  positionMs   Int      @default(0)
+  isPlaying    Boolean  @default(false)
+  syncedAt     DateTime @default(now())
+  membersJson  String?  @db.Text
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  host         User     @relation("SpotifyHost", fields: [hostId], references: [id], onDelete: Cascade)
 }

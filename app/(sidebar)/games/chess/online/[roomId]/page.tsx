@@ -8,6 +8,7 @@ import Image from "next/image";
 import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
+import GameChat, { type ChatMsg } from "@/components/GameChat";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -30,6 +31,7 @@ type RoomData = {
   rated: boolean;
   hostElo: number|null; guestElo: number|null;
   hostEloDelta: number|null; guestEloDelta: number|null;
+  chat: ChatMsg[];
 };
 
 function useCellPx() {
@@ -328,6 +330,15 @@ export default function ChessOnlineRoom() {
     pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
+
+  // Spectator heartbeat
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "PLAYING") return;
+    const ping = () => fetch(`/api/chess-rooms/${roomId}/spectate`, { method: "POST" }).catch(() => {});
+    ping();
+    const t = setInterval(ping, 30_000);
+    return () => clearInterval(t);
+  }, [room?.myRole, room?.status, roomId]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
     // Cancel any in-flight poll and stop the interval
@@ -645,13 +656,22 @@ export default function ChessOnlineRoom() {
             <LogOut size={12}/> Resign
           </button>
 
-          <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3 flex-1" style={{ minHeight:320, maxHeight:480 }}>
+          <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3" style={{ minHeight:200, maxHeight:300 }}>
             <div className="flex items-center gap-2 mb-2">
               <ChevronRight size={14} className="text-[var(--text-muted)]"/>
               <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Move History</span>
             </div>
             <MovePanel moves={room.movesSAN} />
           </div>
+
+          {room.myRole !== "spectator" && (
+            <GameChat
+              msgs={room.chat}
+              myUserId={room.myRole === "host" ? room.hostId : (room.guestId ?? "")}
+              roomId={room.id}
+              apiBase="/api/chess-rooms"
+            />
+          )}
         </div>
       </div>
     </main>

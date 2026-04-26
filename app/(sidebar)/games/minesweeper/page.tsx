@@ -151,16 +151,16 @@ export default function GamesPage() {
   const handleFlag = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
     if (gameState !== "playing") return;
+    if (board[r][c].isRevealed) return;
 
+    const willFlag = !board[r][c].isFlagged;
+    setMinesLeft(m => willFlag ? m - 1 : m + 1);
     setBoard(prev => {
       const b = prev.map(row => row.map(cell => ({ ...cell })));
-      if (b[r][c].isRevealed) return prev;
-
       b[r][c].isFlagged = !b[r][c].isFlagged;
-      setMinesLeft(m => b[r][c].isFlagged ? m - 1 : m + 1);
       return b;
     });
-  }, [gameState]);
+  }, [gameState, board]);
 
   const cellSize = difficulty === "hard" ? "w-7 h-7 text-xs" : "w-8 h-8 text-sm";
 

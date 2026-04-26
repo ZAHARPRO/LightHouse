@@ -24,7 +24,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const winnerColor = myColor === "w" ? "black" : "white";
     await prisma.chessRoom.update({
       where: { id },
-      data: { status: "FINISHED", winner: winnerColor, winReason: "resigned", endedAt: new Date() },
+      data: { status: "FINISHED", winner: winnerColor, winReason: "resigned", endedAt: new Date(), chatJson: null },
     });
 
     // ELO update

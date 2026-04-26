@@ -45,6 +45,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           winner: timeoutWinner,
           winReason: "timeout",
           endedAt: now,
+          chatJson: null,
           ...(whiteTurn ? { whiteTimeMs: 0 } : { blackTimeMs: 0 }),
         },
       });
@@ -107,5 +108,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     guestElo: room.guest?.chessElo ?? null,
     hostEloDelta: room.hostEloDelta,
     guestEloDelta: room.guestEloDelta,
+    chat: room.chatJson ? JSON.parse(room.chatJson) : [],
   });
 }

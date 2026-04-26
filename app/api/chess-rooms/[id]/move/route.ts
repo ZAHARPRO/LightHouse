@@ -117,11 +117,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     update.winner = myColor === "w" ? "white" : "black";
     update.winReason = "checkmate";
     update.endedAt = new Date();
+    update.chatJson = null;
   } else if (isStalemate(nextState)) {
     update.status = "FINISHED";
     update.winner = "draw";
     update.winReason = "stalemate";
     update.endedAt = new Date();
+    update.chatJson = null;
   }
 
   await prisma.chessRoom.update({ where: { id }, data: update });

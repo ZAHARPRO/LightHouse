@@ -6,12 +6,13 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users,
+  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
 import ChatPopup from "./ChatPopup";
 import SupportInbox from "./SupportInbox";
+import SpotifyPlayer from "./SpotifyPlayer";
 
 const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 
@@ -94,6 +95,9 @@ export default function Navbar() {
     setTimeout(() => { setDrawerOpen(false); setDrawerClosing(false); }, 180);
   }
   function toggleDrawer() { drawerOpen ? closeDrawer() : openDrawer(); }
+
+  // Spotify player
+  const [spotifyOpen, setSpotifyOpen] = useState(false);
 
   // Chat popup
   const [chatOpen, setChatOpen]       = useState(false);
@@ -501,6 +505,17 @@ export default function Navbar() {
               </div>
             )}
 
+            {/* Spotify player — logged-in only */}
+            {session && (
+              <button
+                onClick={() => setSpotifyOpen(o => !o)}
+                title="Spotify Player"
+                className={iconBtn(spotifyOpen)}
+              >
+                <Music2 size={16} />
+              </button>
+            )}
+
             {/* Bell — logged-in only */}
             {session && (
               <button
@@ -631,6 +646,9 @@ export default function Navbar() {
           />
         </div>
       )}
+
+      {/* Spotify player popup */}
+      {spotifyOpen && <SpotifyPlayer onClose={() => setSpotifyOpen(false)} />}
     </>
   );
 }

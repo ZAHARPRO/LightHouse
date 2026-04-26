@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Plus, Loader2, Clock } from "lucide-react";
+import { Users, Plus, Loader2, Clock, Eye } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -11,7 +11,9 @@ type RoomItem = {
   timeControl: string;
   guestId: string | null;
   createdAt: string;
-  host: { id: string; name: string | null; image: string | null };
+  spectatorCount: number;
+  host:  { id: string; name: string | null; image: string | null };
+  guest?: { id: string; name: string | null; image: string | null } | null;
 };
 
 const TC_LABELS: Record<string, string> = {
@@ -34,14 +36,19 @@ const TIME_OPTIONS = [
 
 export default function ChessOnlineLobby() {
   const router = useRouter();
-  const [rooms, setRooms] = useState<RoomItem[]>([]);
+  const [waiting, setWaiting] = useState<RoomItem[]>([]);
+  const [playing, setPlaying] = useState<RoomItem[]>([]);
   const [timeControl, setTimeControl] = useState("600");
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
   async function fetchRooms() {
     const res = await fetch("/api/chess-rooms");
-    if (res.ok) setRooms(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      setWaiting(data.waiting ?? []);
+      setPlaying(data.playing ?? []);
+    }
   }
 
   useEffect(() => {
@@ -113,22 +120,22 @@ export default function ChessOnlineLobby() {
         </button>
       </div>
 
-      {/* Room list */}
+      {/* Waiting rooms */}
       <div className="flex items-center gap-2 mb-3">
         <Clock size={14} className="text-[var(--text-muted)]" />
         <span className="text-[var(--text-muted)] text-sm font-display font-semibold">
-          Open Rooms ({rooms.length})
+          Open Rooms ({waiting.length})
         </span>
       </div>
 
-      {rooms.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+      {waiting.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-10 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] mb-6">
           <Users size={32} className="text-[var(--text-muted)] opacity-40" />
           <p className="text-[var(--text-muted)] text-sm">No open rooms. Create the first one!</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {rooms.map(room => (
+        <div className="flex flex-col gap-3 mb-6">
+          {waiting.map(room => (
             <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
               {room.host.image
                 ? <Image src={room.host.image} alt="" width={36} height={36} className="rounded-full" />
@@ -146,6 +153,49 @@ export default function ChessOnlineLobby() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Playing rooms — spectate */}
+      {playing.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <Eye size={14} className="text-indigo-400" />
+            <span className="text-[var(--text-muted)] text-sm font-display font-semibold">
+              Live Games ({playing.length})
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {playing.map(room => (
+              <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  {room.host.image
+                    ? <Image src={room.host.image} alt="" width={28} height={28} className="rounded-full" />
+                    : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">{room.host.name?.[0]??"?"}</div>
+                  }
+                  <span className="text-[0.65rem] text-[var(--text-muted)]">vs</span>
+                  {room.guest?.image
+                    ? <Image src={room.guest.image} alt="" width={28} height={28} className="rounded-full" />
+                    : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">{room.guest?.name?.[0]??"?"}</div>
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-display font-semibold text-[var(--text-primary)] text-sm truncate">
+                    {room.host.name ?? "?"} vs {room.guest?.name ?? "?"}
+                  </p>
+                  <p className="text-[var(--text-muted)] text-xs">{TC_LABELS[room.timeControl] ?? room.timeControl}</p>
+                </div>
+                <Link href={`/games/chess/online/${room.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 font-display font-bold text-xs hover:bg-indigo-500/20 transition-colors no-underline">
+                  <Eye size={12} />
+                  Watch
+                  {room.spectatorCount > 0 && (
+                    <span className="ml-0.5 text-[0.6rem] opacity-80">{room.spectatorCount}</span>
+                  )}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </main>
   );

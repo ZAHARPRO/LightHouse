@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Plus, Loader2, Star } from "lucide-react";
+import { Users, Plus, Loader2, Star, Eye } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { getRank } from "@/lib/elo";
@@ -11,8 +11,16 @@ type RoomItem = {
   id: string;
   timeControl: string;
   guestId: string | null;
+  spectatorCount: number;
   hostEloSnapshot: number | null;
   host: { id: string; name: string | null; image: string | null; chessElo: number };
+  guest?: { id: string; name: string | null; image: string | null; chessElo: number } | null;
+};
+
+const TC_LABELS: Record<string, string> = {
+  "300": "🔥 5 min",
+  "600": "⏱ 10 min",
+  "1500": "🕐 25 min",
 };
 
 const TIME_OPTIONS = [
@@ -23,14 +31,19 @@ const TIME_OPTIONS = [
 
 export default function RatedChessLobby() {
   const router = useRouter();
-  const [rooms, setRooms] = useState<RoomItem[]>([]);
+  const [waiting, setWaiting] = useState<RoomItem[]>([]);
+  const [playing, setPlaying] = useState<RoomItem[]>([]);
   const [timeControl, setTimeControl] = useState("600");
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
   async function fetchRooms() {
     const res = await fetch("/api/chess-rooms?rated=true");
-    if (res.ok) setRooms(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      setWaiting(data.waiting ?? []);
+      setPlaying(data.playing ?? []);
+    }
   }
 
   useEffect(() => {
@@ -62,7 +75,7 @@ export default function RatedChessLobby() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-12">
-    <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center gap-3 mb-2">
         <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">
           ← Games
         </Link>
@@ -97,18 +110,18 @@ export default function RatedChessLobby() {
       <div className="flex items-center gap-2 mb-3">
         <Users size={14} className="text-[var(--text-muted)]" />
         <span className="text-[var(--text-muted)] text-sm font-display font-semibold">
-          Open Rooms ({rooms.length})
+          Open Rooms ({waiting.length})
         </span>
       </div>
 
-      {rooms.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+      {waiting.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] mb-6">
           <Star size={32} className="text-[var(--text-muted)] opacity-40" />
           <p className="text-[var(--text-muted)] text-sm">No rated rooms open. Create the first one!</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {rooms.map(room => {
+        <div className="flex flex-col gap-3 mb-6">
+          {waiting.map(room => {
             const rank = getRank(room.host.chessElo);
             return (
               <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
@@ -137,6 +150,66 @@ export default function RatedChessLobby() {
             );
           })}
         </div>
+      )}
+
+      {playing.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <Eye size={14} className="text-yellow-400" />
+            <span className="text-[var(--text-muted)] text-sm font-display font-semibold">
+              Live Games ({playing.length})
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {playing.map(room => {
+              const hostRank = getRank(room.host.chessElo);
+              const guestRank = room.guest ? getRank(room.guest.chessElo) : null;
+              return (
+                <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    {room.host.image
+                      ? <Image src={room.host.image} alt="" width={28} height={28} className="rounded-full" />
+                      : <div className="w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 font-bold text-xs">{room.host.name?.[0] ?? "?"}</div>
+                    }
+                    <span className="text-[0.65rem] text-[var(--text-muted)]">vs</span>
+                    {room.guest?.image
+                      ? <Image src={room.guest.image} alt="" width={28} height={28} className="rounded-full" />
+                      : <div className="w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 font-bold text-xs">{room.guest?.name?.[0] ?? "?"}</div>
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display font-semibold text-[var(--text-primary)] text-sm truncate">
+                      {room.host.name ?? "?"} vs {room.guest?.name ?? "?"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-[var(--text-muted)]">{TC_LABELS[room.timeControl] ?? room.timeControl}</span>
+                      {hostRank && (
+                        <span className="text-[0.6rem] font-bold px-1 py-[0.1rem] rounded-full"
+                          style={{ background: `${hostRank.color}22`, color: hostRank.color, border: `1px solid ${hostRank.color}44` }}>
+                          {hostRank.label}
+                        </span>
+                      )}
+                      {guestRank && (
+                        <span className="text-[0.6rem] font-bold px-1 py-[0.1rem] rounded-full"
+                          style={{ background: `${guestRank.color}22`, color: guestRank.color, border: `1px solid ${guestRank.color}44` }}>
+                          {guestRank.label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Link href={`/games/chess/online/${room.id}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-display font-bold text-xs hover:bg-yellow-500/20 transition-colors no-underline">
+                    <Eye size={12} />
+                    Watch
+                    {room.spectatorCount > 0 && (
+                      <span className="ml-0.5 text-[0.6rem] opacity-80">{room.spectatorCount}</span>
+                    )}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </main>
   );

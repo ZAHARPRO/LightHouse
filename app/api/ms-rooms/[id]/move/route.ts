@@ -67,6 +67,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       updateData.winner = isHost ? "guest" : "host";
       updateData.winReason = "exploded";
       updateData.endedAt = new Date();
+      updateData.chatJson = null;
     } else {
       const neighbors = computeNeighbors(rows, cols, mineSet);
       revealed = floodReveal(rows, cols, mineSet, neighbors, revealed, idx);
@@ -77,6 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         updateData.winner = isHost ? "host" : "guest";
         updateData.winReason = "cleared";
         updateData.endedAt = new Date();
+        updateData.chatJson = null;
       }
     }
   }

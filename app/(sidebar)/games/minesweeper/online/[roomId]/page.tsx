@@ -7,6 +7,7 @@ import Image from "next/image";
 import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
 import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
+import GameChat, { type ChatMsg } from "@/components/GameChat";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -41,6 +42,7 @@ type RoomData = {
   rated: boolean;
   hostEloDelta: number | null;
   guestEloDelta: number | null;
+  chat: ChatMsg[];
 };
 
 const NUM_COLORS: Record<number, string> = {
@@ -200,6 +202,15 @@ export default function GameRoomPage() {
     pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
+
+  // Spectator heartbeat
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "PLAYING") return;
+    const ping = () => fetch(`/api/ms-rooms/${roomId}/spectate`, { method: "POST" }).catch(() => {});
+    ping();
+    const t = setInterval(ping, 30_000);
+    return () => clearInterval(t);
+  }, [room?.myRole, room?.status, roomId]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
     fetchAbortRef.current?.abort();
@@ -501,6 +512,17 @@ export default function GameRoomPage() {
       <p className="text-[var(--text-muted)] text-xs mt-5 text-center">
         LMB — reveal · RMB — flag
       </p>
+
+      {room.myRole !== "spectator" && (
+        <div className="mt-4 w-full max-w-sm">
+          <GameChat
+            msgs={room.chat}
+            myUserId={room.myRole === "host" ? room.hostId : (room.guestId ?? "")}
+            roomId={room.id}
+            apiBase="/api/ms-rooms"
+          />
+        </div>
+      )}
     </main>
   );
 }

@@ -78,5 +78,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     rated: room.rated,
     hostEloDelta: room.hostEloDelta,
     guestEloDelta: room.guestEloDelta,
+    chat: room.chatJson ? JSON.parse(room.chatJson) : [],
   });
 }

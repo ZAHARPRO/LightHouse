@@ -60,6 +60,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [results, setResults]         = useState<YTItem[]>([]);
   const [searching, setSearching]     = useState(false);
   const [searchOpen, setSearchOpen]   = useState(false);
+  const [searchErr, setSearchErr]     = useState<string | null>(null);
   const searchRef   = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -78,16 +79,29 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // Search debounce
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!searchQ.trim()) { setResults([]); setSearchOpen(false); return; }
+    if (!searchQ.trim()) { setResults([]); setSearchOpen(false); setSearchErr(null); return; }
     setSearching(true);
+    setSearchErr(null);
     debounceRef.current = setTimeout(async () => {
-      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(searchQ.trim())}`);
-      if (res.ok) {
-        const d = await res.json() as { items: YTItem[] };
-        setResults(d.items ?? []);
+      try {
+        const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(searchQ.trim())}`);
+        if (res.ok) {
+          const d = await res.json() as { items: YTItem[] };
+          setResults(d.items ?? []);
+          setSearchOpen(true);
+          if ((d.items ?? []).length === 0) setSearchErr("No results found.");
+        } else {
+          const d = await res.json().catch(() => ({})) as { error?: string };
+          setSearchErr(d.error === "No API key" ? "YouTube API key not configured." : "Search failed.");
+          setResults([]);
+          setSearchOpen(true);
+        }
+      } catch {
+        setSearchErr("Network error.");
         setSearchOpen(true);
+      } finally {
+        setSearching(false);
       }
-      setSearching(false);
     }, 350);
   }, [searchQ]);
 
@@ -238,9 +252,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                   {searching && <Loader2 size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />}
                 </div>
 
-                {searchOpen && results.length > 0 && (
+                {searchOpen && (
                   <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 rounded-xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.99)] backdrop-blur-xl shadow-2xl overflow-hidden">
-                    {results.map(r => (
+                    {searchErr ? (
+                      <p className="px-3 py-2.5 text-xs text-[var(--text-muted)]">{searchErr}</p>
+                    ) : results.map(r => (
                       <button key={r.videoId} onClick={() => playTrack(r)}
                         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-elevated)] transition-colors text-left">
                         <Image src={r.thumbnail} alt="" width={40} height={28} className="rounded shrink-0 object-cover" />

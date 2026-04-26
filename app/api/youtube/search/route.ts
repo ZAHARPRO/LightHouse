@@ -16,7 +16,6 @@ export async function GET(req: Request) {
   url.searchParams.set("part", "snippet");
   url.searchParams.set("q", q);
   url.searchParams.set("type", "video");
-  url.searchParams.set("videoCategoryId", "10"); // music
   url.searchParams.set("maxResults", "10");
   url.searchParams.set("key", key);
 

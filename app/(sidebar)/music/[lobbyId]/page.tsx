@@ -154,7 +154,7 @@ export default function MusicLobbyPage() {
       const res = await fetch(`/api/spotify-lobbies/${lobbyId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pass ?? joinPass || undefined }),
+        body: JSON.stringify({ password: (pass ?? joinPass) || undefined }),
       });
       if (res.ok) setJoined(true);
       else {

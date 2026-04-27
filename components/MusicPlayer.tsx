@@ -53,7 +53,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (typeof window === "undefined") return { x: 16, y: 16 };
     return { x: window.innerWidth - 376, y: window.innerHeight - 420 };
   });
-  const [size, setSize]     = useState({ w: 350, h: 260 });
+  const [size, setSize]     = useState({ w: 350 });
   const [minimized, setMin] = useState(false);
   const [view, setView]     = useState<"player" | "lobbies" | "create" | "lobby">("player");
   const [volume, setVol]    = useState(70);
@@ -124,7 +124,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       .then((d: ActiveLobby | null) => {
         if (d && (d as ActiveLobby & { status?: string }).status !== "CLOSED") {
           setActiveLobby(d as ActiveLobby);
-          setSize({ w: 360, h: 500 });
+          setSize({ w: 360 });
           setView("lobby");
         } else {
           music.setActiveLobbyId(null);
@@ -143,23 +143,43 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       }).catch(() => {});
   }, [session?.user?.id]);
 
-  // ── Poll active lobby every 4s ─────────────────────────────────────────────
+  // ── Poll active lobby every 2s ─────────────────────────────────────────────
   const fetchActiveLobby = useCallback(async () => {
     if (!activeLobby) return;
+    const t0 = Date.now();
     const res = await fetch(`/api/music-lobbies/${activeLobby.id}`);
     if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
     const d = await res.json() as ActiveLobby;
+    const rtt = Date.now() - t0; // round-trip time; use half as one-way estimate
     setActiveLobby(d);
-    if (!isHost && d.trackUri && d.trackUri !== music.track?.videoId) {
-      const est = d.positionMs + (d.isPlaying ? d.elapsedMs : 0);
-      music.play({ videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" }, est);
+
+    if (!d.trackUri) return;
+
+    if (d.trackUri !== music.track?.videoId) {
+      // New track pushed by host or any member — follow it
+      // positionMs (server snapshot) + elapsedMs (server-side clock since snapshot) + rtt/2 (transit)
+      const est = d.positionMs + (d.isPlaying ? d.elapsedMs + rtt / 2 : 0);
+      music.play(
+        { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
+        est
+      );
+    } else if (!isHost && d.isPlaying) {
+      // Same track — correct position drift for non-host (host drives position, don't resync host)
+      // Read live position from playerRef (ref is stable, no stale closure issue)
+      const localPos = music.playerRef.current
+        ? Math.floor(music.playerRef.current.getCurrentTime() * 1000)
+        : 0;
+      const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
+      if (Math.abs(serverPos - localPos) > 5000) {
+        music.seek(serverPos);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLobby?.id, isHost]);
 
   useEffect(() => {
     if (view !== "lobby" || !activeLobby) return;
-    const t = setInterval(fetchActiveLobby, 4000);
+    const t = setInterval(fetchActiveLobby, 2000);
     return () => clearInterval(t);
   }, [view, fetchActiveLobby, activeLobby]);
 
@@ -254,13 +274,13 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
     music.playNow(item);
-    if (isHost && activeLobby) syncTrack(item, 0, true);
+    if (activeLobby) syncTrack(item, 0, true);
   }
 
   function startPlaylist(pl: Playlist) {
     if (!pl.tracks.length) return;
     music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks });
-    if (isHost && activeLobby) syncTrack(pl.tracks[0], 0, true);
+    if (activeLobby) syncTrack(pl.tracks[0], 0, true);
   }
 
   function copyLink(id: string) {
@@ -313,7 +333,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     const d = await lobbyRes.json() as ActiveLobby;
     music.setActiveLobbyId(id);
     setActiveLobby(d);
-    setSize({ w: 360, h: 500 });
+    setSize({ w: 360 });
     setView("lobby"); setLobbyTab("player");
   }
 
@@ -408,8 +428,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   const handleResize = (e: React.MouseEvent) => {
     e.stopPropagation(); e.preventDefault();
-    const sx = e.clientX, sy = e.clientY, sw = size.w, sh = size.h;
-    const onMove = (ev: MouseEvent) => setSize({ w: Math.max(300, Math.min(600, sw + ev.clientX - sx)), h: Math.max(200, Math.min(700, sh + ev.clientY - sy)) });
+    const sx = e.clientX, sw = size.w;
+    const onMove = (ev: MouseEvent) => setSize({ w: Math.max(300, Math.min(600, sw + ev.clientX - sx)) });
     const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
     document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onUp);
   };
@@ -612,8 +632,6 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const bodyH = size.h - 40;
-
   return (
     <div className="fixed z-[980] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.97)] backdrop-blur-xl"
       style={{ left: pos.x, top: pos.y, width: size.w, userSelect: "none" }}>
@@ -649,7 +667,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       </div>
 
       {!minimized && (
-        <div style={{ height: bodyH, overflowY: "auto" }}>
+        <div style={{ overflowY: "auto", maxHeight: `calc(100vh - ${pos.y + 48}px)` }}>
 
           {/* ── PLAYER VIEW ─────────────────────────────────────── */}
           {view === "player" && (
@@ -729,7 +747,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
           {/* ── LOBBY VIEW ──────────────────────────────────────── */}
           {view === "lobby" && activeLobby && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col">
               {/* Lobby header bar */}
               <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border-subtle)] shrink-0">
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -771,7 +789,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               </div>
 
               {/* Lobby tab content */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="overflow-y-auto" style={{ maxHeight: `calc(100vh - ${pos.y + 160}px)` }}>
 
                 {/* Player tab */}
                 {lobbyTab === "player" && (

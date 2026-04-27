@@ -16,7 +16,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (!lobby || lobby.status !== "ACTIVE") return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (lobby.hostId !== session.user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Any lobby member (not just host) can push a track change
+  const members: { id: string }[] = lobby.membersJson ? JSON.parse(lobby.membersJson as string) : [];
+  const isMember = lobby.hostId === session.user.id || members.some(m => m.id === session.user.id);
+  if (!isMember) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json() as {
     trackUri?: string;

@@ -71,7 +71,6 @@ export function useMusicContext() {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   const playerRef   = useRef<YTPlayer | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [track, setTrack]             = useState<YTTrack | null>(null);
   const [isPlaying, setIsPlaying]     = useState(false);
@@ -84,17 +83,25 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     if (!isPlaying || !playerReady) return;
     const t = setInterval(() => {
       if (playerRef.current) {
-        setPositionMs(Math.floor(playerRef.current.getCurrentTime() * 1000));
+        try {
+          setPositionMs(Math.floor(playerRef.current.getCurrentTime() * 1000));
+        } catch {}
       }
     }, 1000);
     return () => clearInterval(t);
   }, [isPlaying, playerReady]);
 
-  // Load YouTube IFrame API
+  // Load YouTube IFrame API — container lives outside React tree to avoid reconciliation issues
   useEffect(() => {
+    const container = document.createElement("div");
+    Object.assign(container.style, {
+      position: "fixed", width: "1px", height: "1px",
+      bottom: "0", right: "0", opacity: "0", pointerEvents: "none",
+    });
+    document.body.appendChild(container);
+
     const initPlayer = () => {
-      if (!containerRef.current) return;
-      const p = new window.YT.Player(containerRef.current, {
+      const p = new window.YT.Player(container, {
         width: "1", height: "1",
         playerVars: { autoplay: 0, controls: 0, rel: 0, modestbranding: 1, iv_load_policy: 3 },
         events: {
@@ -121,9 +128,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => {
-      playerRef.current?.destroy();
+      try { playerRef.current?.destroy(); } catch {}
       playerRef.current = null;
       setPlayerReady(false);
+      if (document.body.contains(container)) document.body.removeChild(container);
     };
   }, []);
 
@@ -148,11 +156,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       play, pause, resume, seek, setVolume, next, prev,
       playerRef,
     }}>
-      {/* Hidden persistent YouTube player */}
-      <div
-        ref={containerRef}
-        style={{ position: "fixed", width: 1, height: 1, bottom: 0, right: 0, opacity: 0, pointerEvents: "none" }}
-      />
       {children}
     </MusicContext.Provider>
   );

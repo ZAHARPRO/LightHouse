@@ -106,7 +106,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Restore lobby view on mount if already in a lobby ─────────────────────
   useEffect(() => {
     if (!music.activeLobbyId) return;
-    fetch(`/api/spotify-lobbies/${music.activeLobbyId}`)
+    fetch(`/api/music-lobbies/${music.activeLobbyId}`)
       .then(r => r.ok ? r.json() : null)
       .then((d: ActiveLobby | null) => {
         if (d && (d as ActiveLobby & { status?: string }).status !== "CLOSED") {
@@ -123,7 +123,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Poll active lobby every 4s ─────────────────────────────────────────────
   const fetchActiveLobby = useCallback(async () => {
     if (!activeLobby) return;
-    const res = await fetch(`/api/spotify-lobbies/${activeLobby.id}`);
+    const res = await fetch(`/api/music-lobbies/${activeLobby.id}`);
     if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
     const d = await res.json() as ActiveLobby;
     setActiveLobby(d);
@@ -144,7 +144,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Heartbeat ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (view !== "lobby" || !activeLobby || !session?.user?.id) return;
-    const beat = () => fetch(`/api/spotify-lobbies/${activeLobby.id}/join`, {
+    const beat = () => fetch(`/api/music-lobbies/${activeLobby.id}/join`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
     }).catch(() => {});
     beat();
@@ -155,7 +155,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Host sync every 5s ─────────────────────────────────────────────────────
   useEffect(() => {
     if (view !== "lobby" || !isHost || !activeLobby || !track) return;
-    const push = () => fetch(`/api/spotify-lobbies/${activeLobby.id}/sync`, {
+    const push = () => fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trackUri: track.videoId, trackName: track.title, trackArtist: track.channel, trackImage: track.thumbnail, positionMs, isPlaying }),
     });
@@ -178,7 +178,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   // ── Lobby list ─────────────────────────────────────────────────────────────
   const fetchLobbies = useCallback(async () => {
-    const res = await fetch("/api/spotify-lobbies");
+    const res = await fetch("/api/music-lobbies");
     if (res.ok) setLobbies(await res.json());
   }, []);
 
@@ -225,7 +225,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Helpers ────────────────────────────────────────────────────────────────
   function syncTrack(item: YTItem, pos: number, playing: boolean) {
     if (!activeLobby) return;
-    fetch(`/api/spotify-lobbies/${activeLobby.id}/sync`, {
+    fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: pos, isPlaying: playing }),
     });
@@ -252,7 +252,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   }
 
   async function enterLobby(id: string) {
-    const lobbyRes = await fetch(`/api/spotify-lobbies/${id}`);
+    const lobbyRes = await fetch(`/api/music-lobbies/${id}`);
     if (!lobbyRes.ok) return;
     const d = await lobbyRes.json() as ActiveLobby;
     music.setActiveLobbyId(id);
@@ -264,7 +264,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   async function createLobby() {
     setCreating(true);
     try {
-      const res = await fetch("/api/spotify-lobbies", {
+      const res = await fetch("/api/music-lobbies", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: lobbyName, password: lobbyPass || undefined }),
       });
@@ -281,7 +281,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (hasPass && typeof pass !== "string") { setJoinPass(p => ({ ...p, [lobbyId]: "" })); return; }
     setJoining(lobbyId);
     try {
-      const res = await fetch(`/api/spotify-lobbies/${lobbyId}/join`, {
+      const res = await fetch(`/api/music-lobbies/${lobbyId}/join`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pass || undefined }),
       });
@@ -292,7 +292,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   async function leaveLobby() {
     if (!activeLobby) return;
-    await fetch(`/api/spotify-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
+    await fetch(`/api/music-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
     music.setActiveLobbyId(null); music.pause();
     setActiveLobby(null); setActiveQueue([]); setActivePlId(null);
     setView("lobbies");

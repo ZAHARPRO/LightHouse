@@ -10,7 +10,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params;
 
-  const lobby = await prisma.spotifyLobby.findUnique({
+  const lobby = await prisma.musicLobby.findUnique({
     where: { id },
     select: { hostId: true, status: true, trackUri: true, historyJson: true },
   });
@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  await prisma.spotifyLobby.update({
+  await prisma.musicLobby.update({
     where: { id },
     data: {
       trackUri:    body.trackUri    ?? null,

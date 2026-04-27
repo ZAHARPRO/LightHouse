@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const { password } = await req.json().catch(() => ({ password: undefined })) as { password?: string };
 
-  const lobby = await prisma.spotifyLobby.findUnique({
+  const lobby = await prisma.musicLobby.findUnique({
     where: { id },
     select: { status: true, passwordHash: true, membersJson: true, hostId: true },
   });
@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   members.push({ id: session.user.id, name: session.user.name ?? null, image: session.user.image ?? null, at: now });
 
-  await prisma.spotifyLobby.update({
+  await prisma.musicLobby.update({
     where: { id },
     data: { membersJson: JSON.stringify(members) },
   });

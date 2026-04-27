@@ -8,7 +8,7 @@ const MEMBER_TTL = 30_000;
 export async function GET() {
   const now = Date.now();
 
-  const lobbies = await prisma.spotifyLobby.findMany({
+  const lobbies = await prisma.musicLobby.findMany({
     where: { status: "ACTIVE" },
     orderBy: { createdAt: "desc" },
     take: 30,
@@ -41,12 +41,12 @@ export async function POST(req: Request) {
 
   const { name, password } = await req.json() as { name?: string; password?: string };
 
-  await prisma.spotifyLobby.updateMany({
+  await prisma.musicLobby.updateMany({
     where: { hostId: session.user.id, status: "ACTIVE" },
     data: { status: "CLOSED" },
   });
 
-  const lobby = await prisma.spotifyLobby.create({
+  const lobby = await prisma.musicLobby.create({
     data: {
       hostId: session.user.id,
       name: name?.trim() || null,

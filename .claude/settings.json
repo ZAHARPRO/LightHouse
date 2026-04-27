@@ -19,11 +19,13 @@
       "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\api\\\\spotify-lobbies\\\\[id]\\\\sync\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\\\(sidebar\\)\\\\music\\\\[lobbyId]\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\app\\\\api\\\\youtube\\\\search\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\contexts\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\apple\\\\Documets\\\\GitHub\\\\LightHouse\\\\contexts\")",
+      "Bash(echo \"exit: $?\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\post",
-      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\news"
+      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\news",
+      "c:\\Users\\apple\\Documets\\GitHub\\LightHouse\\app\\(sidebar)\\music\\[lobbyId]"
     ]
   }
 }

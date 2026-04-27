@@ -8,7 +8,7 @@ const EMPTY_CLOSE = 5 * 60 * 1000; // 5 minutes
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const lobby = await prisma.spotifyLobby.findUnique({
+  const lobby = await prisma.musicLobby.findUnique({
     where: { id },
     select: {
       id: true, name: true, status: true,
@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     members.length === 0 &&
     now - new Date(lobby.updatedAt).getTime() > EMPTY_CLOSE
   ) {
-    await prisma.spotifyLobby.update({ where: { id }, data: { status: "CLOSED" } });
+    await prisma.musicLobby.update({ where: { id }, data: { status: "CLOSED" } });
     return NextResponse.json({ error: "Lobby closed (empty)." }, { status: 404 });
   }
 
@@ -58,19 +58,19 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
 
-  const lobby = await prisma.spotifyLobby.findUnique({ where: { id }, select: { hostId: true } });
+  const lobby = await prisma.musicLobby.findUnique({ where: { id }, select: { hostId: true } });
   if (!lobby) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (lobby.hostId === session.user.id) {
-    await prisma.spotifyLobby.update({ where: { id }, data: { status: "CLOSED" } });
+    await prisma.musicLobby.update({ where: { id }, data: { status: "CLOSED" } });
   } else {
-    const existing = await prisma.spotifyLobby.findUnique({
+    const existing = await prisma.musicLobby.findUnique({
       where: { id }, select: { membersJson: true },
     });
     const members = existing?.membersJson
       ? (JSON.parse(existing.membersJson) as { id: string }[]).filter(m => m.id !== session.user.id)
       : [];
-    await prisma.spotifyLobby.update({
+    await prisma.musicLobby.update({
       where: { id },
       data: { membersJson: JSON.stringify(members) },
     });

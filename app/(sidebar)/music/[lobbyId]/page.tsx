@@ -85,7 +85,7 @@ export default function MusicLobbyPage() {
 
   // ── Fetch lobby ────────────────────────────────────────────────────────────
   const fetchLobby = useCallback(async () => {
-    const res = await fetch(`/api/spotify-lobbies/${lobbyId}`, { cache: "no-store" });
+    const res = await fetch(`/api/music-lobbies/${lobbyId}`, { cache: "no-store" });
     if (!res.ok) { setError("Lobby not found or closed."); return; }
     const data = await res.json() as LobbyData;
     if (data.status !== "ACTIVE") { setError("This lobby has been closed."); return; }
@@ -128,7 +128,7 @@ export default function MusicLobbyPage() {
     if (!isHost || !joined) return;
     const push = () => {
       if (!music.track) return;
-      fetch(`/api/spotify-lobbies/${lobbyId}/sync`, {
+      fetch(`/api/music-lobbies/${lobbyId}/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,7 +150,7 @@ export default function MusicLobbyPage() {
       setQueueIdx(next);
       const item = activeQueue[next];
       music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-      fetch(`/api/spotify-lobbies/${lobbyId}/sync`, {
+      fetch(`/api/music-lobbies/${lobbyId}/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: 0, isPlaying: true }),
@@ -165,7 +165,7 @@ export default function MusicLobbyPage() {
   // ── Heartbeat ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!joined || !session?.user?.id) return;
-    const beat = () => fetch(`/api/spotify-lobbies/${lobbyId}/join`, {
+    const beat = () => fetch(`/api/music-lobbies/${lobbyId}/join`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
     }).catch(() => {});
     heartbeatRef.current = setInterval(beat, 15_000);
@@ -218,7 +218,7 @@ export default function MusicLobbyPage() {
   async function handleJoin(pass?: string) {
     setJoining(true);
     try {
-      const res = await fetch(`/api/spotify-lobbies/${lobbyId}/join`, {
+      const res = await fetch(`/api/music-lobbies/${lobbyId}/join`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: (pass ?? joinPass) || undefined }),
       });
@@ -235,7 +235,7 @@ export default function MusicLobbyPage() {
   }
 
   function syncTrack(item: YTItem, positionMs: number, isPlaying: boolean) {
-    fetch(`/api/spotify-lobbies/${lobbyId}/sync`, {
+    fetch(`/api/music-lobbies/${lobbyId}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs, isPlaying }),
     });
@@ -315,13 +315,13 @@ export default function MusicLobbyPage() {
 
   async function leaveLobby() {
     setLeaving(true); music.pause();
-    await fetch(`/api/spotify-lobbies/${lobbyId}`, { method: "DELETE" }).catch(() => {});
+    await fetch(`/api/music-lobbies/${lobbyId}`, { method: "DELETE" }).catch(() => {});
     router.push("/feed");
   }
 
   async function closeLobby() {
     music.pause();
-    await fetch(`/api/spotify-lobbies/${lobbyId}`, { method: "DELETE" });
+    await fetch(`/api/music-lobbies/${lobbyId}`, { method: "DELETE" });
     router.push("/feed");
   }
 

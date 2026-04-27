@@ -61,7 +61,7 @@ model User {
   msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
   chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
   chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
-  spotifyLobbies       SpotifyLobby[]       @relation("SpotifyHost")
+  musicLobbies         MusicLobby[]         @relation("MusicHost")
   playlists            Playlist[]           @relation("UserPlaylists")
   chessElo             Int                  @default(400)
   minesweeperElo       Int                  @default(400)
@@ -534,7 +534,7 @@ enum ChessRoomStatus {
   FINISHED
 }
 
-model SpotifyLobby {
+model MusicLobby {
   id           String   @id @default(cuid())
   hostId       String
   name         String?
@@ -552,7 +552,9 @@ model SpotifyLobby {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  host         User     @relation("SpotifyHost", fields: [hostId], references: [id], onDelete: Cascade)
+  host         User     @relation("MusicHost", fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@map("SpotifyLobby")
 }
 
 model Playlist {

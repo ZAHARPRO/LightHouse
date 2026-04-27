@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const lobby = await prisma.musicLobby.findUnique({
     where: { id },
-    select: { hostId: true, status: true, trackUri: true, historyJson: true },
+    select: { hostId: true, status: true, trackUri: true, historyJson: true, membersJson: true },
   });
 
   if (!lobby || lobby.status !== "ACTIVE") return NextResponse.json({ error: "Not found" }, { status: 404 });

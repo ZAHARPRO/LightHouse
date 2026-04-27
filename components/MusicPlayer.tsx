@@ -5,75 +5,178 @@ import { useSession } from "next-auth/react";
 import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
+  History, ListMusic, Trash2, Download, ChevronRight, Youtube,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useMusicContext } from "@/contexts/MusicContext";
 
-type Lobby = {
-  id: string;
-  name: string | null;
-  memberCount: number;
-  hasPassword: boolean;
-  trackName: string | null;
-  trackArtist: string | null;
-  trackImage: string | null;
-  isPlaying: boolean;
-  host: { id: string; name: string | null; image: string | null };
+// ─── Types ────────────────────────────────────────────────────────────────────
+type LobbyListItem = {
+  id: string; name: string | null; memberCount: number; hasPassword: boolean;
+  trackName: string | null; isPlaying: boolean;
+  host: { id: string; name: string | null };
 };
-
+type Member = { id: string; name: string | null; image: string | null; at: number };
+type HistoryItem = { videoId: string; title: string; channel: string; thumbnail: string; at: number };
+type YTItem = { videoId: string; title: string; channel: string; thumbnail: string };
+type Playlist = { id: string; name: string; tracks: YTItem[] };
 type ActiveLobby = {
-  id: string;
-  name: string | null;
-  hasPassword: boolean;
-  members: { id: string; name: string | null; image: string | null; at: number }[];
+  id: string; name: string | null; hasPassword: boolean;
   host: { id: string; name: string | null; image: string | null };
+  members: Member[];
+  history: HistoryItem[];
+  trackUri: string | null; trackName: string | null; trackArtist: string | null; trackImage: string | null;
+  isPlaying: boolean; positionMs: number; elapsedMs: number;
 };
 
-type YTItem = {
-  videoId: string;
-  title: string;
-  channel: string;
-  thumbnail: string;
-};
+type LobbyTab = "player" | "listeners" | "history" | "playlists";
 
 function fmtMs(ms: number) {
   const s = Math.floor(Math.max(0, ms) / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
+function timeAgo(at: number) {
+  const d = Math.floor((Date.now() - at) / 1000);
+  if (d < 60) return `${d}s ago`; if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+  return `${Math.floor(d / 3600)}h ago`;
+}
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const { data: session } = useSession();
   const music = useMusicContext();
 
+  // Layout
   const [pos, setPos] = useState(() => {
     if (typeof window === "undefined") return { x: 16, y: 16 };
-    return { x: window.innerWidth - 348, y: window.innerHeight - 380 };
+    return { x: window.innerWidth - 376, y: window.innerHeight - 420 };
   });
-  const [size, setSize]       = useState({ w: 320, h: 220 });
-  const [minimized, setMin]   = useState(false);
-  const [view, setView]       = useState<"player" | "lobbies" | "create" | "lobby">("player");
-  const [volume, setVolumeState] = useState(70);
+  const [size, setSize]     = useState({ w: 350, h: 260 });
+  const [minimized, setMin] = useState(false);
+  const [view, setView]     = useState<"player" | "lobbies" | "create" | "lobby">("player");
+  const [volume, setVol]    = useState(70);
 
-  // Lobbies
-  const [lobbies, setLobbies]         = useState<Lobby[]>([]);
+  // Lobby list
+  const [lobbies, setLobbies]   = useState<LobbyListItem[]>([]);
+  const [lobbyName, setLName]   = useState("");
+  const [lobbyPass, setLPass]   = useState("");
+  const [creating, setCreating] = useState(false);
+  const [joinPass, setJoinPass] = useState<Record<string, string>>({});
+  const [joining, setJoining]   = useState<string | null>(null);
+  const [copied, setCopied]     = useState(false);
+
+  // Active lobby
   const [activeLobby, setActiveLobby] = useState<ActiveLobby | null>(null);
-  const [lobbyName, setLobbyName] = useState("");
-  const [lobbyPass, setLobbyPass] = useState("");
-  const [creating, setCreating]   = useState(false);
-  const [joinPass, setJoinPass]   = useState<Record<string, string>>({});
-  const [joining, setJoining]     = useState<string | null>(null);
-  const [copied, setCopied]       = useState(false);
+  const [lobbyTab, setLobbyTab]       = useState<LobbyTab>("player");
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncRef      = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Search
-  const [searchQ, setSearchQ]         = useState("");
-  const [results, setResults]         = useState<YTItem[]>([]);
-  const [searching, setSearching]     = useState(false);
-  const [searchOpen, setSearchOpen]   = useState(false);
-  const [searchErr, setSearchErr]     = useState<string | null>(null);
+  const [searchQ, setSearchQ]       = useState("");
+  const [results, setResults]       = useState<YTItem[]>([]);
+  const [searching, setSearching]   = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchErr, setSearchErr]   = useState<string | null>(null);
   const searchRef   = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Playlists
+  const [playlists, setPlaylists]     = useState<Playlist[]>([]);
+  const [plLoaded, setPlLoaded]       = useState(false);
+  const [showCreatePl, setShowCreate] = useState(false);
+  const [newPlName, setNewPlName]     = useState("");
+  const [ytUrl, setYtUrl]             = useState("");
+  const [importing, setImporting]     = useState(false);
+  const [importErr, setImportErr]     = useState<string | null>(null);
+  const [creatingPl, setCreatingPl]   = useState(false);
+  const [expandedPl, setExpandedPl]   = useState<string | null>(null);
+  const [activeQueue, setActiveQueue] = useState<YTItem[]>([]);
+  const [queueIdx, setQueueIdx]       = useState(0);
+  const [activePlId, setActivePlId]   = useState<string | null>(null);
+
+  const isHost = activeLobby?.host.id === session?.user?.id;
+  const { track, isPlaying, positionMs, playerReady, playerState,
+          pause, resume, seek, setVolume: setMusicVol, prev, next } = music;
+  const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
+  const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
+
+  function handleVol(v: number) { setVol(v); setMusicVol(v); }
+
+  // ── Restore lobby view on mount if already in a lobby ─────────────────────
+  useEffect(() => {
+    if (!music.activeLobbyId) return;
+    fetch(`/api/spotify-lobbies/${music.activeLobbyId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ActiveLobby | null) => {
+        if (d && (d as ActiveLobby & { status?: string }).status !== "CLOSED") {
+          setActiveLobby(d as ActiveLobby);
+          setSize({ w: 360, h: 500 });
+          setView("lobby");
+        } else {
+          music.setActiveLobbyId(null);
+        }
+      }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Poll active lobby every 4s ─────────────────────────────────────────────
+  const fetchActiveLobby = useCallback(async () => {
+    if (!activeLobby) return;
+    const res = await fetch(`/api/spotify-lobbies/${activeLobby.id}`);
+    if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
+    const d = await res.json() as ActiveLobby;
+    setActiveLobby(d);
+    // Guest: sync track
+    if (!isHost && d.trackUri && d.trackUri !== music.track?.videoId) {
+      const est = d.positionMs + (d.isPlaying ? d.elapsedMs : 0);
+      music.play({ videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" }, est);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLobby?.id, isHost]);
+
+  useEffect(() => {
+    if (view !== "lobby" || !activeLobby) return;
+    const t = setInterval(fetchActiveLobby, 4000);
+    return () => clearInterval(t);
+  }, [view, fetchActiveLobby, activeLobby]);
+
+  // ── Heartbeat ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (view !== "lobby" || !activeLobby || !session?.user?.id) return;
+    const beat = () => fetch(`/api/spotify-lobbies/${activeLobby.id}/join`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+    }).catch(() => {});
+    beat();
+    heartbeatRef.current = setInterval(beat, 15_000);
+    return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
+  }, [view, activeLobby?.id, session?.user?.id]);
+
+  // ── Host sync every 5s ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (view !== "lobby" || !isHost || !activeLobby || !track) return;
+    const push = () => fetch(`/api/spotify-lobbies/${activeLobby.id}/sync`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackUri: track.videoId, trackName: track.title, trackArtist: track.channel, trackImage: track.thumbnail, positionMs, isPlaying }),
+    });
+    syncRef.current = setInterval(push, 5000);
+    return () => { if (syncRef.current) clearInterval(syncRef.current); };
+  }, [view, isHost, activeLobby?.id, track, positionMs, isPlaying]);
+
+  // ── Auto-advance playlist on track end ────────────────────────────────────
+  useEffect(() => {
+    if (!isHost || playerState !== 0 || activeQueue.length === 0) return;
+    const nextIdx = queueIdx + 1;
+    if (nextIdx < activeQueue.length) {
+      setQueueIdx(nextIdx);
+      const item = activeQueue[nextIdx];
+      music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
+      if (activeLobby) syncTrack(item, 0, true);
+    } else { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState]);
+
+  // ── Lobby list ─────────────────────────────────────────────────────────────
   const fetchLobbies = useCallback(async () => {
     const res = await fetch("/api/spotify-lobbies");
     if (res.ok) setLobbies(await res.json());
@@ -86,309 +189,346 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     return () => clearInterval(t);
   }, [view, fetchLobbies]);
 
-  // Poll active lobby members every 5s
-  useEffect(() => {
-    if (view !== "lobby" || !activeLobby) return;
-    const poll = async () => {
-      const res = await fetch(`/api/spotify-lobbies/${activeLobby.id}`);
-      if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
-      const d = await res.json() as { members: ActiveLobby["members"]; host: ActiveLobby["host"]; name: string | null; hasPassword: boolean };
-      setActiveLobby(prev => prev ? { ...prev, members: d.members } : null);
-    };
-    poll();
-    const t = setInterval(poll, 5000);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, activeLobby?.id]);
-
-  // Search debounce
+  // ── Search ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!searchQ.trim()) { setResults([]); setSearchOpen(false); setSearchErr(null); return; }
-    setSearching(true);
-    setSearchErr(null);
+    setSearching(true); setSearchErr(null);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(searchQ.trim())}`);
         if (res.ok) {
           const d = await res.json() as { items: YTItem[] };
-          setResults(d.items ?? []);
-          setSearchOpen(true);
-          if ((d.items ?? []).length === 0) setSearchErr("No results found.");
+          setResults(d.items ?? []); setSearchOpen(true);
+          if ((d.items ?? []).length === 0) setSearchErr("No results.");
         } else {
           const d = await res.json().catch(() => ({})) as { error?: string };
-          setSearchErr(d.error === "No API key" ? "YouTube API key not configured." : "Search failed.");
-          setResults([]);
-          setSearchOpen(true);
+          setSearchErr(d.error === "No API key" ? "API key not configured." : "Search failed.");
+          setResults([]); setSearchOpen(true);
         }
-      } catch {
-        setSearchErr("Network error.");
-        setSearchOpen(true);
-      } finally {
-        setSearching(false);
-      }
+      } catch { setSearchErr("Network error."); setSearchOpen(true); }
+      finally { setSearching(false); }
     }, 350);
   }, [searchQ]);
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!searchRef.current?.contains(e.target as Node)) setSearchOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    const fn = (e: MouseEvent) => { if (!searchRef.current?.contains(e.target as Node)) setSearchOpen(false); };
+    document.addEventListener("mousedown", fn); return () => document.removeEventListener("mousedown", fn);
   }, []);
+
+  // ── Playlists ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (lobbyTab !== "playlists" || plLoaded) return;
+    fetch("/api/playlists").then(r => r.json()).then((d: Playlist[]) => { setPlaylists(d); setPlLoaded(true); }).catch(() => {});
+  }, [lobbyTab, plLoaded]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function syncTrack(item: YTItem, pos: number, playing: boolean) {
+    if (!activeLobby) return;
+    fetch(`/api/spotify-lobbies/${activeLobby.id}/sync`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: pos, isPlaying: playing }),
+    });
+  }
 
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
+    setActiveQueue([]); setQueueIdx(0); setActivePlId(null);
     music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-    // If host in active lobby, sync to lobby
-    if (music.activeLobbyId) {
-      fetch(`/api/spotify-lobbies/${music.activeLobbyId}/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trackUri: item.videoId, trackName: item.title,
-          trackArtist: item.channel, trackImage: item.thumbnail,
-          positionMs: 0, isPlaying: true,
-        }),
-      });
-    }
+    if (isHost && activeLobby) syncTrack(item, 0, true);
+  }
+
+  function startPlaylist(pl: Playlist) {
+    if (!pl.tracks.length) return;
+    setActiveQueue(pl.tracks); setQueueIdx(0); setActivePlId(pl.id);
+    const first = pl.tracks[0];
+    music.play({ videoId: first.videoId, title: first.title, channel: first.channel, thumbnail: first.thumbnail });
+    if (isHost && activeLobby) syncTrack(first, 0, true);
+  }
+
+  function copyLink(id: string) {
+    navigator.clipboard.writeText(`${window.location.origin}/music/${id}`);
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function enterLobby(id: string) {
+    const lobbyRes = await fetch(`/api/spotify-lobbies/${id}`);
+    if (!lobbyRes.ok) return;
+    const d = await lobbyRes.json() as ActiveLobby;
+    music.setActiveLobbyId(id);
+    setActiveLobby(d);
+    setSize({ w: 360, h: 500 });
+    setView("lobby"); setLobbyTab("player");
   }
 
   async function createLobby() {
     setCreating(true);
     try {
       const res = await fetch("/api/spotify-lobbies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: lobbyName, password: lobbyPass || undefined }),
       });
       if (res.ok) {
         const { id } = await res.json() as { id: string };
-        music.setActiveLobbyId(id);
-        const lobbyRes = await fetch(`/api/spotify-lobbies/${id}`);
-        if (lobbyRes.ok) {
-          const d = await lobbyRes.json() as ActiveLobby & { hasPassword: boolean };
-          setActiveLobby({ id, name: lobbyName || null, hasPassword: !!lobbyPass, members: d.members ?? [], host: d.host });
-        }
-        setLobbyName(""); setLobbyPass("");
-        setView("lobby");
+        setLName(""); setLPass("");
+        await enterLobby(id);
       }
     } finally { setCreating(false); }
   }
 
   async function joinLobby(lobbyId: string, hasPass: boolean) {
     const pass = joinPass[lobbyId];
-    if (hasPass && typeof pass !== "string") {
-      setJoinPass(p => ({ ...p, [lobbyId]: "" })); return;
-    }
+    if (hasPass && typeof pass !== "string") { setJoinPass(p => ({ ...p, [lobbyId]: "" })); return; }
     setJoining(lobbyId);
     try {
       const res = await fetch(`/api/spotify-lobbies/${lobbyId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pass || undefined }),
       });
-      if (res.ok) {
-        music.setActiveLobbyId(lobbyId);
-        const lobbyRes = await fetch(`/api/spotify-lobbies/${lobbyId}`);
-        if (lobbyRes.ok) {
-          const d = await lobbyRes.json() as ActiveLobby & { hasPassword: boolean };
-          setActiveLobby({ id: lobbyId, name: d.name, hasPassword: d.hasPassword, members: d.members ?? [], host: d.host });
-        }
-        setView("lobby");
-      } else { const d = await res.json(); alert(d.error ?? "Error"); }
+      if (res.ok) await enterLobby(lobbyId);
+      else { const d = await res.json(); alert(d.error ?? "Error"); }
     } finally { setJoining(null); }
   }
 
   async function leaveLobby() {
     if (!activeLobby) return;
     await fetch(`/api/spotify-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
-    music.setActiveLobbyId(null);
-    music.pause();
-    setActiveLobby(null);
+    music.setActiveLobbyId(null); music.pause();
+    setActiveLobby(null); setActiveQueue([]); setActivePlId(null);
     setView("lobbies");
   }
 
-  function copyLobbyLink(id: string) {
-    navigator.clipboard.writeText(`${window.location.origin}/music/${id}`);
-    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  async function importYtPlaylist() {
+    if (!ytUrl.trim()) return;
+    setImporting(true); setImportErr(null);
+    try {
+      const res = await fetch(`/api/youtube/playlist?url=${encodeURIComponent(ytUrl.trim())}`);
+      const d = await res.json() as { tracks?: YTItem[]; error?: string };
+      if (!res.ok || !d.tracks) { setImportErr(d.error ?? "Import failed."); return; }
+      if (!d.tracks.length) { setImportErr("Playlist is empty or private."); return; }
+      const name = newPlName.trim() || `YouTube Playlist (${d.tracks.length})`;
+      const cr = await fetch("/api/playlists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, tracks: d.tracks }) });
+      if (cr.ok) { const pl = await cr.json() as Playlist; setPlaylists(p => [pl, ...p]); setYtUrl(""); setNewPlName(""); setShowCreate(false); }
+    } finally { setImporting(false); }
   }
 
-  // ─── Drag ─────────────────────────────────────────────────────────────────
+  async function createEmptyPlaylist() {
+    if (!newPlName.trim()) return;
+    setCreatingPl(true);
+    const res = await fetch("/api/playlists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newPlName.trim(), tracks: [] }) });
+    if (res.ok) { const pl = await res.json() as Playlist; setPlaylists(p => [pl, ...p]); setNewPlName(""); setShowCreate(false); }
+    setCreatingPl(false);
+  }
+
+  async function addToPlaylist(plId: string, item: YTItem) {
+    const pl = playlists.find(p => p.id === plId); if (!pl) return;
+    const updated = [...pl.tracks, item];
+    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
+    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
+  }
+
+  async function removeFromPlaylist(plId: string, videoId: string) {
+    const pl = playlists.find(p => p.id === plId); if (!pl) return;
+    const updated = pl.tracks.filter(t => t.videoId !== videoId);
+    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
+    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
+  }
+
+  async function deletePlaylist(id: string) {
+    await fetch(`/api/playlists/${id}`, { method: "DELETE" });
+    setPlaylists(p => p.filter(pl => pl.id !== id));
+    if (activePlId === id) { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
+  }
+
+  // ── Drag / Resize ──────────────────────────────────────────────────────────
   const handleDrag = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
+    if (e.button !== 0) return; e.preventDefault();
     const ox = e.clientX - pos.x, oy = e.clientY - pos.y;
-    const onMove = (ev: MouseEvent) => setPos({
-      x: Math.max(0, Math.min(window.innerWidth  - size.w, ev.clientX - ox)),
-      y: Math.max(0, Math.min(window.innerHeight - 48,     ev.clientY - oy)),
-    });
+    const onMove = (ev: MouseEvent) => setPos({ x: Math.max(0, Math.min(window.innerWidth - size.w, ev.clientX - ox)), y: Math.max(0, Math.min(window.innerHeight - 48, ev.clientY - oy)) });
     const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onUp);
   };
 
-  // ─── Resize ───────────────────────────────────────────────────────────────
   const handleResize = (e: React.MouseEvent) => {
     e.stopPropagation(); e.preventDefault();
     const sx = e.clientX, sy = e.clientY, sw = size.w, sh = size.h;
-    const onMove = (ev: MouseEvent) => setSize({
-      w: Math.max(290, Math.min(560, sw + ev.clientX - sx)),
-      h: Math.max(180, Math.min(600, sh + ev.clientY - sy)),
-    });
+    const onMove = (ev: MouseEvent) => setSize({ w: Math.max(300, Math.min(600, sw + ev.clientX - sx)), h: Math.max(200, Math.min(700, sh + ev.clientY - sy)) });
     const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onUp);
   };
 
   if (!session?.user) return null;
 
-  const { track, isPlaying, positionMs, playerReady, pause, resume, seek, setVolume: setMusicVolume, prev, next } = music;
+  // ── Shared UI pieces ───────────────────────────────────────────────────────
+  const SearchBar = (
+    <div ref={searchRef} className="relative">
+      <div className="relative">
+        <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
+        <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
+          onFocus={() => results.length > 0 && setSearchOpen(true)}
+          placeholder={isHost && activeLobby ? "Search & play for everyone…" : "Search YouTube…"}
+          className="w-full h-7 pl-7 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs outline-none focus:border-red-500/40 placeholder:text-[var(--text-muted)]"
+        />
+        {searching && <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />}
+      </div>
+      {searchOpen && (
+        <div className="absolute left-0 right-0 top-[calc(100%+3px)] z-50 rounded-xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.99)] backdrop-blur-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+          {searchErr ? (
+            <p className="px-3 py-2 text-xs text-[var(--text-muted)]">{searchErr}</p>
+          ) : results.map(r => (
+            <div key={r.videoId} className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-elevated)] transition-colors group">
+              <Image src={r.thumbnail} alt="" width={36} height={27} className="rounded shrink-0 object-cover" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{r.title}</p>
+                <p className="text-[0.58rem] text-[var(--text-muted)] truncate">{r.channel}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => playTrack(r)} className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.58rem] font-bold flex items-center gap-0.5 hover:bg-red-500/25">
+                  <Play size={8} />Play
+                </button>
+                {isHost && lobbyTab === "playlists" && playlists.length > 0 && (
+                  <div className="relative group/pl">
+                    <button className="px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-muted)] text-[0.58rem] font-bold flex items-center gap-0.5 hover:text-[var(--text-primary)]">
+                      <Plus size={8} />Add
+                    </button>
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg shadow-xl overflow-hidden min-w-[130px] hidden group-hover/pl:block">
+                      {playlists.map(pl => (
+                        <button key={pl.id} onClick={() => addToPlaylist(pl.id, r)}
+                          className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] truncate">{pl.name}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
-  function handleVolume(v: number) {
-    setVolumeState(v);
-    setMusicVolume(v);
-  }
-  const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
-  const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
+  const PlayerControls = (
+    <div className="flex flex-col gap-2">
+      {track ? (
+        <>
+          <div className="flex items-center gap-2.5">
+            <Image src={track.thumbnail} alt="" width={44} height={44} className="rounded-lg shrink-0 shadow object-cover" />
+            <div className="min-w-0">
+              <p className="font-display font-bold text-[var(--text-primary)] text-xs truncate leading-tight">{track.title}</p>
+              <p className="text-[var(--text-muted)] text-[0.6rem] truncate">{track.channel}</p>
+              {activePlId && <p className="text-[0.58rem] text-red-400 flex items-center gap-0.5 mt-0.5"><ListMusic size={8} />{queueIdx + 1}/{activeQueue.length}</p>}
+            </div>
+          </div>
+          {/* Progress */}
+          <div>
+            <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full cursor-pointer group"
+              onClick={e => {
+                if (!isHost && activeLobby) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                seek(Math.floor(((e.clientX - rect.left) / rect.width) * duration));
+              }}>
+              <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(positionMs)}</span>
+              <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
+            </div>
+          </div>
+          {/* Controls — host or solo */}
+          {(!activeLobby || isHost) && (
+            <div className="flex items-center justify-center gap-4">
+              <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
+              <button onClick={isPlaying ? pause : resume}
+                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
+                {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+              </button>
+              <button onClick={() => {
+                if (activeQueue.length > 0 && queueIdx + 1 < activeQueue.length) {
+                  const ni = queueIdx + 1; setQueueIdx(ni);
+                  const item = activeQueue[ni];
+                  music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
+                  if (activeLobby) syncTrack(item, 0, true);
+                } else next();
+              }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={16} /></button>
+            </div>
+          )}
+          {/* Guest status */}
+          {activeLobby && !isHost && (
+            <div className="flex items-center gap-1.5 text-[0.6rem] text-[var(--text-muted)]">
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeLobby.isPlaying ? "bg-red-500 animate-pulse" : "bg-[var(--text-muted)]"}`} />
+              {activeLobby.isPlaying ? "Playing (synced to host)" : "Paused by host"}
+            </div>
+          )}
+          {/* Volume */}
+          <div className="flex items-center gap-2">
+            <Volume2 size={10} className="text-[var(--text-muted)] shrink-0" />
+            <input type="range" min={0} max={100} value={volume}
+              onChange={e => handleVol(Number(e.target.value))}
+              className="flex-1 h-1 accent-red-500 cursor-pointer" />
+            <span className="text-[0.55rem] text-[var(--text-muted)] w-5 text-right">{volume}</span>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5 py-3 text-center">
+          <Music2 size={20} className="text-[var(--text-muted)] opacity-30" />
+          <p className="text-[var(--text-muted)] text-xs">
+            {activeLobby && !isHost ? "Waiting for host…" : "Search a track to play"}
+          </p>
+          {!playerReady && <p className="text-[0.58rem] text-[var(--text-muted)] opacity-60">Loading player…</p>}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const bodyH = size.h - 40;
 
   return (
-    <div
-      className="fixed z-[980] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.97)] backdrop-blur-xl"
-      style={{ left: pos.x, top: pos.y, width: size.w, userSelect: "none" }}
-    >
-      {/* Drag handle / header */}
+    <div className="fixed z-[980] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.97)] backdrop-blur-xl"
+      style={{ left: pos.x, top: pos.y, width: size.w, userSelect: "none" }}>
+
+      {/* Header */}
       <div onMouseDown={handleDrag}
-        className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] cursor-grab active:cursor-grabbing select-none">
+        className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] cursor-grab active:cursor-grabbing select-none shrink-0">
         <Music2 size={13} className="text-red-500 shrink-0" />
         <span className="flex-1 text-[0.7rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider truncate">
-          {view === "player" ? "Music" : view === "lobbies" ? "Lobbies" : view === "create" ? "Create Lobby" : (activeLobby?.name || "My Lobby")}
+          {view === "player" ? "Music" : view === "lobbies" ? "Lobbies" : view === "create" ? "Create Lobby"
+            : (activeLobby?.name || `${activeLobby?.host.name ?? "?"}'s Lobby`)}
         </span>
-        {music.activeLobbyId && (
-          <Link href={`/music/${music.activeLobbyId}`}
-            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Open lobby page">
+        {activeLobby && (
+          <Link href={`/music/${activeLobby.id}`}
+            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Open full lobby page">
             <ExternalLink size={12} />
           </Link>
         )}
         {view !== "lobby" && (
-          <button onClick={() => setView(view === "player" ? "lobbies" : "player")}
-            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Lobbies">
+          <button onClick={() => {
+            if (music.activeLobbyId && activeLobby) { setView("lobby"); setLobbyTab("player"); }
+            else setView(view === "player" ? "lobbies" : "player");
+          }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Lobbies">
             <Users size={13} />
           </button>
         )}
-        <button onClick={() => setMin(m => !m)}
-          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
+        <button onClick={() => setMin(m => !m)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
           {minimized ? <ChevronDown size={13} /> : <Minus size={13} />}
         </button>
-        <button onClick={onClose}
-          className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5">
+        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5">
           <X size={13} />
         </button>
       </div>
 
       {!minimized && (
-        <div style={{ height: view === "player" ? "auto" : size.h - 40, overflowY: "auto" }}>
+        <div style={{ height: bodyH, overflowY: "auto" }}>
 
-          {/* ── PLAYER VIEW ─────────────────────────────────────────── */}
+          {/* ── PLAYER VIEW ─────────────────────────────────────── */}
           {view === "player" && (
             <div className="p-3 flex flex-col gap-3">
-              {/* Search */}
-              <div ref={searchRef} className="relative">
-                <div className="relative">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
-                  <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                    onFocus={() => results.length > 0 && setSearchOpen(true)}
-                    placeholder="Search YouTube music…"
-                    className="w-full h-8 pl-7 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs outline-none focus:border-red-500/40 placeholder:text-[var(--text-muted)]"
-                  />
-                  {searching && <Loader2 size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />}
-                </div>
-
-                {searchOpen && (
-                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 rounded-xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.99)] backdrop-blur-xl shadow-2xl overflow-hidden">
-                    {searchErr ? (
-                      <p className="px-3 py-2.5 text-xs text-[var(--text-muted)]">{searchErr}</p>
-                    ) : results.map(r => (
-                      <button key={r.videoId} onClick={() => playTrack(r)}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-elevated)] transition-colors text-left">
-                        <Image src={r.thumbnail} alt="" width={40} height={28} className="rounded shrink-0 object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{r.title}</p>
-                          <p className="text-[0.6rem] text-[var(--text-muted)] truncate">{r.channel}</p>
-                        </div>
-                        <Play size={10} className="text-red-400 shrink-0" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Track info */}
-              {track ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <Image src={track.thumbnail} alt="" width={52} height={52}
-                      className="rounded-lg shrink-0 shadow-md object-cover" />
-                    <div className="min-w-0">
-                      <p className="font-display font-bold text-[var(--text-primary)] text-sm truncate leading-tight">{track.title}</p>
-                      <p className="text-[var(--text-muted)] text-xs truncate">{track.channel}</p>
-                    </div>
-                  </div>
-
-                  {/* Progress */}
-                  <div>
-                    <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full cursor-pointer group"
-                      onClick={e => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        seek(Math.floor(((e.clientX - rect.left) / rect.width) * duration));
-                      }}>
-                      <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors"
-                        style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex justify-between mt-0.5">
-                      <span className="text-[0.6rem] text-[var(--text-muted)]">{fmtMs(positionMs)}</span>
-                      <span className="text-[0.6rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
-                    </div>
-                  </div>
-
-                  {/* Controls */}
-                  <div className="flex items-center justify-center gap-4">
-                    <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                      <SkipBack size={18} />
-                    </button>
-                    <button onClick={isPlaying ? pause : resume}
-                      className="w-9 h-9 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
-                      {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                    <button onClick={next} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                      <SkipForward size={18} />
-                    </button>
-                  </div>
-
-                  {/* Volume */}
-                  <div className="flex items-center gap-2">
-                    <Volume2 size={11} className="text-[var(--text-muted)] shrink-0" />
-                    <input type="range" min={0} max={100} value={volume}
-                      onChange={e => handleVolume(Number(e.target.value))}
-                      className="flex-1 h-1 accent-red-500 cursor-pointer"
-                    />
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-4 text-center">
-                  <Music2 size={24} className="text-[var(--text-muted)] opacity-30" />
-                  <p className="text-[var(--text-muted)] text-xs">Search a track to start playing</p>
-                </div>
-              )}
-
-              {!playerReady && (
-                <p className="text-[0.6rem] text-[var(--text-muted)] text-center opacity-60">Loading player…</p>
-              )}
+              {SearchBar}
+              {PlayerControls}
             </div>
           )}
 
-          {/* ── LOBBIES VIEW ────────────────────────────────────────── */}
+          {/* ── LOBBIES VIEW ────────────────────────────────────── */}
           {view === "lobbies" && (
             <div className="flex flex-col">
               <div className="flex items-center justify-between px-3 pt-3 pb-2">
@@ -398,155 +538,256 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                   <Plus size={11} /> Create
                 </button>
               </div>
-
               {lobbies.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
                   <Music2 size={24} className="text-[var(--text-muted)] opacity-30" />
                   <p className="text-[var(--text-muted)] text-xs">No active lobbies</p>
                 </div>
-              ) : (
-                <div className="flex flex-col divide-y divide-[var(--border-subtle)]">
-                  {lobbies.map(lobby => (
-                    <div key={lobby.id} className="px-3 py-2.5">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate flex-1">
-                          {lobby.name || `${lobby.host.name ?? "?"}'s lobby`}
-                        </span>
-                        {lobby.hasPassword && <Lock size={10} className="text-[var(--text-muted)] shrink-0" />}
-                        <span className="text-[0.6rem] text-[var(--text-muted)] flex items-center gap-0.5 shrink-0">
-                          <Users size={9} />{lobby.memberCount}
-                        </span>
-                        <button onClick={() => copyLobbyLink(lobby.id)}
-                          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                          {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
-                        </button>
-                      </div>
-
-                      {lobby.trackName && (
-                        <p className="text-[0.62rem] text-[var(--text-muted)] truncate mb-1.5">
-                          {lobby.isPlaying ? "▶ " : "⏸ "}{lobby.trackName}
-                        </p>
-                      )}
-
-                      {lobby.hasPassword && typeof joinPass[lobby.id] === "string" && (
-                        <input type="password" placeholder="Password"
-                          value={joinPass[lobby.id]}
-                          onChange={e => setJoinPass(p => ({ ...p, [lobby.id]: e.target.value }))}
-                          className="w-full mb-1.5 px-2 py-1 rounded-md text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none"
-                        />
-                      )}
-
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => joinLobby(lobby.id, lobby.hasPassword)}
-                          disabled={joining === lobby.id}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.62rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-50">
-                          {joining === lobby.id ? <Loader2 size={9} className="animate-spin" /> : <ExternalLink size={9} />}
-                          Join
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── ACTIVE LOBBY VIEW ───────────────────────────────────── */}
-          {view === "lobby" && activeLobby && (
-            <div className="flex flex-col p-3 gap-3">
-              {/* Lobby info */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {activeLobby.hasPassword && <Lock size={10} className="text-[var(--text-muted)]" />}
-                  <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">
-                    {activeLobby.name || `${activeLobby.host.name ?? "?"}'s lobby`}
-                  </span>
-                </div>
-                <button onClick={() => copyLobbyLink(activeLobby.id)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.6rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                  {copied ? <Check size={9} className="text-green-400" /> : <Copy size={9} />}
-                  {copied ? "Copied!" : "Copy link"}
-                </button>
-              </div>
-
-              {/* Members */}
-              <div>
-                <p className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-                  Listeners ({activeLobby.members.length})
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {/* Host */}
-                  <div className="flex items-center gap-2">
-                    {activeLobby.host.image
-                      ? <Image src={activeLobby.host.image} alt="" width={20} height={20} className="rounded-full shrink-0" />
-                      : <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-[0.55rem] font-bold">{activeLobby.host.name?.[0] ?? "?"}</div>
-                    }
-                    <span className="text-xs text-[var(--text-secondary)] truncate">{activeLobby.host.name ?? "Host"}</span>
-                    <span className="text-[0.55rem] text-red-400 font-bold ml-auto">host</span>
+              ) : lobbies.map(lobby => (
+                <div key={lobby.id} className="px-3 py-2.5 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate flex-1">
+                      {lobby.name || `${lobby.host.name ?? "?"}'s lobby`}
+                    </span>
+                    {lobby.hasPassword && <Lock size={10} className="text-[var(--text-muted)] shrink-0" />}
+                    <span className="text-[0.6rem] text-[var(--text-muted)] flex items-center gap-0.5 shrink-0"><Users size={9} />{lobby.memberCount}</span>
+                    <button onClick={() => copyLink(lobby.id)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                      {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
+                    </button>
                   </div>
-                  {activeLobby.members.filter(m => m.id !== activeLobby.host.id).map(m => (
-                    <div key={m.id} className="flex items-center gap-2">
-                      {m.image
-                        ? <Image src={m.image} alt="" width={18} height={18} className="rounded-full shrink-0" />
-                        : <div className="w-[18px] h-[18px] rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] text-[0.5rem] font-bold">{m.name?.[0] ?? "?"}</div>
-                      }
-                      <span className="text-xs text-[var(--text-secondary)] truncate">{m.name ?? "Anonymous"}</span>
-                    </div>
-                  ))}
+                  {lobby.trackName && (
+                    <p className="text-[0.62rem] text-[var(--text-muted)] truncate mb-1.5">{lobby.isPlaying ? "▶ " : "⏸ "}{lobby.trackName}</p>
+                  )}
+                  {lobby.hasPassword && typeof joinPass[lobby.id] === "string" && (
+                    <input type="password" placeholder="Password" value={joinPass[lobby.id]}
+                      onChange={e => setJoinPass(p => ({ ...p, [lobby.id]: e.target.value }))}
+                      className="w-full mb-1.5 px-2 py-1 rounded-md text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none" />
+                  )}
+                  <button onClick={() => joinLobby(lobby.id, lobby.hasPassword)} disabled={joining === lobby.id}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.62rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-50">
+                    {joining === lobby.id ? <Loader2 size={9} className="animate-spin" /> : <ExternalLink size={9} />} Join
+                  </button>
                 </div>
-              </div>
-
-              {/* Volume */}
-              <div className="flex items-center gap-2">
-                <Volume2 size={11} className="text-[var(--text-muted)] shrink-0" />
-                <input type="range" min={0} max={100} value={volume}
-                  onChange={e => handleVolume(Number(e.target.value))}
-                  className="flex-1 h-1 accent-red-500 cursor-pointer"
-                />
-                <span className="text-[0.6rem] text-[var(--text-muted)] w-6 text-right">{volume}</span>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button onClick={() => setView("player")}
-                  className="flex-1 py-1.5 rounded-lg text-xs font-display font-semibold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                  ← Player
-                </button>
-                <button onClick={leaveLobby}
-                  className="flex-1 py-1.5 rounded-lg text-xs font-display font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors">
-                  {session?.user?.id === activeLobby.host.id ? "Close Lobby" : "Leave"}
-                </button>
-              </div>
+              ))}
             </div>
           )}
 
-          {/* ── CREATE VIEW ─────────────────────────────────────────── */}
+          {/* ── CREATE VIEW ─────────────────────────────────────── */}
           {view === "create" && (
             <div className="p-3 flex flex-col gap-3">
               <div>
                 <label className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Name (optional)</label>
-                <input value={lobbyName} onChange={e => setLobbyName(e.target.value)}
-                  placeholder="My session"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40"
-                />
+                <input value={lobbyName} onChange={e => setLName(e.target.value)} placeholder="My session"
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
               </div>
               <div>
                 <label className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Password (optional)</label>
-                <input type="password" value={lobbyPass} onChange={e => setLobbyPass(e.target.value)}
-                  placeholder="Leave blank for public"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40"
-                />
+                <input type="password" value={lobbyPass} onChange={e => setLPass(e.target.value)} placeholder="Leave blank for public"
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setView("lobbies")}
-                  className="flex-1 py-2 rounded-xl text-sm font-display font-semibold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                  Cancel
-                </button>
+                  className="flex-1 py-2 rounded-xl text-sm font-display font-semibold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">Cancel</button>
                 <button onClick={createLobby} disabled={creating}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-display font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                  {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                  Create
+                  {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Create
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── LOBBY VIEW ──────────────────────────────────────── */}
+          {view === "lobby" && activeLobby && (
+            <div className="flex flex-col h-full">
+              {/* Lobby header bar */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border-subtle)] shrink-0">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  {activeLobby.hasPassword && <Lock size={9} className="text-[var(--text-muted)] shrink-0" />}
+                  <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">
+                    {activeLobby.name || `${activeLobby.host.name ?? "?"}'s lobby`}
+                  </span>
+                  <span className="text-[0.58rem] text-[var(--text-muted)] shrink-0 flex items-center gap-0.5">
+                    <Users size={8} />{activeLobby.members.length}
+                  </span>
+                </div>
+                <button onClick={() => copyLink(activeLobby.id)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                  {copied ? <Check size={8} className="text-green-400" /> : <Copy size={8} />}
+                  {copied ? "Copied" : "Share"}
+                </button>
+                <button onClick={leaveLobby}
+                  className="shrink-0 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors">
+                  {isHost ? "Close" : "Leave"}
+                </button>
+              </div>
+
+              {/* Lobby tab bar */}
+              <div className="flex border-b border-[var(--border-subtle)] shrink-0">
+                {([
+                  { key: "player",    icon: Play,      label: "Player" },
+                  { key: "listeners", icon: Users,     label: "People" },
+                  { key: "history",   icon: History,   label: "History" },
+                  { key: "playlists", icon: ListMusic, label: "Playlists" },
+                ] as { key: LobbyTab; icon: React.ElementType; label: string }[]).map(({ key, icon: Icon, label }) => (
+                  <button key={key} onClick={() => setLobbyTab(key)}
+                    className={[
+                      "flex-1 flex flex-col items-center gap-0.5 py-1.5 text-[0.55rem] font-display font-bold uppercase tracking-wide transition-colors",
+                      lobbyTab === key ? "text-red-400 border-b-2 border-red-500" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
+                    ].join(" ")}>
+                    <Icon size={11} />{label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Lobby tab content */}
+              <div className="flex-1 overflow-y-auto">
+
+                {/* Player tab */}
+                {lobbyTab === "player" && (
+                  <div className="p-3 flex flex-col gap-3">
+                    {SearchBar}
+                    {PlayerControls}
+                  </div>
+                )}
+
+                {/* Listeners tab */}
+                {lobbyTab === "listeners" && (
+                  <div className="p-3">
+                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[var(--border-subtle)]">
+                      {activeLobby.host.image
+                        ? <Image src={activeLobby.host.image} alt="" width={22} height={22} className="rounded-full shrink-0" />
+                        : <div className="w-[22px] h-[22px] rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-[0.55rem] font-bold">{activeLobby.host.name?.[0] ?? "?"}</div>
+                      }
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">{activeLobby.host.name ?? "Host"}</p>
+                      </div>
+                      <span className="text-[0.55rem] text-red-400 font-bold">host</span>
+                    </div>
+                    {activeLobby.members.filter(m => m.id !== activeLobby.host.id).map(m => (
+                      <div key={m.id} className="flex items-center gap-2 mb-2">
+                        {m.image
+                          ? <Image src={m.image} alt="" width={18} height={18} className="rounded-full shrink-0" />
+                          : <div className="w-[18px] h-[18px] rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] text-[0.5rem] font-bold">{m.name?.[0] ?? "?"}</div>
+                        }
+                        <p className="text-xs text-[var(--text-secondary)] truncate">{m.name ?? "Anonymous"}</p>
+                      </div>
+                    ))}
+                    {activeLobby.members.length === 0 && <p className="text-[0.65rem] text-[var(--text-muted)] text-center py-4">No listeners yet</p>}
+                  </div>
+                )}
+
+                {/* History tab */}
+                {lobbyTab === "history" && (
+                  <div className="p-3">
+                    {(!activeLobby.history || activeLobby.history.length === 0) ? (
+                      <div className="text-center py-6">
+                        <History size={20} className="mx-auto mb-2 text-[var(--text-muted)] opacity-30" />
+                        <p className="text-[0.65rem] text-[var(--text-muted)]">No tracks played yet</p>
+                      </div>
+                    ) : activeLobby.history.map((item, i) => (
+                      <button key={`${item.videoId}-${i}`}
+                        onClick={() => isHost && playTrack(item)}
+                        className={["w-full flex items-center gap-2 p-1.5 rounded-lg mb-1 text-left transition-colors", isHost ? "hover:bg-[var(--bg-secondary)] cursor-pointer" : "cursor-default"].join(" ")}>
+                        <Image src={item.thumbnail} alt="" width={32} height={24} className="rounded shrink-0 object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[0.65rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{item.title}</p>
+                          <p className="text-[0.55rem] text-[var(--text-muted)]">{timeAgo(item.at)}</p>
+                        </div>
+                        {isHost && <Play size={9} className="text-[var(--text-muted)] shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Playlists tab */}
+                {lobbyTab === "playlists" && (
+                  <div className="p-3">
+                    {!showCreatePl ? (
+                      <button onClick={() => setShowCreate(true)}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 mb-3 rounded-lg border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:border-red-500/40 hover:text-red-400 transition-colors">
+                        <Plus size={11} /> New playlist / Import YouTube
+                      </button>
+                    ) : (
+                      <div className="mb-3 p-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col gap-2">
+                        <input value={newPlName} onChange={e => setNewPlName(e.target.value)} placeholder="Playlist name"
+                          className="w-full px-2 py-1.5 rounded-lg text-xs bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
+                        <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1.5">
+                          <Youtube size={10} className="text-red-500 shrink-0" />
+                          <input value={ytUrl} onChange={e => setYtUrl(e.target.value)} placeholder="YouTube playlist URL (optional)"
+                            className="flex-1 text-xs bg-transparent text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]" />
+                        </div>
+                        {importErr && <p className="text-[0.58rem] text-red-400">{importErr}</p>}
+                        <div className="flex gap-1.5">
+                          <button onClick={() => { setShowCreate(false); setImportErr(null); setNewPlName(""); setYtUrl(""); }}
+                            className="flex-1 py-1 rounded-lg text-xs font-display font-semibold bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">Cancel</button>
+                          <button onClick={ytUrl.trim() ? importYtPlaylist : createEmptyPlaylist}
+                            disabled={importing || creatingPl || (!newPlName.trim() && !ytUrl.trim())}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs font-display font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                            {(importing || creatingPl) ? <Loader2 size={10} className="animate-spin" /> : <Download size={10} />}
+                            {ytUrl.trim() ? "Import" : "Create"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!plLoaded ? (
+                      <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-[var(--text-muted)]" /></div>
+                    ) : playlists.length === 0 ? (
+                      <div className="text-center py-5">
+                        <ListMusic size={20} className="mx-auto mb-1.5 text-[var(--text-muted)] opacity-30" />
+                        <p className="text-[0.65rem] text-[var(--text-muted)]">No playlists yet</p>
+                      </div>
+                    ) : playlists.map(pl => (
+                      <div key={pl.id} className="mb-2 rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+                        <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[var(--bg-secondary)]">
+                          <button onClick={() => setExpandedPl(expandedPl === pl.id ? null : pl.id)}
+                            className="flex items-center gap-1 flex-1 min-w-0 text-left">
+                            <ChevronRight size={10} className={`text-[var(--text-muted)] shrink-0 transition-transform ${expandedPl === pl.id ? "rotate-90" : ""}`} />
+                            <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">{pl.name}</span>
+                            <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{pl.tracks.length}</span>
+                          </button>
+                          {isHost && (
+                            <button onClick={() => startPlaylist(pl)}
+                              className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
+                                activePlId === pl.id ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
+                              <Play size={7} />{activePlId === pl.id ? "Playing" : "Play"}
+                            </button>
+                          )}
+                          <button onClick={() => deletePlaylist(pl.id)} className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors">
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                        {expandedPl === pl.id && (
+                          <div className="max-h-44 overflow-y-auto">
+                            {pl.tracks.length === 0 ? (
+                              <p className="text-[0.62rem] text-[var(--text-muted)] text-center py-2">Empty</p>
+                            ) : pl.tracks.map((t, i) => (
+                              <div key={`${t.videoId}-${i}`}
+                                className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", activePlId === pl.id && queueIdx === i ? "bg-red-500/10" : ""].join(" ")}>
+                                <span className="text-[0.5rem] text-[var(--text-muted)] w-3 shrink-0">{i + 1}</span>
+                                <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
+                                </div>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {isHost && (
+                                    <button onClick={() => {
+                                      setQueueIdx(i); setActivePlId(pl.id); setActiveQueue(pl.tracks);
+                                      music.play({ videoId: t.videoId, title: t.title, channel: t.channel, thumbnail: t.thumbnail });
+                                      if (activeLobby) syncTrack(t, 0, true);
+                                    }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
+                                  )}
+                                  <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}
+                                    className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><X size={9} /></button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -557,8 +798,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       {!minimized && (
         <div onMouseDown={handleResize}
           className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
-          style={{ background: "linear-gradient(135deg,transparent 50%,rgba(255,255,255,0.07) 50%)" }}
-        />
+          style={{ background: "linear-gradient(135deg,transparent 50%,rgba(255,255,255,0.07) 50%)" }} />
       )}
     </div>
   );

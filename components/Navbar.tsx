@@ -10,15 +10,21 @@ import {
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
+import LanguageSwitcher from "./LanguageSwitcher";
+import { useLocale } from "next-intl";
+import type { Locale } from "@/i18n/config";
 import ChatPopup from "./ChatPopup";
 import SupportInbox from "./SupportInbox";
 import MusicPlayer from "./MusicPlayer";
+import { useTranslations } from "next-intl";
 
 const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 
 export default function Navbar() {
   const { data: session } = useSession();
   const isStaff = session?.user?.role && STAFF_ROLES.includes(session.user.role);
+  const locale = useLocale() as Locale;
+  const t = useTranslations("nav");
 
   const router = useRouter();
   const [searchQ, setSearchQ]       = useState("");
@@ -33,6 +39,7 @@ export default function Navbar() {
     id: string; label: string; sub: string | null; href: string;
     image?: string | null; tier?: string;
   };
+
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -328,7 +335,7 @@ export default function Navbar() {
       onChange={(e) => handleSearchChange(e.target.value)}
       onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
       onKeyDown={handleKeyDown}
-      placeholder="Search…"
+      placeholder={t("searchPlaceholder")}
       className="input-field w-full h-[42px] rounded-[10px] shadow-2xl"
       style={{ paddingLeft: "2.25rem" }}
       autoComplete="off"
@@ -360,7 +367,7 @@ export default function Navbar() {
       >
         <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
         <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
-          Search for{" "}
+          {t("searchFor", { query: searchQ })}
           <span className="text-[var(--text-primary)] font-semibold font-display">
             &ldquo;{searchQ}&rdquo;
           </span>
@@ -423,9 +430,9 @@ export default function Navbar() {
             {/* Nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
               {[
-                { href: "/games", label: "Games" },
-                { href: "/subscriptions", label: "Plans" },
-                { href: "/contact",       label: "Contact" },
+                { href: "/games",         label: t("games") },
+                { href: "/subscriptions", label: t("plans") },
+                { href: "/contact",       label: t("contact") },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
@@ -478,7 +485,7 @@ export default function Navbar() {
                   ].join(" ")}
                 >
                   <Plus size={15} />
-                  <span className="hidden md:inline">Create</span>
+                  <span className="hidden md:inline">{t("create")}</span>
                 </button>
 
                 {createOpen && (
@@ -545,10 +552,11 @@ export default function Navbar() {
                     <User size={16} className="text-[var(--accent-orange)]" />
                   )}
                 </Link>
+                <LanguageSwitcher current={locale} />
                 <button
                   onClick={() => signOut()}
                   className="hidden sm:flex items-center p-[0.375rem] rounded-md bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-red-500 transition-colors duration-150"
-                  title="Sign out"
+                  title={t("logout")}
                 >
                   <LogOut size={15} />
                 </button>
@@ -556,10 +564,10 @@ export default function Navbar() {
             ) : (
               <>
                 <Link href="/auth/signin" className="btn-ghost hidden md:inline-flex no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
-                  Sign In
+                  {t("signIn")}
                 </Link>
                 <Link href="/auth/register" className="btn-primary no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
-                  Join Free
+                  {t("joinFree")}
                 </Link>
               </>
             )}

@@ -5,8 +5,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Github, Chrome, Zap, Eye, EyeOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function SignInPage() {
+  const t = useTranslations("auth");
   const { status } = useSession();
   const router = useRouter();
 
@@ -34,7 +36,7 @@ export default function SignInPage() {
     });
 
     if (res?.error) {
-      setError("Invalid email or password.");
+      setError(t("invalidCredentials"));
       setLoading(false);
     } else {
       window.location.href = "/feed";
@@ -53,10 +55,10 @@ export default function SignInPage() {
             <Zap size={24} color="white" strokeWidth={2.5} />
           </div>
           <h1 className="font-display font-extrabold text-[1.625rem] tracking-tight mb-1.5">
-            Welcome back
+            {t("welcomeBack")}
           </h1>
           <p className="text-[var(--text-secondary)] text-[0.9rem]">
-            Sign in to your LightHouse account
+            {t("signInSubtitle")}
           </p>
         </div>
 
@@ -80,7 +82,7 @@ export default function SignInPage() {
 
         <div className="flex items-center gap-3 mb-6">
           <hr className="sep flex-1" />
-          <span className="text-[var(--text-muted)] text-[0.8125rem]">or</span>
+          <span className="text-[var(--text-muted)] text-[0.8125rem]">{t("orContinueWith")}</span>
           <hr className="sep flex-1" />
         </div>
 
@@ -88,13 +90,13 @@ export default function SignInPage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
-              Email
+              {t("email")}
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("emailPlaceholder")}
               required
               className="input-field"
             />
@@ -102,14 +104,14 @@ export default function SignInPage() {
 
           <div>
             <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
-              Password
+              {t("password")}
             </label>
             <div className="relative">
               <input
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder={t("passwordPlaceholder")}
                 required
                 className="input-field pr-12"
               />
@@ -130,14 +132,14 @@ export default function SignInPage() {
           )}
 
           <button type="submit" className="btn-primary mt-2" disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? t("signingIn") : t("signIn")}
           </button>
         </form>
 
         <p className="text-center mt-6 text-[var(--text-secondary)] text-sm">
-          Don&apos;t have an account?{" "}
+          {t("noAccount")}{" "}
           <Link href="/auth/register" className="text-[var(--accent-orange)] font-semibold no-underline">
-            Create one free
+            {t("createFree")}
           </Link>
         </p>
       </div>

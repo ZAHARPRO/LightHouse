@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Upload, Zap } from "lucide-react";
 import UploadForm from "@/components/UploadForm";
+import { getTranslations } from "next-intl/server";
 
 export default async function UploadPage() {
-  const session = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations("upload")]);
   if (!session?.user) redirect("/auth/signin");
 
   const categories = await prisma.category.findMany({
@@ -23,11 +24,11 @@ export default async function UploadPage() {
             <Upload size={19} color="var(--accent-orange)" />
           </div>
           <h1 className="font-display font-extrabold text-[1.625rem] tracking-[-0.02em] text-[var(--text-primary)]">
-            Upload Video
+            {t("title")}
           </h1>
         </div>
         <p className="text-[var(--text-muted)] text-[0.9rem] pl-[3.25rem]">
-          Share your content with the LightHouse community
+          {t("subtitle")}
         </p>
       </div>
 
@@ -41,12 +42,12 @@ export default async function UploadPage() {
         <Zap size={15} color="var(--accent-orange)" className="shrink-0 mt-0.5" />
         <div>
           <p className="font-display font-bold text-[0.8125rem] text-[var(--text-secondary)] mb-1">
-            Tips
+            {t("tipsTitle")}
           </p>
           <ul className="text-[var(--text-muted)] text-[0.8125rem] leading-[1.7] pl-4">
-            <li>Paste a direct link to an <code>.mp4</code>, <code>.webm</code>, or any browser-playable format</li>
-            <li>Duration is in seconds — 1 hour = 3600</li>
-            <li>Premium videos are only visible to active subscribers</li>
+            <li>{t("tip1")}</li>
+            <li>{t("tip2")}</li>
+            <li>{t("tip3")}</li>
           </ul>
         </div>
       </div>

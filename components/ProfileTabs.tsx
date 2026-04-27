@@ -6,6 +6,7 @@ import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck, BarChart2, Eye, 
 import VideoManager from "./VideoManager";
 import PostManager from "./PostManager";
 import BadgeShowcaseEditor from "./BadgeShowcaseEditor";
+import { useTranslations } from "next-intl";
 
 type Video = {
   id: string; title: string; description: string | null;
@@ -46,14 +47,7 @@ type Stats = {
   postCount: number;
 };
 
-const TABS = [
-  { id: "videos",    label: "Videos",    icon: Play },
-  { id: "community", label: "Community", icon: FileText },
-  { id: "badges",    label: "Badges",    icon: Award },
-  { id: "stats",     label: "Stats",     icon: BarChart2 },
-] as const;
-
-type TabId = typeof TABS[number]["id"];
+type TabId = "videos" | "community" | "badges" | "stats";
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -70,6 +64,15 @@ export default function ProfileTabs({
   stats: Stats;
   badgeShowcase: string[];
 }) {
+  const t = useTranslations("profileTabs");
+
+  const TABS = [
+    { id: "videos"    as TabId, label: t("videos"),    icon: Play },
+    { id: "community" as TabId, label: t("community"), icon: FileText },
+    { id: "badges"    as TabId, label: t("badges"),    icon: Award },
+    { id: "stats"     as TabId, label: t("stats"),     icon: BarChart2 },
+  ];
+
   const [tab, setTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "videos";
     const p = new URLSearchParams(window.location.search).get("tab");
@@ -80,6 +83,7 @@ export default function ProfileTabs({
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get("tab");
     if (p && TABS.some(t => t.id === p)) setTab(p as TabId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -116,10 +120,10 @@ export default function ProfileTabs({
           {/* Quick create — desktop only */}
           <div className="hidden sm:flex gap-2 shrink-0 pb-1.5 pl-3">
             <Link href="/upload" className={quickBtn}>
-              <Upload size={13} /> Video
+              <Upload size={13} /> {t("videoBtn")}
             </Link>
             <Link href="/post/new" className={quickBtn}>
-              <Plus size={13} /> Post
+              <Plus size={13} /> {t("postBtn")}
             </Link>
           </div>
         </div>
@@ -127,10 +131,10 @@ export default function ProfileTabs({
         {/* Quick create — mobile only */}
         <div className="flex sm:hidden gap-2 mt-3">
           <Link href="/upload" className={quickBtn + " flex-1 justify-center"}>
-            <Upload size={13} /> Upload Video
+            <Upload size={13} /> {t("uploadVideoBtn")}
           </Link>
           <Link href="/post/new" className={quickBtn + " flex-1 justify-center"}>
-            <Plus size={13} /> New Post
+            <Plus size={13} /> {t("newPostBtn")}
           </Link>
         </div>
       </div>
@@ -148,8 +152,10 @@ export default function ProfileTabs({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <p className="text-[var(--text-muted)] text-sm">
               {rewards.length === 0
-                ? "Watch videos, comment, and engage to earn badges."
-                : `${rewards.length} badge${rewards.length === 1 ? "" : "s"} earned`}
+                ? t("earnBadges")
+                : rewards.length === 1
+                ? t("badgesEarned", { count: rewards.length })
+                : t("badgesEarnedPlural", { count: rewards.length })}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -162,13 +168,13 @@ export default function ProfileTabs({
                 ].join(" ")}
               >
                 <Settings2 size={13} />
-                Showcase
+                {t("showcase")}
               </button>
               <Link
                 href="/badges"
                 className="flex items-center gap-1 no-underline text-[0.8rem] font-display font-semibold text-[var(--accent-orange)] hover:underline"
               >
-                <Award size={13} /> Browse all
+                <Award size={13} /> {t("browseAll")}
               </Link>
             </div>
           </div>
@@ -184,9 +190,9 @@ export default function ProfileTabs({
           {rewards.length === 0 ? (
             <div className="card p-12 text-center">
               <Zap size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
-              <p className="text-[var(--text-secondary)]">No badges yet.</p>
+              <p className="text-[var(--text-secondary)]">{t("noBadgesYet")}</p>
               <Link href="/badges" className="mt-3 inline-block no-underline text-sm font-display font-semibold text-[var(--accent-orange)] hover:underline">
-                See what you can earn →
+                {t("seeEarn")}
               </Link>
             </div>
           ) : (
@@ -216,7 +222,7 @@ export default function ProfileTabs({
                         style={{ background: "rgba(99,102,241,0.08)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.2)" }}
                       >
                         <ShieldCheck size={11} />
-                        Awarded by Admin
+                        {t("awardedByAdmin")}
                         {r.adminNote && <span className="font-normal opacity-80 truncate ml-0.5">— {r.adminNote}</span>}
                       </div>
                     )}
@@ -231,17 +237,17 @@ export default function ProfileTabs({
       {/* Stats tab */}
       {tab === "stats" && (
         <div>
-          <p className="text-[var(--text-muted)] text-sm mb-5">Your channel performance at a glance.</p>
+          <p className="text-[var(--text-muted)] text-sm mb-5">{t("statsSubtitle")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { icon: Eye,           value: fmt(stats.totalViews),       label: "Total Views",    sub: stats.videoCount > 0 ? `~${fmt(stats.avgViews)} avg/video` : null },
-              { icon: ThumbsUp,      value: fmt(stats.totalLikes),       label: "Likes Received", sub: null },
-              { icon: MessageSquare, value: fmt(stats.totalComments),    label: "Comments",       sub: null },
-              { icon: Users,         value: fmt(stats.totalSubscribers), label: "Subscribers",    sub: null },
-              { icon: Video,         value: stats.videoCount,            label: "Videos",         sub: null },
-              { icon: FileText,      value: stats.postCount,             label: "Posts",          sub: null },
-              { icon: Flame,         value: stats.watchStreak,           label: "Watch Streak",   sub: stats.watchStreak > 0 ? "days in a row" : "Start watching!" },
-              { icon: Star,          value: stats.points,                label: "Points",         sub: `Level ${stats.level}` },
+              { icon: Eye,           value: fmt(stats.totalViews),       label: t("totalViews"),    sub: stats.videoCount > 0 ? t("avgViews", { avg: fmt(stats.avgViews) }) : null },
+              { icon: ThumbsUp,      value: fmt(stats.totalLikes),       label: t("likesReceived"), sub: null },
+              { icon: MessageSquare, value: fmt(stats.totalComments),    label: t("comments"),      sub: null },
+              { icon: Users,         value: fmt(stats.totalSubscribers), label: t("subscribers"),   sub: null },
+              { icon: Video,         value: stats.videoCount,            label: t("videos"),        sub: null },
+              { icon: FileText,      value: stats.postCount,             label: t("community"),     sub: null },
+              { icon: Flame,         value: stats.watchStreak,           label: t("watchStreak"),   sub: stats.watchStreak > 0 ? t("daysInRow") : t("startWatching") },
+              { icon: Star,          value: stats.points,                label: t("points"),        sub: t("level", { level: stats.level }) },
             ].map(({ icon: Icon, value, label, sub }) => (
               <div
                 key={label}

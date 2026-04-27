@@ -6,6 +6,7 @@ import Link from "next/link";
 import { sendChatMessage } from "@/actions/chat";
 import { Send, MessageSquare, Users, Zap, ArrowLeft, Reply, X } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import { useTranslations } from "next-intl";
 
 type Message = {
   id: string;
@@ -43,6 +44,7 @@ function getSessionStart(): string {
 }
 
 export default function ChatPage() {
+  const t = useTranslations("chat");
   const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -148,19 +150,19 @@ export default function ChatPage() {
             className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-3 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors duration-150 hover:text-[var(--text-primary)] hover:border-[var(--border-default)]"
           >
             <ArrowLeft size={13} />
-            Back to Feed
+            {t("backToFeed")}
           </Link>
           <div className="flex items-center gap-2 mb-1">
             <MessageSquare size={18} color="var(--accent-orange)" />
-            <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.03em]">Global Chat</h1>
+            <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.03em]">{t("title")}</h1>
           </div>
-          <p className="text-[var(--text-secondary)] text-sm">Live conversation — messages clear when you leave</p>
+          <p className="text-[var(--text-secondary)] text-sm">{t("subtitle")}</p>
         </div>
         {onlineCount !== null && (
           <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[0.8125rem]">
             <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
             <Users size={14} />
-            <span>{onlineCount} online</span>
+            <span>{t("online", { count: onlineCount })}</span>
           </div>
         )}
       </div>
@@ -172,7 +174,7 @@ export default function ChatPage() {
           {messages.length === 0 && session && (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
               <MessageSquare size={32} className="text-[var(--text-muted)] opacity-30" />
-              <p className="text-[var(--text-muted)] text-sm">No messages yet. Start the conversation!</p>
+              <p className="text-[var(--text-muted)] text-sm">{t("empty")}</p>
             </div>
           )}
           {messages.map((msg) => {
@@ -208,7 +210,7 @@ export default function ChatPage() {
                 <div className={["max-w-[70%] flex flex-col", isMe ? "items-end" : "items-start"].join(" ")}>
                   <div className={["flex items-center gap-2 mb-1", isMe ? "flex-row-reverse" : "flex-row"].join(" ")}>
                     <span className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)]">
-                      {isMe ? "You" : msg.author.name}
+                      {isMe ? t("you") : msg.author.name}
                     </span>
                     <span style={{ color: tier.color, background: `${tier.color}18`, border: `1px solid ${tier.color}30` }}
                       className="text-[0.6875rem] font-semibold py-0.5 px-1.5 rounded">
@@ -250,7 +252,7 @@ export default function ChatPage() {
               <div className="flex items-center justify-between px-5 pt-3 pb-1">
                 <span className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--accent-orange)]">
                   <Reply size={13} />
-                  Replying to <strong>{replyTo.name}</strong>
+                  {t("reply")} <strong>{replyTo.name}</strong>
                 </span>
                 <button onClick={() => setReplyTo(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150">
                   <X size={14} />
@@ -262,7 +264,7 @@ export default function ChatPage() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Say something to the world…"}
+                placeholder={replyTo ? t("replyPlaceholder", { name: replyTo.name }) : t("placeholder")}
                 maxLength={500}
                 className="input-field flex-1 bg-[var(--bg-elevated)]"
               />
@@ -280,11 +282,11 @@ export default function ChatPage() {
           <div className="border-t border-[var(--border-subtle)] py-4 px-5 bg-[var(--bg-secondary)] flex items-center justify-between">
             <span className="text-[var(--text-secondary)] text-[0.9rem] flex items-center gap-1.5">
               <Zap size={14} color="var(--accent-orange)" />
-              Sign in to join the conversation
+              {t("signInPrompt")}
             </span>
             <div className="flex gap-2">
-              <Link href="/auth/signin" className="btn-ghost no-underline py-1.5 px-4 text-sm">Sign In</Link>
-              <Link href="/auth/register" className="btn-primary no-underline py-1.5 px-4 text-sm">Join Free</Link>
+              <Link href="/auth/signin" className="btn-ghost no-underline py-1.5 px-4 text-sm">{t("signIn")}</Link>
+              <Link href="/auth/register" className="btn-primary no-underline py-1.5 px-4 text-sm">{t("joinFree")}</Link>
             </div>
           </div>
         )}

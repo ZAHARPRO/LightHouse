@@ -3,10 +3,12 @@
 import { useRef, useState, useTransition } from "react";
 import { createVideo } from "@/actions/videos";
 import { Upload, Video, FileText, Link2, Clock, Crown, Tag, AlertCircle, Loader } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Category = { id: string; name: string };
 
 export default function UploadForm({ categories }: { categories: Category[] }) {
+  const t = useTranslations("upload");
   const [isPremium, setIsPremium]   = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [pending, startTransition]  = useTransition();
@@ -76,11 +78,11 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         )}
 
         {/* Title */}
-        <Field label="Title" icon={<FileText size={14} className="text-[var(--accent-orange)]" />} required>
+        <Field label={t("titleLabel")} icon={<FileText size={14} className="text-[var(--accent-orange)]" />} required>
           <input
             name="title"
             type="text"
-            placeholder="Enter video title"
+            placeholder={t("titlePlaceholder")}
             required
             maxLength={200}
             className="input-field"
@@ -88,11 +90,11 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Video URL */}
-        <Field label="Video URL" icon={<Video size={14} className="text-[var(--accent-orange)]" />} required>
+        <Field label={t("urlLabel")} icon={<Video size={14} className="text-[var(--accent-orange)]" />} required>
           <input
             name="url"
             type="url"
-            placeholder="https://example.com/video.mp4"
+            placeholder={t("urlPlaceholder")}
             required
             onChange={handleUrlChange}
             className="input-field"
@@ -100,10 +102,10 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Description */}
-        <Field label="Description" icon={<FileText size={14} className="text-[var(--accent-orange)]" />}>
+        <Field label={t("descLabel")} icon={<FileText size={14} className="text-[var(--accent-orange)]" />}>
           <textarea
             name="description"
-            placeholder="Tell viewers what this video is about…"
+            placeholder={t("descPlaceholder")}
             rows={4}
             maxLength={2000}
             className="input-field"
@@ -112,11 +114,11 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         </Field>
 
         {/* Thumbnail URL */}
-        <Field label="Thumbnail URL" icon={<Link2 size={14} className="text-[var(--accent-orange)]" />}>
+        <Field label={t("thumbLabel")} icon={<Link2 size={14} className="text-[var(--accent-orange)]" />}>
           <input
             name="thumbnail"
             type="url"
-            placeholder="https://example.com/thumb.jpg (optional)"
+            placeholder={t("thumbPlaceholder")}
             className="input-field"
           />
         </Field>
@@ -124,28 +126,28 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
         {/* Duration + Category row */}
         <div className="grid grid-cols-2 gap-4">
           <Field
-            label="Duration (seconds)"
+            label={t("durationLabel")}
             icon={detecting
               ? <Loader size={14} className="text-[var(--accent-orange)] animate-spin" />
               : <Clock size={14} className="text-[var(--accent-orange)]" />
             }
-            hint={detecting ? "Detecting…" : duration ? "Auto-detected" : undefined}
+            hint={detecting ? t("detecting") : duration ? t("autoDetected") : undefined}
           >
             <input
               name="duration"
               type="number"
               min={1}
               max={86400}
-              placeholder={detecting ? "Detecting…" : "Will be detected from URL"}
+              placeholder={detecting ? t("detecting") : t("durationPlaceholder")}
               value={duration}
               readOnly
               className="input-field cursor-default opacity-70"
             />
           </Field>
 
-          <Field label="Category" icon={<Tag size={14} className="text-[var(--accent-orange)]" />}>
+          <Field label={t("categoryLabel")} icon={<Tag size={14} className="text-[var(--accent-orange)]" />}>
             <select name="categoryId" className="input-field cursor-pointer">
-              <option value="">— None —</option>
+              <option value="">{t("noCategory")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -171,10 +173,10 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
                 "font-display font-bold text-[0.9rem]",
                 isPremium ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]",
               ].join(" ")}>
-                Premium Content
+                {t("premiumLabel")}
               </p>
               <p className="text-[0.8rem] text-[var(--text-muted)] mt-[0.1rem]">
-                Only subscribers can watch this video
+                {t("premiumDesc")}
               </p>
             </div>
           </div>
@@ -204,7 +206,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
           ].join(" ")}
         >
           <Upload size={17} />
-          {pending ? "Uploading…" : "Publish Video"}
+          {pending ? t("uploading") : t("publish")}
         </button>
       </div>
     </form>

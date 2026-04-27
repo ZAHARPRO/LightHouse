@@ -318,10 +318,11 @@ export default function ChessOnlineRoom() {
     fetchAbortRef.current = ctrl;
     try {
       const res = await fetch(`/api/chess-rooms/${roomId}`, { signal: ctrl.signal });
-      if (!res.ok) { setError("Room not found"); return; }
+      if (res.status === 404) { setError("Room not found"); return; }
+      if (!res.ok) return; // transient server error — skip this poll, don't kick
       setRoom(await res.json());
     } catch (e) {
-      if ((e as Error).name !== "AbortError") setError("Room not found");
+      if ((e as Error).name !== "AbortError") return; // network glitch — skip poll
     }
   }, [roomId]);
 
@@ -341,7 +342,6 @@ export default function ChessOnlineRoom() {
   }, [room?.myRole, room?.status, roomId]);
 
   const doAction = useCallback(async (path: string, body?: object) => {
-    // Cancel any in-flight poll and stop the interval
     fetchAbortRef.current?.abort();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     await fetch(`/api/chess-rooms/${roomId}/${path}`, {
@@ -349,7 +349,7 @@ export default function ChessOnlineRoom() {
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    await fetchRoom();
+    fetchRoom(); // fire without await — polling also starts immediately
     pollRef.current = setInterval(fetchRoom, 400);
   }, [roomId, fetchRoom]);
 

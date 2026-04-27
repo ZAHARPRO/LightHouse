@@ -103,6 +103,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [addingToPlId, setAddingToPlId]   = useState<string | null>(null);
   const [addPlLoading, setAddPlLoading]   = useState(false);
 
+  const syncedTrackRef   = useRef<string | null>(null);
+  const prevIsPlayingRef = useRef<boolean | null>(null);
+
   const isHost = activeLobby?.host.id === session?.user?.id;
   const {
     track, isPlaying, positionMs, playerReady,
@@ -156,22 +159,37 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!d.trackUri) return;
 
     if (d.trackUri !== music.track?.videoId) {
-      // New track pushed by host or any member — follow it
-      // positionMs (server snapshot) + elapsedMs (server-side clock since snapshot) + rtt/2 (transit)
+      // New track — one-time position sync then play locally
+      syncedTrackRef.current = d.trackUri;
+      prevIsPlayingRef.current = d.isPlaying;
       const est = d.positionMs + (d.isPlaying ? d.elapsedMs + rtt / 2 : 0);
       music.play(
         { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
         est
       );
-    } else if (!isHost && d.isPlaying) {
-      // Same track — correct position drift for non-host (host drives position, don't resync host)
-      // Read live position from playerRef (ref is stable, no stale closure issue)
-      const localPos = music.playerRef.current
-        ? Math.floor(music.playerRef.current.getCurrentTime() * 1000)
-        : 0;
-      const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
-      if (Math.abs(serverPos - localPos) > 5000) {
+    } else if (!isHost) {
+      // Same track — only react to state transitions, no continuous drift correction
+      const wasPlaying = prevIsPlayingRef.current;
+
+      if (!d.isPlaying && wasPlaying !== false) {
+        // Host paused
+        prevIsPlayingRef.current = false;
+        music.pause();
+      } else if (d.isPlaying && wasPlaying === false) {
+        // Host resumed — re-sync position once then play locally
+        prevIsPlayingRef.current = true;
+        const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
         music.seek(serverPos);
+        music.resume();
+      } else if (d.isPlaying) {
+        // Normal playback — only fix extreme drift (>30s means host manually seeked)
+        const localPos = music.playerRef.current
+          ? Math.floor(music.playerRef.current.getCurrentTime() * 1000)
+          : 0;
+        const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
+        if (Math.abs(serverPos - localPos) > 30_000) {
+          music.seek(serverPos);
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

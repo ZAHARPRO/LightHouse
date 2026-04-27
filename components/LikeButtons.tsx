@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { toggleLike } from "@/actions/likes";
+import { useTranslations } from "next-intl";
 
 interface Props {
   videoId: string;
@@ -21,6 +22,7 @@ export default function LikeButtons({
   isOwner,
   isLoggedIn,
 }: Props) {
+  const t = useTranslations("like");
   const [reaction, setReaction] = useState(initialUserReaction);
   const [likes, setLikes]       = useState(initialLikes);
   const [dislikes, setDislikes] = useState(initialDislikes);
@@ -56,9 +58,9 @@ export default function LikeButtons({
 
   const disabled = isOwner || !isLoggedIn || pending;
   const title = isOwner
-    ? "You can't react to your own video"
+    ? t("ownVideo")
     : !isLoggedIn
-    ? "Sign in to react"
+    ? t("signIn")
     : undefined;
 
   const btnBase = [

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { MessageCircle, ArrowLeft, Newspaper, ChevronRight } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import { getTranslations } from "next-intl/server";
 
 function timeAgo(d: Date) {
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -17,6 +18,7 @@ function timeAgo(d: Date) {
 }
 
 export default async function DMListPage() {
+  const t = await getTranslations("dm");
   const session = await auth();
   if (!session?.user?.id) redirect("/auth/signin");
 
@@ -35,7 +37,7 @@ export default async function DMListPage() {
         href="/profile"
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-6 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> Back to Profile
+        <ArrowLeft size={13} /> {t("backToProfile")}
       </Link>
 
       {/* ── Site News section ── */}
@@ -45,14 +47,14 @@ export default async function DMListPage() {
             <div className="flex items-center gap-2">
               <Newspaper size={15} className="text-[var(--accent-orange)]" />
               <h2 className="font-display font-bold text-[0.9375rem] text-[var(--text-primary)]">
-                Site News
+                {t("siteNews")}
               </h2>
             </div>
             <Link
               href="/news"
               className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline flex items-center gap-0.5"
             >
-              View all <ChevronRight size={12} />
+              {t("viewAll")} <ChevronRight size={12} />
             </Link>
           </div>
 
@@ -89,16 +91,16 @@ export default async function DMListPage() {
       <div className="flex items-center gap-2 mb-6">
         <MessageCircle size={18} className="text-[var(--accent-orange)]" />
         <h1 className="font-display font-extrabold text-2xl tracking-tight text-[var(--text-primary)]">
-          Messages
+          {t("title")}
         </h1>
       </div>
 
       {convs.length === 0 ? (
         <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-12 text-center">
           <MessageCircle size={32} className="mx-auto mb-3 text-[var(--text-muted)] opacity-40" />
-          <p className="text-[var(--text-secondary)] text-sm">No conversations yet.</p>
+          <p className="text-[var(--text-secondary)] text-sm">{t("noConversations")}</p>
           <p className="text-[var(--text-muted)] text-xs mt-1">
-            Visit someone&apos;s profile and click &quot;Message&quot; to start a chat.
+            {t("noConversationsHint")}
           </p>
         </div>
       ) : (

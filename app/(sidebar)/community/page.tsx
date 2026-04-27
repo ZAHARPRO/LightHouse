@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, Lock, ArrowRight } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import { getTranslations } from "next-intl/server";
 
 function timeAgo(date: Date): string {
   const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -33,6 +34,7 @@ type Post = {
 };
 
 export default async function CommunityPage() {
+  const t = await getTranslations("community");
   const session = await auth();
 
   let posts: Post[] = [];
@@ -78,20 +80,20 @@ export default async function CommunityPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.02em] text-[var(--text-primary)]">
-            Community
+            {t("title")}
           </h1>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             {isLoggedIn
               ? subCount > 0
-                ? `Posts from ${subCount} creator${subCount === 1 ? "" : "s"} you follow`
-                : "Subscribe to creators to see their posts here"
-              : "Sign in to see posts from creators you follow"}
+                ? t(subCount === 1 ? "followingCount" : "followingCountPlural", { count: subCount })
+                : t("emptyFollowing")
+              : t("notSignedIn")}
           </p>
         </div>
 
         {!isLoggedIn && (
           <Link href="/auth/signin" className="btn-primary no-underline text-sm py-2 px-5">
-            Sign In
+            {t("signIn")}
           </Link>
         )}
         {isLoggedIn && subCount === 0 && (
@@ -99,7 +101,7 @@ export default async function CommunityPage() {
             href="/feed"
             className="flex items-center gap-1.5 no-underline text-sm font-display font-semibold text-[var(--accent-orange)] py-2 px-4 rounded-lg border border-orange-500/25 bg-orange-500/[0.06] hover:bg-orange-500/[0.1] transition-colors duration-150"
           >
-            <Users size={14} /> Discover creators <ArrowRight size={13} />
+            <Users size={14} /> {t("discoverCreators")} <ArrowRight size={13} />
           </Link>
         )}
       </div>
@@ -108,9 +110,9 @@ export default async function CommunityPage() {
       {posts.length === 0 ? (
         <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-8 py-16 text-center">
           <Users size={36} className="mx-auto mb-4 text-[var(--text-muted)]" />
-          <p className="font-display font-bold text-[var(--text-primary)] text-lg mb-2">No posts yet</p>
+          <p className="font-display font-bold text-[var(--text-primary)] text-lg mb-2">{t("noPostsYet")}</p>
           <p className="text-[var(--text-muted)] text-[0.9rem]">
-            The creators you follow haven&apos;t posted anything yet.
+            {t("noPostsMessage")}
           </p>
         </div>
       ) : (
@@ -130,7 +132,7 @@ export default async function CommunityPage() {
                   </span>
                   {post.isPremium && (
                     <span className="text-[0.6875rem] font-bold px-[0.4rem] py-[0.1rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/25 font-display">
-                      Premium
+                      {t("premium")}
                     </span>
                   )}
                   <span className="ml-auto text-xs text-[var(--text-muted)]">
@@ -161,11 +163,11 @@ export default async function CommunityPage() {
       {!isLoggedIn && (
         <div className="mt-6 rounded-xl bg-orange-500/[0.06] border border-orange-500/20 px-6 py-4 text-center">
           <p className="text-[0.875rem] text-[var(--text-secondary)] font-display">
-            These are preview posts.{" "}
+            {t("previewNotice")}{" "}
             <Link href="/auth/signin" className="text-[var(--accent-orange)] font-semibold no-underline hover:underline">
-              Sign in
+              {t("signInLink")}
             </Link>{" "}
-            to see posts from creators you actually follow.
+            {t("toSeeReal")}
           </p>
         </div>
       )}

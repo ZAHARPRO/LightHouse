@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
+import { getTranslations } from "next-intl/server";
 import BanBanner from "@/components/BanBanner";
 import AvatarUpload from "@/components/AvatarUpload";
 import UsernameEditor from "@/components/UsernameEditor";
@@ -16,6 +17,7 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 export default async function ProfilePage() {
+  const t = await getTranslations("profile");
   const session = await auth();
   if (!session?.user?.id) redirect("/auth/signin");
 
@@ -91,14 +93,14 @@ export default async function ProfilePage() {
                 className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
               >
                 <MessageCircle size={13} />
-                Messages
+                {t("messages")}
               </Link>
               <Link
                 href={`/profile/${user.id}`}
                 className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
               >
                 <ExternalLink size={13} />
-                Public Profile
+                {t("publicProfile")}
               </Link>
               <ProfilePlaylists
                 initialFavSong={user.favoriteSong ? (() => { try { return JSON.parse(user.favoriteSong!); } catch { return null; } })() : null}
@@ -121,10 +123,10 @@ export default async function ProfilePage() {
             <div className="max-w-full sm:max-w-[320px] mb-4">
               <div className="flex justify-between mb-1.5">
                 <span className="flex items-center gap-1.5 font-display font-bold text-sm text-[var(--accent-orange)]">
-                  <TrendingUp size={14}/> Level {level}
+                  <TrendingUp size={14}/> {t("level", { level })}
                 </span>
                 <span className="text-[var(--text-muted)] text-[0.8125rem]">
-                  {user.points} pts — {100 - ((user.points ?? 0) % 100)} to next
+                  {t("pointsToNext", { pts: user.points, left: 100 - ((user.points ?? 0) % 100) })}
                 </span>
               </div>
               <div className="h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
@@ -138,9 +140,9 @@ export default async function ProfilePage() {
             {/* Quick stats */}
             <div className="flex flex-wrap gap-4 sm:gap-5 pt-3 border-t border-[var(--border-subtle)]">
               {[
-                { icon: Star,  value: user.points,         label: "Points" },
-                { icon: Award, value: user.rewards.length, label: "Badges" },
-                { icon: Crown, value: level,               label: "Level"  },
+                { icon: Star,  value: user.points,         label: t("pointsLabel") },
+                { icon: Award, value: user.rewards.length, label: t("badgesLabel") },
+                { icon: Crown, value: level,               label: t("levelLabel")  },
               ].map(({ icon: Icon, value, label }) => (
                 <div key={label} className="flex items-center gap-2">
                   <Icon size={15} color="var(--accent-orange)" className="shrink-0" />
@@ -179,10 +181,10 @@ export default async function ProfilePage() {
       {user.tier === "FREE" && (
         <div className="mt-8 p-5 sm:p-8 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),transparent)] border border-orange-500/15 rounded-xl flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h3 className="font-display font-bold text-lg mb-1">Upgrade your plan</h3>
-            <p className="text-[var(--text-secondary)] text-sm">Earn more points, unlock exclusive content, and get a premium badge.</p>
+            <h3 className="font-display font-bold text-lg mb-1">{t("upgradePlanTitle")}</h3>
+            <p className="text-[var(--text-secondary)] text-sm">{t("upgradePlanDesc")}</p>
           </div>
-          <a href="/subscriptions" className="btn-primary no-underline whitespace-nowrap">View Plans</a>
+          <a href="/subscriptions" className="btn-primary no-underline whitespace-nowrap">{t("viewPlans")}</a>
         </div>
       )}
     </div>

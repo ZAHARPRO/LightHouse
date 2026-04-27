@@ -46,8 +46,8 @@ type RoomData = {
 };
 
 const NUM_COLORS: Record<number, string> = {
-  1: "text-blue-400", 2: "text-green-400", 3: "text-red-400", 4: "text-purple-400",
-  5: "text-orange-400", 6: "text-cyan-400", 7: "text-pink-400", 8: "text-gray-300",
+  1: "#60a5fa", 2: "#4ade80", 3: "#f87171", 4: "#a78bfa",
+  5: "#fb923c", 6: "#22d3ee", 7: "#f472b6", 8: "#9ca3af",
 };
 
 const DIFF_LABEL: Record<string, string> = {
@@ -60,37 +60,24 @@ const WIN_REASON: Record<string, string> = {
   left: "opponent left",
 };
 
-// ── Cell size helpers ─────────────────────────────────────────────────────────
-// main (interactive) board cell size in px based on column count
+// ── Cell sizes — never shrink, scroll instead ────────────────────────────────
 function mainCellPx(cols: number): number {
-  if (cols >= 30) return 18;  // hard:   30 cols → board ~600px
-  if (cols >= 16) return 22;  // medium: 16 cols → board ~382px
-  return 28;                   // easy:    9 cols → board ~268px
+  if (cols >= 30) return 28;
+  if (cols >= 16) return 32;
+  return 40;
 }
-// compact (view-only) opponent board
 function oppCellPx(cols: number): number {
-  if (cols >= 30) return 13;
-  if (cols >= 16) return 15;
-  return 20;
+  if (cols >= 30) return 20;
+  if (cols >= 16) return 22;
+  return 28;
 }
-// both boards compact (FINISHED review)
 function finCellPx(cols: number): number {
-  if (cols >= 30) return 14;
-  if (cols >= 16) return 17;
-  return 22;
-}
-// breakpoint at which boards go side-by-side
-function rowBreakClass(cols: number): string {
-  if (cols >= 30) return "xl:flex-row";  // ~1150px needed
-  if (cols >= 16) return "lg:flex-row";  // ~700px needed
-  return "md:flex-row";                  // ~500px needed
-}
-function finBreakClass(cols: number): string {
-  if (cols >= 30) return "xl:grid-cols-2";
-  return "md:grid-cols-2";
+  if (cols >= 30) return 22;
+  if (cols >= 16) return 24;
+  return 32;
 }
 
-// ── Mini board renderer ───────────────────────────────────────────────────────
+// ── Board renderer ────────────────────────────────────────────────────────────
 
 interface BoardProps {
   rows: number;
@@ -105,20 +92,27 @@ interface BoardProps {
   onFlag?: (e: React.MouseEvent, idx: number) => void;
 }
 
-function MineBoard({ rows, cols, mines, revealed, flagged, isHit, interactive, cellPx = 28, onReveal, onFlag }: BoardProps) {
-  const mineSet = new Set(mines ?? []);
-  const revSet  = new Set(revealed);
-  const flagSet = new Set(flagged);
+function MineBoard({ rows, cols, mines, revealed, flagged, isHit, interactive, cellPx = 32, onReveal, onFlag }: BoardProps) {
+  const mineSet   = new Set(mines ?? []);
+  const revSet    = new Set(revealed);
+  const flagSet   = new Set(flagged);
   const neighbors = mines ? computeNeighbors(rows, cols, mineSet) : [];
   const total     = rows * cols;
-  const iconPx    = Math.max(8, Math.floor(cellPx * 0.48));
-  const fontPx    = Math.max(7, Math.floor(cellPx * 0.42));
+  const iconPx    = Math.max(10, Math.floor(cellPx * 0.50));
+  const fontPx    = Math.max(9,  Math.floor(cellPx * 0.48));
 
   return (
-    <div className="overflow-x-auto" onContextMenu={e => e.preventDefault()}>
+    <div className="overflow-x-auto select-none" onContextMenu={e => e.preventDefault()}>
       <div
-        className="inline-grid gap-[2px]"
-        style={{ gridTemplateColumns: `repeat(${cols}, ${cellPx}px)` }}
+        className="inline-grid"
+        style={{
+          gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
+          gap: 1,
+          padding: 2,
+          background: "rgba(0,0,0,0.35)",
+          borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.05)",
+        }}
       >
         {Array.from({ length: total }, (_, idx) => {
           const isRevealed = revSet.has(idx);
@@ -126,34 +120,64 @@ function MineBoard({ rows, cols, mines, revealed, flagged, isHit, interactive, c
           const isFlagged  = flagSet.has(idx);
           const n          = neighbors[idx] ?? 0;
 
-          let bgCls = interactive
-            ? "bg-[var(--bg-elevated)] hover:bg-[var(--bg-card)] border-[var(--border-subtle)] cursor-pointer"
-            : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] cursor-default";
-          let content: React.ReactNode = null;
-
-          if (isRevealed) {
-            if (isMine) {
-              bgCls = isHit ? "bg-red-500/20 border-red-500/40" : "bg-[var(--bg-card)] border-[var(--border-subtle)]";
-              content = <Bomb size={iconPx} className="text-red-400" />;
-            } else {
-              bgCls = "bg-[var(--bg-secondary)] border-[var(--border-subtle)]";
-              if (n > 0) content = <span className={`font-display font-bold ${NUM_COLORS[n]}`} style={{ fontSize: fontPx }}>{n}</span>;
-            }
-          } else if (isFlagged) {
-            content = <Flag size={iconPx} className="text-[var(--accent-orange)]" />;
+          /* ── Revealed mine ── */
+          if (isRevealed && isMine) {
+            return (
+              <div key={idx}
+                style={{ width: cellPx, height: cellPx, background: isHit ? "rgba(239,68,68,0.25)" : "rgba(239,68,68,0.08)", borderRadius: 3 }}
+                className="flex items-center justify-center">
+                <Bomb size={iconPx} style={{ color: isHit ? "#f87171" : "#f87171aa" }} />
+              </div>
+            );
           }
 
+          /* ── Revealed safe ── */
+          if (isRevealed) {
+            return (
+              <div key={idx}
+                style={{ width: cellPx, height: cellPx, background: "rgba(0,0,0,0.28)", borderRadius: 3 }}
+                className="flex items-center justify-center">
+                {n > 0 && (
+                  <span style={{ fontSize: fontPx, color: NUM_COLORS[n], fontWeight: 900, fontFamily: "monospace", lineHeight: 1 }}>
+                    {n}
+                  </span>
+                )}
+              </div>
+            );
+          }
+
+          /* ── Flagged ── */
+          if (isFlagged) {
+            return (
+              <button key={idx}
+                style={{
+                  width: cellPx, height: cellPx, borderRadius: 3,
+                  background: "linear-gradient(145deg, rgba(249,115,22,0.18) 0%, rgba(249,115,22,0.08) 100%)",
+                  border: "1px solid rgba(249,115,22,0.35)",
+                  cursor: interactive ? "context-menu" : "default",
+                }}
+                className="flex items-center justify-center"
+                onContextMenu={e => interactive && onFlag?.(e, idx)}
+              >
+                <Flag size={iconPx} style={{ color: "var(--accent-orange)" }} />
+              </button>
+            );
+          }
+
+          /* ── Unrevealed ── */
           return (
-            <button
-              key={idx}
-              disabled={!interactive || isRevealed}
-              style={{ width: cellPx, height: cellPx }}
-              className={`flex items-center justify-center rounded border transition-colors duration-75 ${bgCls}`}
+            <button key={idx}
+              style={{
+                width: cellPx, height: cellPx, borderRadius: 3,
+                background: "linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                boxShadow: interactive ? "inset 0 1px 0 rgba(255,255,255,0.09), inset 0 -1px 0 rgba(0,0,0,0.2)" : undefined,
+                cursor: interactive ? "pointer" : "default",
+                transition: "background 60ms",
+              }}
+              className={interactive ? "hover:brightness-125 active:brightness-75" : ""}
               onClick={() => interactive && onReveal?.(idx)}
               onContextMenu={e => interactive && onFlag?.(e, idx)}
-            >
-              {content}
-            </button>
+            />
           );
         })}
       </div>
@@ -190,10 +214,11 @@ export default function GameRoomPage() {
     fetchAbortRef.current = ctrl;
     try {
       const res = await fetch(`/api/ms-rooms/${roomId}`, { signal: ctrl.signal });
-      if (!res.ok) { setError("Room not found"); return; }
+      if (res.status === 404) { setError("Room not found"); return; }
+      if (!res.ok) return; // transient server error — skip this poll, don't kick
       setRoom(await res.json());
     } catch (e) {
-      if ((e as Error).name !== "AbortError") setError("Room not found");
+      if ((e as Error).name !== "AbortError") return; // network glitch — skip poll
     }
   }, [roomId]);
 
@@ -220,7 +245,7 @@ export default function GameRoomPage() {
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    await fetchRoom();
+    fetchRoom(); // fire without await — polling also starts immediately
     pollRef.current = setInterval(fetchRoom, 400);
   }, [roomId, fetchRoom]);
 
@@ -259,7 +284,7 @@ export default function GameRoomPage() {
 
   async function handleLeave() {
     await doAction("leave");
-    router.push("/games/minesweeper/online");
+    router.push("/games/minesweeper/online/rated");
   }
 
   if (error) return (
@@ -364,7 +389,7 @@ export default function GameRoomPage() {
     const reason     = room.winReason ? WIN_REASON[room.winReason] ?? room.winReason : "";
     const winnerName = room.winner === "host" ? room.hostName : room.guestName;
     const fPx        = finCellPx(cols);
-    const fBreak     = finBreakClass(cols);
+    const fBreak     = cols >= 30 ? "" : "lg:grid-cols-2";
 
     return (
       <main className="max-w-5xl mx-auto px-4 py-10">
@@ -421,7 +446,7 @@ export default function GameRoomPage() {
         </div>
 
         <div className="flex justify-center">
-          <button onClick={() => router.push("/games/minesweeper/online")}
+          <button onClick={() => router.push("/games/minesweeper/online/rated")}
             className="px-6 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-bold text-sm hover:text-[var(--text-primary)] transition-colors">
             ← Back to Lobby
           </button>
@@ -433,7 +458,7 @@ export default function GameRoomPage() {
   // ── PLAYING ────────────────────────────────────────────────────────────────
   const mPx       = mainCellPx(cols);
   const oPx       = oppCellPx(cols);
-  const rBreak    = rowBreakClass(cols);
+  const rBreak    = cols >= 30 ? "" : "lg:flex-row";
   const myFlagsLeft = (room.mineCount ?? 0) - room.myFlagged.length;
 
   return (

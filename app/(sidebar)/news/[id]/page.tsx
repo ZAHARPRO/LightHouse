@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, ShieldCheck } from "lucide-react";
 import NewsCommentsSection from "@/components/NewsCommentsSection";
 import NewsVoteButtons from "@/components/NewsVoteButtons";
 import { getNewsVotes, getNewsComments } from "@/actions/news";
+import { getTranslations } from "next-intl/server";
 
 function formatDate(d: Date) {
   return new Date(d).toLocaleDateString("en-US", {
@@ -20,7 +21,7 @@ export default async function NewsPostPage({
   params: Promise<{ id: string }>;
 }) {
   const { id }   = await params;
-  const session  = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations("news")]);
 
   const post = await prisma.newsPost.findUnique({
     where: { id },
@@ -45,7 +46,7 @@ export default async function NewsPostPage({
         href="/news"
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-8 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> All News
+        <ArrowLeft size={13} /> {t("allNews")}
       </Link>
 
       {/* Post */}
@@ -53,7 +54,7 @@ export default async function NewsPostPage({
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <span className="inline-flex items-center gap-1 text-[0.65rem] font-display font-bold uppercase tracking-[0.08em] text-[var(--accent-orange)] bg-orange-500/10 px-2 py-0.5 rounded-full">
-            📢 Announcement
+            {t("announcement")}
           </span>
         </div>
 
@@ -98,7 +99,7 @@ export default async function NewsPostPage({
         {/* Vote buttons */}
         <div className="flex items-center justify-between pt-6 border-t border-[var(--border-subtle)]">
           <p className="text-[0.8rem] text-[var(--text-muted)] font-display">
-            Was this helpful?
+            {t("wasHelpful")}
           </p>
           <NewsVoteButtons
             newsPostId={post.id}

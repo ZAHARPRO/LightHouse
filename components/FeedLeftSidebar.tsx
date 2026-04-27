@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Sub = { id: string; name: string; initials: string; color: string; image?: string | null };
 
@@ -14,6 +15,8 @@ interface Props {
 }
 
 export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpandedChange }: Props) {
+  const t = useTranslations("feed");
+  const tc = useTranslations("common");
   const [expanded, setExpanded] = useState(false);
 
   function handleMouseEnter() {
@@ -72,7 +75,7 @@ export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpand
             transition: "max-height 0.3s ease, opacity 0.3s ease, color 0.2s",
           }}
         >
-          {chatOpen ? "Close" : "The Chat"}
+          {chatOpen ? tc("close") : t("theChat")}
         </span>
       </button>
 
@@ -87,7 +90,7 @@ export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpand
               transition: "max-height 0.3s ease, opacity 0.25s ease",
             }}
           >
-            Subscriptions
+            {t("subscriptions")}
           </p>
           <div className="flex flex-col gap-[0.375rem]">
             {subs.map((sub) => (

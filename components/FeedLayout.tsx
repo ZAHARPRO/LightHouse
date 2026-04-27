@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Play, Lock, MessageSquare, ArrowUp } from "lucide-react";
 import ChatPopup from "./ChatPopup";
 import UserAvatar from "./UserAvatar";
+import { useTranslations } from "next-intl";
 
 const THUMB_COLORS = [
   ["#0d0d1a", "#f97316"],
@@ -70,6 +71,7 @@ function VideoCard({ video, index, userTier }: {
   index: number;
   userTier: string | null;
 }) {
+  const t = useTranslations("feed");
   const [bg, accent] = THUMB_COLORS[index % THUMB_COLORS.length];
   const locked = video.isPremium && userTier === "FREE";
 
@@ -139,7 +141,7 @@ function VideoCard({ video, index, userTier }: {
             {video.author?.name}
           </p>
           <p className="text-[0.75rem] text-[var(--text-muted)]">
-            {formatViews(video.views ?? 0)} views · {video.createdAt ? timeAgo(video.createdAt) : "recently"}
+            {formatViews(video.views ?? 0)} {t("viewsLabel")} · {video.createdAt ? timeAgo(video.createdAt) : t("recently")}
           </p>
         </div>
       </div>
@@ -149,6 +151,7 @@ function VideoCard({ video, index, userTier }: {
 
 /* ── Hero / featured card — first video, full-width horizontal ── */
 function HeroCard({ video, index, userTier }: { video: Video; index: number; userTier: string | null }) {
+  const t = useTranslations("feed");
   const [bg, accent] = THUMB_COLORS[index % THUMB_COLORS.length];
   const locked = video.isPremium && userTier === "FREE";
 
@@ -209,7 +212,7 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
         {/* Info panel */}
         <div className="flex-1 p-5 sm:p-6 flex flex-col justify-center gap-3.5">
           <span className="self-start text-[0.62rem] font-display font-bold tracking-[0.15em] uppercase text-[var(--accent-orange)] bg-orange-500/15 border border-orange-500/30 px-3 py-1.5 rounded-full shadow-sm">
-            🔥 Trending Now
+            🔥 {t("trendingNow")}
           </span>
 
           <h2
@@ -226,7 +229,7 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
                 {video.author?.name}
               </p>
               <p className="text-[0.75rem] text-[var(--text-muted)]">
-                {formatViews(video.views ?? 0)} views · {video.createdAt ? timeAgo(video.createdAt) : "recently"}
+                {formatViews(video.views ?? 0)} {t("viewsLabel")} · {video.createdAt ? timeAgo(video.createdAt) : t("recently")}
               </p>
             </div>
           </div>
@@ -234,10 +237,10 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
           {/* Engagement metrics */}
           <div className="flex gap-4 text-[0.75rem] text-[var(--text-muted)]">
             <span className="flex items-center gap-1">
-              <span className="text-orange-500 font-bold">{formatViews(video._count.likes ?? 0)}</span> likes
+              <span className="text-orange-500 font-bold">{formatViews(video._count.likes ?? 0)}</span> {t("likesLabel")}
             </span>
             <span className="flex items-center gap-1">
-              <span className="text-blue-400 font-bold">{formatViews(video._count.comments ?? 0)}</span> comments
+              <span className="text-blue-400 font-bold">{formatViews(video._count.comments ?? 0)}</span> {t("commentsLabel")}
             </span>
           </div>
         </div>
@@ -284,6 +287,9 @@ function timeAgo(date: Date): string {
 
 /* ── Main layout ── */
 export default function FeedLayout({ videos, userTier, subs, communityPosts, isLoggedIn }: Props) {
+  const tf = useTranslations("feed");
+  const tc = useTranslations("community");
+  const tCommon = useTranslations("common");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatClosing, setChatClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -316,7 +322,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
 
         {/* Header row */}
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">For You</h2>
+          <h2 className="font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">{tf("forYou")}</h2>
           <div className="flex items-center gap-2">
             {/* Chat button */}
             <button
@@ -329,11 +335,11 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
               }}
             >
               <MessageSquare size={13} />
-              <span className="hidden sm:inline">Chat</span>
+              <span className="hidden sm:inline">{tf("chat")}</span>
             </button>
             {!isLoggedIn && (
               <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4 shadow-md">
-                Join Free
+                {tCommon("joinFree")}
               </Link>
             )}
           </div>
@@ -383,9 +389,9 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
         {communityPosts.length > 0 && (
           <div className="mt-10">
             <div className="flex items-center justify-between mb-4">
-              <span className="font-display font-extrabold text-base text-[var(--text-primary)]">Community</span>
+              <span className="font-display font-extrabold text-base text-[var(--text-primary)]">{tc("title")}</span>
               <Link href="/community" className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline">
-                See all
+                {tc("seeAll")}
               </Link>
             </div>
             <div className="flex flex-col gap-3">
@@ -414,7 +420,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
               href="/community"
               className="block text-center mt-4 px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)]"
             >
-              See more posts →
+              {tc("seeMorePosts")}
             </Link>
           </div>
         )}
@@ -442,11 +448,11 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
       <div className="max-lg:hidden">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)]">
-            For You
+            {tf("forYou")}
           </h2>
           {!isLoggedIn && (
             <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4">
-              Join Free
+              {tCommon("joinFree")}
             </Link>
           )}
         </div>

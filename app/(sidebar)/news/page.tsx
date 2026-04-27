@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Newspaper, MessageSquare, ThumbsUp, Calendar, ArrowLeft } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 function formatDate(d: Date) {
   return new Date(d).toLocaleDateString("en-US", {
@@ -21,13 +22,16 @@ function timeAgo(d: Date) {
 }
 
 export default async function NewsListPage() {
-  const posts = await prisma.newsPost.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      author: { select: { name: true, role: true } },
-      _count: { select: { comments: true, likes: true } },
-    },
-  });
+  const [posts, t] = await Promise.all([
+    prisma.newsPost.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { name: true, role: true } },
+        _count: { select: { comments: true, likes: true } },
+      },
+    }),
+    getTranslations("news"),
+  ]);
 
   return (
     <div className="max-w-[720px] mx-auto px-6 py-10">
@@ -35,7 +39,7 @@ export default async function NewsListPage() {
         href="/dm"
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-6 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> Back to Messages
+        <ArrowLeft size={13} /> {t("backToMessages")}
       </Link>
 
       <div className="flex items-center gap-3 mb-8">
@@ -44,16 +48,16 @@ export default async function NewsListPage() {
         </div>
         <div>
           <h1 className="font-display font-extrabold text-2xl tracking-tight text-[var(--text-primary)] leading-none">
-            Site News
+            {t("title")}
           </h1>
-          <p className="text-[var(--text-muted)] text-sm mt-0.5">Official announcements from the team</p>
+          <p className="text-[var(--text-muted)] text-sm mt-0.5">{t("subtitle")}</p>
         </div>
       </div>
 
       {posts.length === 0 ? (
         <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-12 text-center">
           <Newspaper size={32} className="mx-auto mb-3 text-[var(--text-muted)] opacity-40" />
-          <p className="text-[var(--text-secondary)] text-sm">No announcements yet.</p>
+          <p className="text-[var(--text-secondary)] text-sm">{t("empty")}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
@@ -66,7 +70,7 @@ export default async function NewsListPage() {
               <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-6 hover:border-orange-500/30 transition-colors duration-150">
                 {i === 0 && (
                   <span className="inline-flex items-center gap-1 text-[0.65rem] font-display font-bold uppercase tracking-[0.08em] text-[var(--accent-orange)] bg-orange-500/10 px-2 py-0.5 rounded-full mb-3">
-                    Latest
+                    {t("latestBadge")}
                   </span>
                 )}
                 <h2 className="font-display font-bold text-[1.0625rem] text-[var(--text-primary)] mb-2 group-hover:text-[var(--accent-orange)] transition-colors leading-snug">
@@ -86,7 +90,7 @@ export default async function NewsListPage() {
                     <MessageSquare size={11} /> {post._count.comments}
                   </span>
                   <span className="ml-auto text-[var(--accent-orange)] font-display font-semibold text-[0.75rem]">
-                    Read more →
+                    {t("readMore")}
                   </span>
                 </div>
               </div>

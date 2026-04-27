@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { UserPlus, UserMinus, Loader } from "lucide-react";
 import { followCreator, unfollowCreator } from "@/actions/subscriptions";
+import { useTranslations } from "next-intl";
 
 interface Props {
   creatorId: string;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function SubscribeButton({ creatorId, initialFollowing }: Props) {
+  const t = useTranslations("subscribe");
   const [following, setFollowing] = useState(initialFollowing);
   const [isPending, startTransition] = useTransition();
   const [hovered, setHovered] = useState(false);
@@ -63,10 +65,10 @@ export default function SubscribeButton({ creatorId, initialFollowing }: Props) 
         <UserPlus size={14} />
       )}
       {isPending
-        ? following ? "Unsubscribing…" : "Subscribing…"
+        ? following ? t("unsubscribing") : t("subscribing")
         : following
-          ? isUnsubscribeMode ? "Unsubscribe" : "Subscribed"
-          : "Subscribe"}
+          ? isUnsubscribeMode ? t("unsubscribe") : t("subscribed")
+          : t("subscribe")}
     </button>
   );
 }

@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { registerUser } from "@/actions/auth";
 import { Zap, Eye, EyeOff, Github, Chrome } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function RegisterPage() {
+  const t = useTranslations("auth");
   const { status } = useSession();
   const router = useRouter();
 
@@ -48,10 +50,10 @@ export default function RegisterPage() {
             <Zap size={24} color="white" strokeWidth={2.5} />
           </div>
           <h1 className="font-display font-extrabold text-[1.625rem] tracking-tight mb-1.5">
-            Create account
+            {t("createAccount")}
           </h1>
           <p className="text-[var(--text-secondary)] text-[0.9rem]">
-            Join LightHouse and start your journey
+            {t("registerSubtitle")}
           </p>
         </div>
 
@@ -73,32 +75,32 @@ export default function RegisterPage() {
 
         <div className="flex items-center gap-3 mb-6">
           <hr className="sep flex-1" />
-          <span className="text-[var(--text-muted)] text-[0.8125rem]">or</span>
+          <span className="text-[var(--text-muted)] text-[0.8125rem]">{t("orContinueWith")}</span>
           <hr className="sep flex-1" />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
-              Full Name
+              {t("name")}
             </label>
-            <input name="name" type="text" placeholder="Your name" required className="input-field" />
+            <input name="name" type="text" placeholder={t("namePlaceholder")} required className="input-field" />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
-              Email
+              {t("email")}
             </label>
-            <input name="email" type="email" placeholder="you@example.com" required className="input-field" />
+            <input name="email" type="email" placeholder={t("emailPlaceholder")} required className="input-field" />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1.5 text-[var(--text-secondary)]">
-              Password
+              {t("password")}
             </label>
             <div className="relative">
               <input
                 name="password"
                 type={showPw ? "text" : "password"}
-                placeholder="Min. 8 characters"
+                placeholder={t("passwordHint")}
                 required
                 minLength={8}
                 className="input-field pr-12"
@@ -120,14 +122,14 @@ export default function RegisterPage() {
           )}
 
           <button type="submit" className="btn-primary mt-2" disabled={loading}>
-            {loading ? "Creating account…" : "Create Account"}
+            {loading ? t("creatingAccount") : t("signUp")}
           </button>
         </form>
 
         <p className="text-center mt-6 text-[var(--text-secondary)] text-sm">
-          Already have an account?{" "}
+          {t("hasAccount")}{" "}
           <Link href="/auth/signin" className="text-[var(--accent-orange)] font-semibold no-underline">
-            Sign in
+            {t("signInLink")}
           </Link>
         </p>
       </div>

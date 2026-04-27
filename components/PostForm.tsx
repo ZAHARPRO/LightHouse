@@ -3,8 +3,10 @@
 import { useRef, useState, useTransition } from "react";
 import { createPost } from "@/actions/posts";
 import { Send, FileText, AlignLeft, Crown, AlertCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function PostForm() {
+  const t = useTranslations("forms");
   const [isPremium, setIsPremium]  = useState(false);
   const [error, setError]          = useState<string | null>(null);
   const [content, setContent]      = useState("");
@@ -40,13 +42,12 @@ export default function PostForm() {
         <div>
           <label className={labelClass}>
             <FileText size={14} className="text-[var(--accent-orange)]" />
-            Title
-            <span className="text-[var(--accent-orange)]">*</span>
+            {t("titleRequired")}
           </label>
           <input
             name="title"
             type="text"
-            placeholder="What's this post about?"
+            placeholder={t("titlePlaceholder")}
             required
             maxLength={200}
             className="input-field"
@@ -57,18 +58,17 @@ export default function PostForm() {
         <div>
           <label className={labelClass}>
             <AlignLeft size={14} className="text-[var(--accent-orange)]" />
-            Content
-            <span className="text-[var(--accent-orange)]">*</span>
+            {t("contentRequired")}
             <span className={[
               "ml-auto text-xs font-medium",
               content.length > MAX * 0.9 ? "text-red-500" : "text-[var(--text-muted)]",
             ].join(" ")}>
-              {content.length} / {MAX.toLocaleString()}
+              {t("charsOf", { count: content.length, max: MAX.toLocaleString() })}
             </span>
           </label>
           <textarea
             name="content"
-            placeholder="Share your thoughts, insights, or story…"
+            placeholder={t("contentPlaceholder")}
             required
             rows={12}
             maxLength={MAX}
@@ -97,10 +97,10 @@ export default function PostForm() {
                 "font-display font-bold text-[0.9rem]",
                 isPremium ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]",
               ].join(" ")}>
-                Premium Content
+                {t("premiumContent")}
               </p>
               <p className="text-[0.8rem] text-[var(--text-muted)] mt-[0.1rem]">
-                Only subscribers can read this post
+                {t("premiumDesc")}
               </p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function PostForm() {
           ].join(" ")}
         >
           <Send size={16} />
-          {pending ? "Publishing…" : "Publish Post"}
+          {pending ? t("publishing") : t("publishPost")}
         </button>
       </div>
     </form>

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Crown, Calendar, Users, Lock, Pencil, Clock } from "lucide-react";
 import PostCommentsSection from "@/components/PostCommentsSection";
+import { getTranslations } from "next-intl/server";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -18,6 +19,7 @@ export default async function PostPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getTranslations("post");
   const { id } = await params;
   const session = await auth();
 
@@ -93,7 +95,7 @@ export default async function PostPage({
         href="/feed"
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-7 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> Back to Feed
+        <ArrowLeft size={13} /> {t("backToFeed")}
       </Link>
 
       {/* Header */}
@@ -101,11 +103,11 @@ export default async function PostPage({
         {/* Badges */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/20 font-display tracking-[0.05em] uppercase">
-            Post
+            {t("postBadge")}
           </span>
           {post.isPremium && (
             <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold py-[0.2rem] px-[0.6rem] rounded-full bg-[linear-gradient(90deg,rgba(249,115,22,0.15),rgba(251,191,36,0.15))] text-[#fbbf24] border border-[rgba(251,191,36,0.25)] font-display tracking-[0.05em] uppercase">
-              <Crown size={10} /> Premium
+              <Crown size={10} /> {t("premiumBadge")}
             </span>
           )}
           <div className="flex items-center gap-2 ml-auto">
@@ -117,7 +119,7 @@ export default async function PostPage({
                 href={`/post/${id}/edit`}
                 className="inline-flex items-center gap-1 no-underline text-[0.75rem] font-semibold py-[0.2rem] px-[0.6rem] rounded-[6px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150"
               >
-                <Pencil size={11} /> Edit
+                <Pencil size={11} /> {t("edit")}
               </Link>
             )}
           </div>
@@ -157,13 +159,13 @@ export default async function PostPage({
         <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-8 py-12 text-center">
           <Lock size={40} color="var(--accent-orange)" className="mx-auto mb-4" />
           <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-2">
-            Premium Post
+            {t("premiumTitle")}
           </p>
           <p className="text-[var(--text-secondary)] text-[0.9rem] mb-6">
-            Subscribe to {post.author.name} to read this post
+            {t("premiumMessage", { name: post.author.name ?? "" })}
           </p>
           <Link href="/subscriptions" className="btn-primary no-underline py-2.5 px-6">
-            View Plans
+            {t("viewPlans")}
           </Link>
         </div>
       ) : (
@@ -174,13 +176,9 @@ export default async function PostPage({
           {wasEdited && (
             <p className="flex items-center gap-1 mt-5 text-[0.75rem] text-[var(--text-muted)] border-t border-[var(--border-subtle)] pt-4">
               <Clock size={11} />
-              Edited{" "}
-              {new Date(post.updatedAt).toLocaleDateString("en-US", {
-                year: "numeric", month: "short", day: "numeric",
-              })}{" "}
-              at{" "}
-              {new Date(post.updatedAt).toLocaleTimeString("en-US", {
-                hour: "2-digit", minute: "2-digit",
+              {t("editedAt", {
+                date: new Date(post.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+                time: new Date(post.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
               })}
             </p>
           )}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { subscribeToPlan } from "@/actions/subscriptions";
 import { PLANS } from "@/lib/plans";
 import { Check, Crown, Zap, Star, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type PlanKey = "BASIC" | "PRO" | "ELITE";
 
@@ -22,6 +23,7 @@ const ACCENTS: Record<PlanKey, string> = {
 };
 
 export default function SubscriptionsPage() {
+  const t = useTranslations("subscriptions");
   const { data: session } = useSession();
   const [loading, setLoading] = useState<PlanKey | null>(null);
   const [success, setSuccess] = useState<PlanKey | null>(null);
@@ -41,15 +43,14 @@ export default function SubscriptionsPage() {
         <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full py-1.5 px-4 mb-6">
           <Crown size={14} color="var(--accent-orange)" />
           <span className="font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] uppercase tracking-[0.08em]">
-            Subscription Plans
+            {t("badge")}
           </span>
         </div>
         <h1 className="font-display font-extrabold text-[clamp(2.25rem,5vw,3.5rem)] tracking-[-0.04em] leading-none mb-5">
-          Choose your <span className="gradient-text">level</span>
+          {t("title")}
         </h1>
         <p className="text-[var(--text-secondary)] max-w-[520px] mx-auto text-[1.0625rem] leading-[1.7]">
-          Unlock premium content, exclusive perks, and climb the rewards
-          ladder with a plan that fits your style.
+          {t("subtitle")}
         </p>
       </div>
 
@@ -76,7 +77,7 @@ export default function SubscriptionsPage() {
                 >
                   <Sparkles size={12} color="white" />
                   <span className="font-display text-[0.75rem] font-bold text-white tracking-[0.05em]">
-                    MOST POPULAR
+                    {t("mostPopular")}
                   </span>
                 </div>
               )}
@@ -97,7 +98,7 @@ export default function SubscriptionsPage() {
                     <span style={{ color: accent }} className="font-display font-extrabold text-[1.875rem]">
                       ${plan.price}
                     </span>
-                    <span className="text-[var(--text-muted)] text-sm">/mo</span>
+                    <span className="text-[var(--text-muted)] text-sm">{t("perMonth")}</span>
                   </div>
                 </div>
               </div>
@@ -130,7 +131,11 @@ export default function SubscriptionsPage() {
                   }}
                   className="w-full font-display font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200 cursor-pointer disabled:cursor-default"
                 >
-                  {success === planKey ? "✓ Subscribed!" : loading === planKey ? "Processing…" : `Get ${plan.name}`}
+                  {success === planKey
+                    ? t("subscribedPlan")
+                    : loading === planKey
+                    ? t("processing")
+                    : t("getPlan", { name: plan.name })}
                 </button>
               ) : (
                 <Link
@@ -142,7 +147,7 @@ export default function SubscriptionsPage() {
                   }}
                   className="block text-center no-underline w-full font-display font-bold text-[0.9375rem] py-3 rounded-[10px] transition-all duration-200"
                 >
-                  Get Started
+                  {t("getStarted")}
                 </Link>
               )}
             </div>
@@ -152,7 +157,7 @@ export default function SubscriptionsPage() {
 
       {/* Free tier note */}
       <div className="text-center mt-12 text-[var(--text-muted)] text-sm">
-        All plans include a 7-day free trial. Cancel anytime. No hidden fees.
+        {t("freeTrial")}
       </div>
     </div>
   );

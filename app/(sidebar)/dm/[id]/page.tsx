@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import {
   getDMMessages, sendDirectMessage,
@@ -41,6 +42,7 @@ function timeAgo(d: Date) {
 
 export default function DMConversationPage() {
   const { id: convId } = useParams<{ id: string }>();
+  const t = useTranslations("dm");
 
   const [messages, setMessages]       = useState<DMsg[]>([]);
   const [myId, setMyId]               = useState<string>("");
@@ -282,7 +284,7 @@ export default function DMConversationPage() {
               if (e.key === "Escape") closeSearch();
               if (e.key === "Enter") { e.preventDefault(); navigate(e.shiftKey ? -1 : 1); }
             }}
-            placeholder="Search messages…"
+            placeholder={t("searchMessages")}
             className="flex-1 w3/4 bg-transparent text-[0.8125rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
           />
           {searchQuery.trim().length > 0 && (
@@ -314,9 +316,9 @@ export default function DMConversationPage() {
         <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-[0.8rem]"
           style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", color: "#fca5a5" }}>
           <UserX size={14} style={{ color: "#f87171", flexShrink: 0 }} />
-          <span>You have blocked this user. They can&apos;t send you messages.</span>
+          <span>{t("blocked")}</span>
           <button onClick={handleUnblock} disabled={pending} className="ml-auto text-[0.75rem] font-display font-semibold text-green-400 hover:text-green-300 bg-transparent border-none cursor-pointer disabled:opacity-50">
-            Unblock
+            {t("unblock")}
           </button>
         </div>
       )}
@@ -324,7 +326,7 @@ export default function DMConversationPage() {
         <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-[0.8rem]"
           style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", color: "#fca5a5" }}>
           <UserX size={14} style={{ color: "#f87171", flexShrink: 0 }} />
-          <span>You can&apos;t send messages to this user.</span>
+          <span>{t("blockedByThem")}</span>
         </div>
       )}
 
@@ -337,9 +339,9 @@ export default function DMConversationPage() {
           <ShieldOff size={15} className="shrink-0 mt-0.5" style={{ color: "#f87171" }} />
           <div>
             <span className="font-display font-semibold" style={{ color: "#f87171" }}>
-              This user&apos;s account has been suspended.
+              {t("userBanned")}
             </span>
-            {otherBan.reason && <span className="ml-1.5">Reason: {otherBan.reason}.</span>}
+            {otherBan.reason && <span className="ml-1.5">{t("banReason", { reason: otherBan.reason })}</span>}
             {otherBan.bannedAt && (
               <span className="ml-1.5 opacity-70">
                 — {new Date(otherBan.bannedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -361,7 +363,7 @@ export default function DMConversationPage() {
             className="flex-1 text-left text-[0.78rem] text-[var(--text-primary)] truncate bg-transparent border-none cursor-pointer p-0 hover:text-[var(--accent-orange)] transition-colors"
           >
             <span className="text-[var(--text-muted)] mr-1.5 text-[0.7rem]">
-              {pinned.length > 1 ? `${safeIdx + 1}/${pinned.length}` : "Pinned"}
+              {pinned.length > 1 ? `${safeIdx + 1}/${pinned.length}` : t("pinned")}
             </span>
             {pinned[safeIdx].content}
           </button>
@@ -453,7 +455,7 @@ export default function DMConversationPage() {
                         fontStyle: msg.isDeleted ? "italic" : undefined,
                       }}
                     >
-                      {msg.isDeleted ? "Message deleted" : highlight(msg.content, searchQuery)}
+                      {msg.isDeleted ? t("deleted") : highlight(msg.content, searchQuery)}
                     </div>
                     {/* Pinned badge */}
                     {msg.isPinned && !msg.isDeleted && (
@@ -476,7 +478,7 @@ export default function DMConversationPage() {
                 <div className="flex items-center gap-1.5 mt-0.5 mx-1">
                   <span className="text-[0.65rem] text-[var(--text-muted)]">{timeAgo(msg.createdAt)}</span>
                   {msg.isEdited && !msg.isDeleted && (
-                    <span className="text-[0.6rem] text-[var(--text-muted)] opacity-60">edited</span>
+                    <span className="text-[0.6rem] text-[var(--text-muted)] opacity-60">{t("edited")}</span>
                   )}
                 </div>
               </div>
@@ -511,7 +513,7 @@ export default function DMConversationPage() {
                         }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[0.8rem] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer bg-transparent border-none text-left"
                       >
-                        <Reply size={12} /> Reply
+                        <Reply size={12} /> {t("reply")}
                       </button>
 
                       {/* Pin / Unpin */}
@@ -520,7 +522,7 @@ export default function DMConversationPage() {
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[0.8rem] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer bg-transparent border-none text-left"
                       >
                         {msg.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-                        {msg.isPinned ? "Unpin" : "Pin"}
+                        {msg.isPinned ? t("unpin") : t("pin")}
                       </button>
 
                       {/* Edit (own only) */}
@@ -529,7 +531,7 @@ export default function DMConversationPage() {
                           onClick={() => startEdit(msg)}
                           className="w-full flex items-center gap-2 px-3 py-1.5 text-[0.8rem] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer bg-transparent border-none text-left"
                         >
-                          <Pencil size={12} /> Edit
+                          <Pencil size={12} /> {t("edit")}
                         </button>
                       )}
 
@@ -539,7 +541,7 @@ export default function DMConversationPage() {
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[0.8rem] text-red-400 hover:bg-red-500/8 transition-colors cursor-pointer bg-transparent border-none text-left"
                       >
                         <Trash2 size={12} />
-                        {isMe ? "Delete for everyone" : "Delete for me"}
+                        {isMe ? t("deleteForAll") : t("deleteForMe")}
                       </button>
                     </div>
                   )}
@@ -567,7 +569,7 @@ export default function DMConversationPage() {
       <div className="shrink-0 border-t border-[var(--border-subtle)] px-6 py-3">
         {(isBlockedByMe || isBlockedByThem) ? (
           <div className="h-10 flex items-center justify-center text-[0.8rem] text-[var(--text-muted)] italic">
-            {isBlockedByMe ? "Unblock this user to send messages." : "You can't reply to this conversation."}
+            {isBlockedByMe ? t("unblockToSend") : t("cannotReply")}
           </div>
         ) : (
           <>
@@ -575,7 +577,7 @@ export default function DMConversationPage() {
               <div className="flex items-center justify-between px-1 pb-2">
                 <span className="flex items-center gap-1.5 text-[0.75rem] text-[var(--accent-orange)]">
                   <Reply size={11} />
-                  Replying to <strong>{replyTo.name}</strong>
+                  {t("replyingTo", { name: replyTo.name })}
                   <span className="text-[var(--text-muted)] truncate max-w-[160px]">— {replyTo.content}</span>
                 </span>
                 <button
@@ -591,7 +593,7 @@ export default function DMConversationPage() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Write a message…"}
+                placeholder={replyTo ? t("replyPlaceholder", { name: replyTo.name }) : t("typeMessage")}
                 maxLength={2000}
                 className="input-field flex-1 h-10"
               />

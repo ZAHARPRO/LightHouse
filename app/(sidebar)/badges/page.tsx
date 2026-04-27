@@ -3,17 +3,19 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { BADGE_DEFS } from "@/lib/badges";
+import { getTranslations } from "next-intl/server";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  special:   "⭐ Special",
+  special: "⭐ Special",
   community: "💬 Community",
-  activity:  "🔥 Activity",
-  games:     "🎮 Games",
+  activity: "🔥 Activity",
+  games: "🎮 Games",
 };
 
 const CATEGORY_ORDER = ["special", "community", "activity", "games"];
 
 export default async function BadgesPage() {
+  const t = await getTranslations("badges");
   const session = await auth();
 
   let earnedTypes = new Set<string>();
@@ -33,10 +35,10 @@ export default async function BadgesPage() {
           select: { id: true, icon: true, label: true, color: true, points: true, description: true },
         }),
       ]);
-      earnedTypes    = new Set(rewards.map((r) => r.type));
+      earnedTypes = new Set(rewards.map((r) => r.type));
       earnedCustomIds = new Set(rewards.filter((r) => r.customBadgeId).map((r) => r.customBadgeId as string));
-      totalPoints    = rewards.reduce((s, r) => s + r.pointsValue, 0);
-      customBadges   = allCustom;
+      totalPoints = rewards.reduce((s, r) => s + r.pointsValue, 0);
+      customBadges = allCustom;
     } catch { /* DB unavailable */ }
   } else {
     try {
@@ -66,19 +68,19 @@ export default async function BadgesPage() {
         href="/profile"
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-8 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> Back to Profile
+        <ArrowLeft size={13} />
       </Link>
 
       {/* Header */}
       <div className="flex items-end justify-between mb-8">
         <div>
           <h1 className="font-display font-extrabold text-[1.75rem] tracking-[-0.02em] text-[var(--text-primary)]">
-            Badge Catalog
+            {t("title")}
           </h1>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             {session
-              ? `${earnedCount} of ${totalBadges} earned · ${totalPoints} pts total`
-              : `${totalBadges} badges available — sign in to track your progress`}
+              ? t("progress", { earned: earnedCount, total: totalBadges, points: totalPoints })
+              : t("notSigned", { total: totalBadges })}
           </p>
         </div>
 
@@ -89,7 +91,7 @@ export default async function BadgesPage() {
           >
             <CheckCircle2 size={15} color="#10b981" />
             <span className="font-display font-bold text-sm" style={{ color: "#10b981" }}>
-              {earnedCount}/{totalBadges} collected
+              {earnedCount} / {totalBadges} {t("collected")}
             </span>
           </div>
         )}
@@ -128,7 +130,7 @@ export default async function BadgesPage() {
                       className="absolute top-3 left-3 text-[0.6rem] font-display font-bold px-[0.4rem] py-[0.1rem] rounded-full"
                       style={{ background: `${badge.color}18`, color: badge.color, border: `1px solid ${badge.color}35` }}
                     >
-                      RARE
+                      {t("rare")}
                     </div>
                   )}
 
@@ -157,7 +159,7 @@ export default async function BadgesPage() {
                       className="rounded-lg px-3 py-2 text-[0.75rem] text-[var(--text-muted)] leading-[1.5]"
                       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
                     >
-                      <span className="font-display font-semibold text-[var(--text-secondary)]">How to earn: </span>
+                      <span className="font-display font-semibold text-[var(--text-secondary)]">{t("howToEarn")}: </span>
                       {badge.howToEarn}
                     </div>
                   </div>
@@ -173,8 +175,8 @@ export default async function BadgesPage() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck size={15} className="text-[#818cf8]" />
-            <h2 className="font-display font-bold text-[1rem] text-[var(--text-primary)]">Admin Badges</h2>
-            <span className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-[0.06em]">· Awarded by the team</span>
+            <h2 className="font-display font-bold text-[1rem] text-[var(--text-primary)]">{t("admin.title")}</h2>
+            <span className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-[0.06em]">· {t("admin.subtitle")}</span>
           </div>
 
           <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
@@ -203,7 +205,7 @@ export default async function BadgesPage() {
                     className="absolute top-3 left-3 flex items-center gap-1 text-[0.6rem] font-display font-bold px-[0.4rem] py-[0.1rem] rounded-full"
                     style={{ background: "rgba(129,140,248,0.12)", color: "#818cf8", border: "1px solid rgba(129,140,248,0.25)" }}
                   >
-                    <ShieldCheck size={9} /> ADMIN
+                    <ShieldCheck size={9} /> {t("admin.label")}
                   </div>
 
                   <div
@@ -231,8 +233,8 @@ export default async function BadgesPage() {
                       className="rounded-lg px-3 py-2 text-[0.75rem] text-[var(--text-muted)] leading-[1.5]"
                       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
                     >
-                      <span className="font-display font-semibold text-[var(--text-secondary)]">How to earn: </span>
-                      Awarded manually by the LightHouse admin team.
+                      <span className="font-display font-semibold text-[var(--text-secondary)]">{t("howToEarn")}: </span>
+                      {t("admin.how")}
                     </div>
                   </div>
                 </div>
@@ -246,10 +248,10 @@ export default async function BadgesPage() {
       {!session && (
         <div className="mt-8 rounded-2xl bg-orange-500/[0.06] border border-orange-500/20 px-6 py-5 text-center">
           <p className="text-[var(--text-secondary)] text-[0.9rem] font-display mb-3">
-            Sign in to track your progress and see which badges you&apos;ve already earned.
+            {t("cta")}
           </p>
           <Link href="/auth/signin" className="btn-primary no-underline py-2 px-6 text-sm">
-            Sign In
+            {t("signIn")}
           </Link>
         </div>
       )}

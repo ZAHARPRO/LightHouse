@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { isGDriveEmbed, isYouTubeEmbed } from "@/lib/videoUrl";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import {
   ArrowLeft, Eye, Clock, Play, Lock,
   Calendar, Users,
@@ -49,6 +50,7 @@ export default async function WatchPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getTranslations("watch");
   const { id } = await params;
   const session = await auth();
 
@@ -186,7 +188,7 @@ export default async function WatchPage({
           className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-4 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
         >
           <ArrowLeft size={13} />
-          Back to Feed
+          {t("backToFeed")}
         </Link>
 
         {/* Player */}
@@ -198,13 +200,13 @@ export default async function WatchPage({
             <div className="text-center">
               <Lock size={48} color={accent} className="mx-auto mb-4" />
               <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-2">
-                Premium Content
+                {t("premiumContent")}
               </p>
               <p className="text-[var(--text-secondary)] text-sm mb-6">
-                Subscribe to watch this video
+                {t("premiumMessage")}
               </p>
               <Link href="/subscriptions" className="btn-primary no-underline py-2.5 px-6">
-                View Plans
+                {t("viewPlans")}
               </Link>
             </div>
           ) : isGDriveEmbed(video.url) || isYouTubeEmbed(video.url) ? (
@@ -257,7 +259,7 @@ export default async function WatchPage({
 
           <div className="flex items-center gap-5 flex-wrap mb-5">
             <span className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
-              <Eye size={14} /> {formatViews(video.views)} views
+              <Eye size={14} /> {t("views", { count: formatViews(video.views) })}
             </span>
             <span className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
               <Calendar size={14} /> {formatDate(video.createdAt)}
@@ -306,7 +308,7 @@ export default async function WatchPage({
                   <SubscribeButton creatorId={video.author.id} initialFollowing={isFollowing} />
                 ) : (
                   <Link href="/auth/signin" className="btn-primary no-underline py-2 px-5 text-sm">
-                    Sign in to subscribe
+                    {t("signInToSubscribe")}
                   </Link>
                 )
               )}
@@ -338,7 +340,7 @@ export default async function WatchPage({
       {/* ── RIGHT: suggested ── */}
       <aside className="sticky top-[calc(64px+1.5rem)]">
         <p className="font-display font-bold text-[0.8125rem] text-[var(--text-muted)] tracking-[0.06em] uppercase mb-3.5">
-          Up Next
+          {t("upNext")}
         </p>
 
         <div className="flex flex-col gap-3">

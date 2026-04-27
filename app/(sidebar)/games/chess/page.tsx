@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { RotateCcw, Flag, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   initialState, getLegalMoves, applyMove, toSAN,
   isCheckmate, isStalemate, isInCheck,
@@ -169,6 +170,7 @@ function ChessBoard({ state, cellPx, selected, legalDots, lastMove, onSquare, on
 }
 
 function MovePanel({ moves }: { moves: string[] }) {
+  const t = useTranslations("chess");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo({ top: 9999, behavior: "smooth" }); }, [moves]);
   const pairs: [string, string|undefined][] = [];
@@ -176,7 +178,7 @@ function MovePanel({ moves }: { moves: string[] }) {
   return (
     <div ref={ref} className="flex-1 overflow-y-auto min-h-0">
       {pairs.length === 0 && (
-        <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">No moves yet</p>
+        <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">{t("noMoves")}</p>
       )}
       {pairs.map(([w, b], i) => (
         <div key={i} className="flex gap-1 text-sm font-mono px-2 py-[3px] rounded hover:bg-[var(--bg-secondary)]">
@@ -203,6 +205,7 @@ function PlayerRow({
   label: string; color: "w"|"b"; active?: boolean; check?: boolean;
   captured?: string[]; advantage?: number;
 }) {
+  const t = useTranslations("chess");
   const sorted = [...captured].sort((a, b) => PIECE_ORDER.indexOf(a) - PIECE_ORDER.indexOf(b));
   const uni = CAP_UNICODE[color];
   return (
@@ -217,8 +220,8 @@ function PlayerRow({
       <div className="flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-display font-semibold text-sm text-[var(--text-primary)]">{label}</span>
-          {active && <span className="text-[0.7rem] text-[var(--accent-orange)] font-semibold">● Your turn</span>}
-          {check && <span className="text-[0.7rem] text-red-400 font-bold">Check!</span>}
+          {active && <span className="text-[0.7rem] text-[var(--accent-orange)] font-semibold">{t("yourTurn")}</span>}
+          {check && <span className="text-[0.7rem] text-red-400 font-bold">{t("check")}</span>}
         </div>
         {sorted.length > 0 && (
           <div className="flex items-center gap-[1px] flex-wrap mt-[1px]">
@@ -236,6 +239,7 @@ function PlayerRow({
 }
 
 export default function ChessVsBotPage() {
+  const t = useTranslations("chess");
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [status, setStatus] = useState<Status>("idle");
   const [gameState, setGameState] = useState<GameState>(initialState());
@@ -269,12 +273,12 @@ export default function ChessVsBotPage() {
     setGameState(next);
     if (isCheckmate(next)) {
       const playerWon = next.turn === "b";
-      setResult(playerWon ? "White wins!" : "Black wins!");
+      setResult(playerWon ? t("whiteWins") : t("blackWins"));
       setStatus("over");
       if (playerWon) awardGameBadge("CHESS_WIN").catch(() => {});
-    } else if (isStalemate(next)) { setResult("Stalemate — draw!"); setStatus("over"); }
+    } else if (isStalemate(next)) { setResult(t("stalemate")); setStatus("over"); }
     return next;
-  }, []);
+  }, [t]);
 
   const triggerBot = useCallback((state: GameState) => {
     if (state.turn !== "b" || isCheckmate(state) || isStalemate(state)) return;
@@ -327,8 +331,8 @@ export default function ChessVsBotPage() {
         <div className="flex flex-col items-center gap-8 py-16 px-12 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
           <div className="text-7xl leading-none">♛</div>
           <div>
-            <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] text-center mb-1">Chess</h1>
-            <p className="text-[var(--text-muted)] text-sm text-center">Play against the bot</p>
+            <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] text-center mb-1">{t("title")}</h1>
+            <p className="text-[var(--text-muted)] text-sm text-center">{t("subtitle")}</p>
           </div>
           <div className="flex gap-3">
             {(["easy", "medium", "hard"] as Difficulty[]).map(d => (
@@ -338,13 +342,13 @@ export default function ChessVsBotPage() {
                     ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
                     : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 ].join(" ")}>
-                {d === "easy" ? "Easy" : d === "medium" ? "Medium" : "Hard"}
+                {d === "easy" ? t("easy") : d === "medium" ? t("medium") : t("hard")}
               </button>
             ))}
           </div>
           <button onClick={startGame}
             className="px-10 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-base hover:opacity-90 transition-opacity">
-            Start Game
+            {t("start")}
           </button>
         </div>
       </main>
@@ -359,7 +363,7 @@ export default function ChessVsBotPage() {
         {/* Board column */}
         <div className="flex flex-col shrink-0">
           {/* Opponent */}
-          <PlayerRow label={`Bot · ${difficulty === "easy" ? "Easy" : difficulty === "medium" ? "Medium" : "Hard"}`} color="b" active={isBotTurn} captured={blackCaptured} advantage={Math.max(0, blackValue - whiteValue)} />
+          <PlayerRow label={`Bot · ${difficulty === "easy" ? t("easy") : difficulty === "medium" ? t("medium") : t("hard")}`} color="b" active={isBotTurn} captured={blackCaptured} advantage={Math.max(0, blackValue - whiteValue)} />
 
           <ChessBoard
             state={gameState}
@@ -382,12 +386,12 @@ export default function ChessVsBotPage() {
           <div className="flex gap-2">
             <button onClick={startGame}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-display font-semibold hover:text-[var(--text-primary)] transition-colors">
-              <RotateCcw size={12} /> New Game
+              <RotateCcw size={12} /> {t("newGame")}
             </button>
             {status === "playing" && (
               <button onClick={() => { setResult("You surrendered."); setStatus("over"); }}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
-                <Flag size={12} /> Surrender
+                <Flag size={12} /> {t("surrender")}
               </button>
             )}
           </div>
@@ -409,7 +413,7 @@ export default function ChessVsBotPage() {
                       ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
                       : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   ].join(" ")}>
-                  {d === "easy" ? "Easy" : d === "medium" ? "Med" : "Hard"}
+                  {d === "easy" ? t("easy") : d === "medium" ? t("medium") : t("hard")}
                 </button>
               ))}
             </div>
@@ -419,7 +423,7 @@ export default function ChessVsBotPage() {
           <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3 flex-1 min-h-0">
             <div className="flex items-center gap-2 mb-2 shrink-0">
               <ChevronRight size={13} className="text-[var(--text-muted)]" />
-              <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Move History</span>
+              <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">{t("moveHistory")}</span>
             </div>
             <MovePanel moves={moveList} />
           </div>

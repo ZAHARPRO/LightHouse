@@ -21,6 +21,7 @@ function ChessIcon({ size = 22 }: { size?: number }) {
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { getRank } from "@/lib/elo";
+import { useTranslations } from "next-intl";
 
 const GAMES = [
   { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: MineIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
@@ -49,6 +50,7 @@ const LEADERBOARDS = [
 const PLACE_COLOR = ["#ffd700", "#c0c0c0", "#cd7f32"];
 
 export default function GamesPage() {
+  const t = useTranslations("games");
   const [lbIndex, setLbIndex] = useState(0);
   const [entries, setEntries] = useState<LeaderEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,10 +83,10 @@ export default function GamesPage() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
           <Star size={16} className="text-yellow-400" />
-          <h2 className="font-display font-extrabold text-base text-[var(--text-primary)]">Leaderboard</h2>
+          <h2 className="font-display font-extrabold text-base text-[var(--text-primary)]">{t("leaderboard")}</h2>
           <Link href="/games/leaderboard"
             className="text-[0.7rem] font-display font-semibold text-[var(--accent-orange)] hover:opacity-80 transition-opacity no-underline whitespace-nowrap">
-            View all →
+            {t("viewAll")}
           </Link>
           <div className="ml-auto flex items-center gap-1">
             <button onClick={prev}
@@ -108,18 +110,18 @@ export default function GamesPage() {
             style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
             <span />
             <span />
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">Player</span>
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">ELO</span>
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">Wins</span>
+            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">{t("player")}</span>
+            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("elo")}</span>
+            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("wins")}</span>
             <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
-              <Flame size={10} className="text-orange-400" /> Best
+              <Flame size={10} className="text-orange-400" /> {t("best")}
             </span>
           </div>
 
           {loading ? (
-            <div className="py-8 text-center text-[var(--text-muted)] text-sm">Loading…</div>
+            <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("loading")}</div>
           ) : entries.length === 0 ? (
-            <div className="py-8 text-center text-[var(--text-muted)] text-sm">No ranked players yet — be the first!</div>
+            <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("noPlayers")}</div>
           ) : (
             (expanded ? entries : entries.slice(0, 3)).map((u, i) => {
               const elo  = u[current.eloField];
@@ -174,7 +176,7 @@ export default function GamesPage() {
               onClick={() => setExpanded(e => !e)}
               className="w-full py-2 text-[0.75rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors border-t border-[var(--border-subtle)] bg-transparent"
             >
-              {expanded ? "Show less ▲" : `Show all ${entries.length} ▼`}
+              {expanded ? t("showLess") : t("showAll", { count: entries.length })}
             </button>
           )}
         </div>

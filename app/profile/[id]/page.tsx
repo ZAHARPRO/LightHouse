@@ -14,6 +14,7 @@ import MessageButton from "@/components/MessageButton";
 import BlockButton from "@/components/BlockButton";
 import UserAvatar from "@/components/UserAvatar";
 import FavoriteSongCard from "@/components/FavoriteSongCard";
+import { getTranslations } from "next-intl/server";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -51,7 +52,7 @@ export default async function PublicProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations("profile")]);
 
   let user: Awaited<ReturnType<typeof prisma.user.findUnique>> & {
     videos: Array<{ id: string; title: string; views: number | null; isPremium: boolean; duration: number | null; _count: { likes: number; comments: number } }>;
@@ -139,7 +140,7 @@ export default async function PublicProfilePage({
           }}
         >
           <ArrowLeft size={13} />
-          Back to Feed
+          {t("backToFeed")}
         </Link>
 
         {/* ── Profile card ── */}
@@ -175,7 +176,7 @@ export default async function PublicProfilePage({
                       fontFamily: "var(--font-display)", fontWeight: 600,
                     }}
                   >
-                    Edit Profile
+                    {t("editProfileBtn")}
                   </Link>
                 ) : session?.user ? (
                   <>
@@ -194,7 +195,7 @@ export default async function PublicProfilePage({
                       background: "var(--accent-orange)", color: "white", textDecoration: "none",
                     }}
                   >
-                    Sign in to subscribe
+                    {t("signInToSubscribe")}
                   </Link>
                 )}
               </div>
@@ -245,7 +246,7 @@ export default async function PublicProfilePage({
                           color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em",
                           marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.375rem",
                         }}>
-                          🎵 Favorite Song
+                          🎵 {t("favoriteSong")}
                         </p>
                         <FavoriteSongCard song={parsed} />
                       </div>
@@ -283,7 +284,7 @@ export default async function PublicProfilePage({
                 <div className="profile-level-bar">
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.375rem" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8125rem", color: "var(--accent-orange)" }}>
-                      <TrendingUp size={13} /> Level {level}
+                      <TrendingUp size={13} /> {t("level", { level })}
                     </span>
                     <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{user.points} pts</span>
                   </div>
@@ -294,11 +295,11 @@ export default async function PublicProfilePage({
 
                 <div className="profile-stats">
                   {[
-                    { icon: Play,  value: user._count.videos,      label: "Videos" },
-                    { icon: Users, value: user._count.subscribers, label: "Subscribers" },
-                    { icon: Eye,   value: formatViews(totalViews), label: "Total Views" },
-                    { icon: Crown, value: level,                   label: "Level" },
-                    { icon: Star,  value: user.points,             label: "Points" },
+                    { icon: Play,  value: user._count.videos,      label: t("statsVideos") },
+                    { icon: Users, value: user._count.subscribers, label: t("statsSubscribers") },
+                    { icon: Eye,   value: formatViews(totalViews), label: t("totalViews") },
+                    { icon: Crown, value: level,                   label: t("levelLabel") },
+                    { icon: Star,  value: user.points,             label: t("pointsLabel") },
                   ].map(({ icon: Icon, value, label }) => (
                     <div key={label} style={{ textAlign: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", marginBottom: "0.125rem" }}>
@@ -320,7 +321,7 @@ export default async function PublicProfilePage({
                   color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em",
                   marginBottom: "0.875rem", textAlign: "center",
                 }}>
-                  Featured
+                  {t("featured")}
                 </p>
                 {showcaseBadges[0] ? (() => {
                   const meta = getPubMeta(showcaseBadges[0]);
@@ -380,7 +381,7 @@ export default async function PublicProfilePage({
                         display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.75rem",
                       }}>🎖️</div>
                       <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
-                        No badge
+                        {t("noBadge")}
                       </span>
                     </div>
                     <div className="profile-badge-stand">
@@ -399,7 +400,7 @@ export default async function PublicProfilePage({
         <div className="flex items-center gap-2 mb-5">
           <Play size={16} color="var(--accent-orange)" />
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.125rem" }}>
-            Videos by {displayHandle}
+            {t("videosBy", { handle: displayHandle })}
           </h2>
           <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>({user._count.videos})</span>
         </div>
@@ -407,7 +408,7 @@ export default async function PublicProfilePage({
         {user.videos.length === 0 ? (
           <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
             <Zap size={32} color="var(--text-muted)" style={{ margin: "0 auto 1rem" }} />
-            <p style={{ color: "var(--text-secondary)" }}>No videos yet.</p>
+            <p style={{ color: "var(--text-secondary)" }}>{t("noVideos")}</p>
           </div>
         ) : (
           <div className="videos-grid">

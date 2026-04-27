@@ -6,8 +6,10 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ArrowLeft, Save, Crown } from "lucide-react";
 import { updatePost } from "@/actions/posts";
+import { useTranslations } from "next-intl";
 
 export default function EditPostPage({ params }: { params: { id: string } }) {
+  const t = useTranslations("post");
   const { id } = params;
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -66,12 +68,12 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         href={`/post/${id}`}
         className="inline-flex items-center gap-1.5 no-underline text-[var(--text-muted)] text-[0.8125rem] mb-7 py-[0.3rem] px-[0.625rem] rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
       >
-        <ArrowLeft size={13} /> Back to post
+        <ArrowLeft size={13} /> {t("backToPost")}
       </Link>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-10 py-8">
         <h1 className="font-display font-extrabold text-[1.5rem] tracking-[-0.02em] text-[var(--text-primary)] mb-6">
-          Edit post
+          {t("editPost")}
         </h1>
 
         {error && (
@@ -84,7 +86,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
           {/* Title */}
           <div className="flex flex-col gap-1.5">
             <label className="font-display font-semibold text-sm text-[var(--text-secondary)]">
-              Title
+              {t("titleLabel")}
             </label>
             <input
               value={title}
@@ -98,7 +100,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
           {/* Content */}
           <div className="flex flex-col gap-1.5">
             <label className="font-display font-semibold text-sm text-[var(--text-secondary)]">
-              Content
+              {t("contentLabel")}
             </label>
             <textarea
               value={content}
@@ -127,7 +129,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
               />
             </div>
             <span className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)] font-display font-semibold">
-              <Crown size={13} className="text-[#fbbf24]" /> Premium post
+              <Crown size={13} className="text-[#fbbf24]" /> {t("premiumToggle")}
             </span>
           </label>
 
@@ -143,13 +145,13 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
               ].join(" ")}
             >
               <Save size={15} />
-              {pending ? "Saving…" : "Save changes"}
+              {pending ? t("saving") : t("saveChanges")}
             </button>
             <Link
               href={`/post/${id}`}
               className="px-5 py-2.5 rounded-lg font-display font-semibold text-sm no-underline bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-150"
             >
-              Cancel
+              {t("cancel")}
             </Link>
           </div>
         </form>

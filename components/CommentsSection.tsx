@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ThumbsUp, Pin, PinOff, Reply, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { addComment, toggleCommentLike, togglePinComment } from "@/actions/comments";
 import UserAvatar from "@/components/UserAvatar";
+import { useTranslations } from "next-intl";
 
 type Author = { id: string; name: string | null; image?: string; tier?: string; };
 
@@ -48,6 +49,7 @@ function sortComments(comments: CommentData[]): CommentData[] {
 }
 
 export default function CommentsSection({ videoId, videoAuthorId, currentUserId, initialComments }: Props) {
+  const t = useTranslations("comments");
   const [comments, setComments] = useState<CommentData[]>(initialComments);
   const [text, setText]         = useState("");
   const [pending, start]        = useTransition();
@@ -111,7 +113,7 @@ export default function CommentsSection({ videoId, videoAuthorId, currentUserId,
     <div className="mt-8">
       {/* Header */}
       <div className="flex items-center gap-2 mb-5">
-        <h2 className="font-display font-extrabold text-lg">Comments</h2>
+        <h2 className="font-display font-extrabold text-lg">{t("title")}</h2>
         <span className="text-[var(--text-muted)] text-sm">({total})</span>
       </div>
 
@@ -129,7 +131,7 @@ export default function CommentsSection({ videoId, videoAuthorId, currentUserId,
                   if (text.trim() && !pending) handleSubmit(e as unknown as React.FormEvent);
                 }
               }}
-              placeholder="Write a comment…"
+              placeholder={t("placeholder")}
               rows={2}
               maxLength={2000}
               className="input-field flex-1 leading-relaxed"
@@ -149,12 +151,12 @@ export default function CommentsSection({ videoId, videoAuthorId, currentUserId,
           </div>
         </form>
       ) : (
-        <p className="text-[var(--text-muted)] text-sm mb-6">Sign in to leave a comment.</p>
+        <p className="text-[var(--text-muted)] text-sm mb-6">{t("signInToComment")}</p>
       )}
 
       {/* Comments list */}
       {sorted.length === 0 ? (
-        <p className="text-[var(--text-muted)] text-sm">No comments yet. Be the first!</p>
+        <p className="text-[var(--text-muted)] text-sm">{t("noComments")} {t("beFirst")}</p>
       ) : (
         <div className="flex flex-col">
           {sorted.map((comment) => (
@@ -193,6 +195,7 @@ function CommentItem({
   onAddReply: (r: ReplyData) => void;
   onReplyLike: (replyId: string) => void;
 }) {
+  const t = useTranslations("comments");
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [replyTo, setReplyTo]         = useState<{ name: string } | null>(null);
   const [replyText, setReplyText]     = useState("");
@@ -224,7 +227,7 @@ function CommentItem({
       {/* Pin indicator */}
       {comment.isPinned && (
         <div className="flex items-center gap-[0.375rem] mb-2 text-[var(--accent-orange)] text-xs font-display font-bold">
-          <Pin size={11} /> Pinned comment
+          <Pin size={11} /> {t("pinned")}
         </div>
       )}
 
@@ -280,21 +283,21 @@ function CommentItem({
               onClick={() => replyTo === null ? openReply() : closeReply()}
               className="flex items-center gap-[0.3rem] px-2 py-1 rounded-md border-none bg-transparent text-[var(--text-muted)] cursor-pointer font-display font-semibold text-[0.8rem]"
             >
-              <Reply size={13} /> Reply
+              <Reply size={13} /> {t("reply")}
             </button>
           )}
 
           {isVideoAuthor && (
             <button
               onClick={onPin}
-              title={comment.isPinned ? "Unpin" : "Pin"}
+              title={comment.isPinned ? t("unpin") : t("pin")}
               className={[
                 "ml-auto flex items-center gap-[0.3rem] px-2 py-1 rounded-md border-none font-display font-semibold text-xs cursor-pointer",
                 comment.isPinned ? "bg-orange-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
               ].join(" ")}
             >
               {comment.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-              {comment.isPinned ? "Unpin" : "Pin"}
+              {comment.isPinned ? t("unpin") : t("pin")}
             </button>
           )}
         </div>
@@ -304,7 +307,7 @@ function CommentItem({
           <form onSubmit={submitReply} className="mt-3">
             {replyTo.name && (
               <p className="text-xs text-[var(--text-muted)] mb-[0.375rem] font-display font-semibold">
-                Replying to <span className="text-[var(--accent-orange)]">@{replyTo.name}</span>
+                {t("replyingTo", { name: replyTo.name })}
               </p>
             )}
             <div className="flex gap-2">
@@ -357,7 +360,7 @@ function CommentItem({
             className="flex items-center gap-[0.375rem] bg-transparent border-none cursor-pointer text-[var(--accent-orange)] font-display font-bold text-[0.8125rem] py-1"
           >
             {repliesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}
+            {t(comment.replies.length === 1 ? "showReplies" : "showRepliesPlural", { count: comment.replies.length })}
           </button>
 
           {repliesOpen && (

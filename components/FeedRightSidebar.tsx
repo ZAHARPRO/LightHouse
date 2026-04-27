@@ -1,10 +1,9 @@
 "use client";
 
-
-
 import Link from "next/link";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import UserAvatar from "./UserAvatar";
+import { useTranslations } from "next-intl";
 
 type CommunityPost = {
   id: string;
@@ -33,6 +32,7 @@ function timeAgo(date: Date): string {
 }
 
 export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, onToggle }: Props) {
+  const t = useTranslations("community");
 
   return (
     <aside
@@ -46,7 +46,7 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
       {/* Toggle */}
       <button
         onClick={onToggle}
-        title={visible ? "Hide panel" : "Show panel"}
+        title={visible ? t("hidePanel") : t("showPanel")}
         className="self-start w-8 h-8 rounded-lg shrink-0 flex items-center justify-center cursor-pointer bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--accent-orange)]"
       >
         {visible ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -55,12 +55,12 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
       {visible && (
         <>
           <div className="flex items-center justify-between">
-            <span className="font-display font-extrabold text-sm text-[var(--text-primary)]">Community</span>
+            <span className="font-display font-extrabold text-sm text-[var(--text-primary)]">{t("title")}</span>
             <Link
               href="/community"
               className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline"
             >
-              See all
+              {t("seeAll")}
             </Link>
           </div>
 
@@ -68,12 +68,12 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
             <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-4 py-6 text-center">
               <p className="text-[0.8125rem] text-[var(--text-muted)] font-display">
                 {isLoggedIn
-                  ? "No posts from your subscriptions yet."
-                  : "Sign in to see posts from creators you follow."}
+                  ? t("noPostsMessage")
+                  : t("notSignedIn")}
               </p>
               {!isLoggedIn && (
                 <Link href="/auth/signin" className="btn-primary no-underline text-xs py-[0.3rem] px-4 mt-3 inline-block">
-                  Sign In
+                  {t("signIn")}
                 </Link>
               )}
             </div>
@@ -116,7 +116,7 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
             href="/community"
             className="block text-center px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] transition-colors duration-200 hover:bg-orange-500/[0.12]"
           >
-            See more posts →
+            {t("seeMorePosts")}
           </Link>
         </>
       )}

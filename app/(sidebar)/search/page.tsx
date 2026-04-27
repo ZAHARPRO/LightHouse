@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Search, Play, Clock, Eye, Lock, FileText, Users } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import { getTranslations } from "next-intl/server";
 
 /* ── helpers ── */
 const THUMB_COLORS = [
@@ -41,12 +42,6 @@ function timeAgo(date: Date) {
   return `${y} year${y > 1 ? "s" : ""} ago`;
 }
 
-const TABS = [
-  { key: "all",      label: "All" },
-  { key: "videos",   label: "Videos" },
-  { key: "creators", label: "Creators" },
-  { key: "posts",    label: "Posts" },
-];
 
 /* ── page ── */
 export default async function SearchPage({
@@ -54,18 +49,25 @@ export default async function SearchPage({
 }: {
   searchParams: { q?: string; tab?: string };
 }) {
+  const t   = await getTranslations("search");
   const q   = (searchParams.q ?? "").trim();
   const tab = searchParams.tab ?? "all";
+  const TABS = [
+    { key: "all",      label: t("tabAll") },
+    { key: "videos",   label: t("tabVideos") },
+    { key: "creators", label: t("tabCreators") },
+    { key: "posts",    label: t("tabPosts") },
+  ];
 
   if (!q) {
     return (
       <div className="max-w-[860px] mx-auto px-6 py-20 text-center">
         <Search size={40} className="mx-auto mb-4 text-[var(--text-muted)] opacity-40" />
         <p className="font-display font-bold text-xl text-[var(--text-primary)]">
-          Start typing to search
+          {t("startTyping")}
         </p>
         <p className="text-[var(--text-muted)] text-sm mt-1">
-          Search for videos, creators and posts
+          {t("subtitle")}
         </p>
       </div>
     );
@@ -161,8 +163,7 @@ export default async function SearchPage({
       {/* Header */}
       <div className="mb-6">
         <p className="text-[var(--text-muted)] text-sm mb-3">
-          {total} result{total !== 1 ? "s" : ""} for{" "}
-          <span className="font-semibold text-[var(--text-primary)]">&ldquo;{q}&rdquo;</span>
+          {t(total !== 1 ? "resultsPlural" : "results", { total, query: q })}
         </p>
 
         {/* Tabs */}
@@ -187,8 +188,8 @@ export default async function SearchPage({
       {total === 0 && (
         <div className="text-center py-20">
           <Search size={36} className="mx-auto mb-4 text-[var(--text-muted)] opacity-30" />
-          <p className="font-display font-bold text-lg text-[var(--text-primary)]">No results found</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Try different keywords</p>
+          <p className="font-display font-bold text-lg text-[var(--text-primary)]">{t("noResults")}</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{t("noResultsHint")}</p>
         </div>
       )}
 
@@ -198,12 +199,12 @@ export default async function SearchPage({
           {tab === "all" && (
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-bold text-[1rem] text-[var(--text-primary)] flex items-center gap-2">
-                <Play size={15} className="text-[var(--accent-orange)]" /> Videos
+                <Play size={15} className="text-[var(--accent-orange)]" /> {t("tabVideos")}
               </h2>
               {videos.length >= 20 && (
                 <Link href={`/search?q=${encodeURIComponent(q)}&tab=videos`}
                   className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline">
-                  See all
+                  {t("seeAll")}
                 </Link>
               )}
             </div>
@@ -281,12 +282,12 @@ export default async function SearchPage({
           {tab === "all" && (
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-bold text-[1rem] text-[var(--text-primary)] flex items-center gap-2">
-                <Users size={15} className="text-[var(--accent-orange)]" /> Creators
+                <Users size={15} className="text-[var(--accent-orange)]" /> {t("tabCreators")}
               </h2>
               {creators.length >= 8 && (
                 <Link href={`/search?q=${encodeURIComponent(q)}&tab=creators`}
                   className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline">
-                  See all
+                  {t("seeAll")}
                 </Link>
               )}
             </div>
@@ -319,9 +320,9 @@ export default async function SearchPage({
                       <p className="text-[0.775rem] text-[var(--text-muted)]">@{c.username}</p>
                     )}
                     <div className="flex items-center gap-3 mt-1 text-[0.75rem] text-[var(--text-muted)]">
-                      <span>{c._count.subscribers} subscriber{c._count.subscribers !== 1 ? "s" : ""}</span>
+                      <span>{t(c._count.subscribers !== 1 ? "subscribersPlural" : "subscribers", { count: c._count.subscribers })}</span>
                       <span>·</span>
-                      <span>{c._count.videos} video{c._count.videos !== 1 ? "s" : ""}</span>
+                      <span>{t(c._count.videos !== 1 ? "videosPlural" : "videos", { count: c._count.videos })}</span>
                     </div>
                     {c.bio && (
                       <p className="mt-1 text-[0.75rem] text-[var(--text-muted)] line-clamp-1">{c.bio}</p>
@@ -340,12 +341,12 @@ export default async function SearchPage({
           {tab === "all" && (
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-bold text-[1rem] text-[var(--text-primary)] flex items-center gap-2">
-                <FileText size={15} className="text-[var(--accent-orange)]" /> Posts
+                <FileText size={15} className="text-[var(--accent-orange)]" /> {t("tabPosts")}
               </h2>
               {posts.length >= 10 && (
                 <Link href={`/search?q=${encodeURIComponent(q)}&tab=posts`}
                   className="text-[0.75rem] font-display font-semibold text-[var(--accent-orange)] no-underline hover:underline">
-                  See all
+                  {t("seeAll")}
                 </Link>
               )}
             </div>

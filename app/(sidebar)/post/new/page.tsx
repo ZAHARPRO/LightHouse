@@ -2,8 +2,10 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { FileText, Zap } from "lucide-react";
 import PostForm from "@/components/PostForm";
+import { getTranslations } from "next-intl/server";
 
 export default async function NewPostPage() {
+  const t = await getTranslations("post");
   const session = await auth();
   if (!session?.user) redirect("/auth/signin");
 
@@ -17,11 +19,11 @@ export default async function NewPostPage() {
             <FileText size={19} color="var(--accent-orange)" />
           </div>
           <h1 className="font-display font-extrabold text-[1.625rem] tracking-[-0.02em] text-[var(--text-primary)]">
-            Write a Post
+            {t("writePost")}
           </h1>
         </div>
         <p className="text-[var(--text-muted)] text-[0.9rem] pl-[3.25rem]">
-          Share your ideas, guides, or stories with the community
+          {t("writeSubtitle")}
         </p>
       </div>
 
@@ -35,12 +37,12 @@ export default async function NewPostPage() {
         <Zap size={15} color="var(--accent-orange)" className="shrink-0 mt-0.5" />
         <div>
           <p className="font-display font-bold text-[0.8125rem] text-[var(--text-secondary)] mb-1">
-            Tips
+            {t("tipsTitle")}
           </p>
           <ul className="text-[var(--text-muted)] text-[0.8125rem] leading-[1.7] pl-4">
-            <li>Write clearly — your readers come from all backgrounds</li>
-            <li>Premium posts are only visible to active subscribers</li>
-            <li>After publishing you will be redirected to your post</li>
+            <li>{t("tip1")}</li>
+            <li>{t("tip2")}</li>
+            <li>{t("tip3")}</li>
           </ul>
         </div>
       </div>

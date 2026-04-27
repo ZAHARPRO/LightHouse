@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
-export default function AuthErrorPage() {
+export default async function AuthErrorPage() {
+  const t = await getTranslations("auth");
+
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-8">
       <div className="text-center max-w-[400px]">
@@ -9,13 +12,13 @@ export default function AuthErrorPage() {
           <AlertCircle size={28} color="#ef4444" />
         </div>
         <h1 className="font-display font-extrabold text-[1.75rem] mb-3">
-          Authentication Error
+          {t("errorTitle")}
         </h1>
         <p className="text-[var(--text-secondary)] mb-8">
-          Something went wrong during sign in. Please try again.
+          {t("errorMessage")}
         </p>
         <Link href="/auth/signin" className="btn-primary no-underline inline-block">
-          Back to Sign In
+          {t("backToSignIn")}
         </Link>
       </div>
     </div>

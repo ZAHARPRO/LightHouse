@@ -6,6 +6,7 @@ import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
   History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
+  Shuffle, Sparkles,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -94,6 +95,14 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [activeQueue, setActiveQueue] = useState<YTItem[]>([]);
   const [queueIdx, setQueueIdx]       = useState(0);
   const [activePlId, setActivePlId]   = useState<string | null>(null);
+  const [activePlName, setActivePlName] = useState<string | null>(null);
+  const [isShuffled, setIsShuffled]   = useState(false);
+  const [smartShuffle, setSmartShuffle] = useState(false);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const originalQueueRef = useRef<YTItem[]>([]);
+  const smartLoadingRef  = useRef(false);
+  const smartShuffleRef  = useRef(false);
+  const trackRef         = useRef<YTItem | null>(null);
 
   // Favorites
   const [favIds, setFavIds]         = useState<Set<string>>(new Set());
@@ -109,6 +118,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           pause, resume, seek, setVolume: setMusicVol, prev, next } = music;
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
+
+  // Keep refs in sync for stale-closure-safe use inside effects
+  useEffect(() => { trackRef.current = track; }, [track]);
+  useEffect(() => { smartShuffleRef.current = smartShuffle; }, [smartShuffle]);
 
   function handleVol(v: number) { setVol(v); setMusicVol(v); }
 
@@ -181,16 +194,24 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     return () => { if (syncRef.current) clearInterval(syncRef.current); };
   }, [view, isHost, activeLobby?.id, track, positionMs, isPlaying]);
 
-  // ── Auto-advance playlist on track end ────────────────────────────────────
+  // ── Auto-advance: playlist queue or smart shuffle on track end ───────────
   useEffect(() => {
-    if (!isHost || playerState !== 0 || activeQueue.length === 0) return;
-    const nextIdx = queueIdx + 1;
-    if (nextIdx < activeQueue.length) {
-      setQueueIdx(nextIdx);
-      const item = activeQueue[nextIdx];
-      music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-      if (activeLobby) syncTrack(item, 0, true);
-    } else { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
+    if (!isHost || playerState !== 0) return;
+    if (activeQueue.length > 0) {
+      const nextIdx = queueIdx + 1;
+      if (nextIdx < activeQueue.length) {
+        setQueueIdx(nextIdx);
+        const item = activeQueue[nextIdx];
+        music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
+        if (activeLobby) syncTrack(item, 0, true);
+      } else {
+        setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
+        setIsShuffled(false); originalQueueRef.current = [];
+        if (smartShuffleRef.current) fetchSmartNext();
+      }
+    } else if (smartShuffleRef.current) {
+      fetchSmartNext();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState]);
 
@@ -249,19 +270,72 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     });
   }
 
+  function shuffleArray<T>(arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
-    setActiveQueue([]); setQueueIdx(0); setActivePlId(null);
+    setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
+    setIsShuffled(false); originalQueueRef.current = [];
     music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
     if (isHost && activeLobby) syncTrack(item, 0, true);
   }
 
   function startPlaylist(pl: Playlist) {
     if (!pl.tracks.length) return;
-    setActiveQueue(pl.tracks); setQueueIdx(0); setActivePlId(pl.id);
+    setActiveQueue(pl.tracks); setQueueIdx(0); setActivePlId(pl.id); setActivePlName(pl.name);
+    setIsShuffled(false); originalQueueRef.current = [];
     const first = pl.tracks[0];
     music.play({ videoId: first.videoId, title: first.title, channel: first.channel, thumbnail: first.thumbnail });
     if (isHost && activeLobby) syncTrack(first, 0, true);
+  }
+
+  function toggleShuffle() {
+    if (!activeQueue.length) return;
+    if (!isShuffled) {
+      originalQueueRef.current = [...activeQueue];
+      const current = activeQueue[queueIdx];
+      const rest = shuffleArray(activeQueue.filter((_, i) => i !== queueIdx));
+      const newQueue = [current, ...rest];
+      setActiveQueue(newQueue);
+      setQueueIdx(0);
+      setIsShuffled(true);
+    } else {
+      const current = activeQueue[queueIdx];
+      const restored = originalQueueRef.current;
+      const idx = restored.findIndex(t => t.videoId === current.videoId);
+      setActiveQueue(restored);
+      setQueueIdx(idx >= 0 ? idx : 0);
+      setIsShuffled(false);
+      originalQueueRef.current = [];
+    }
+  }
+
+  async function fetchSmartNext() {
+    if (smartLoadingRef.current) return;
+    const cur = trackRef.current;
+    if (!cur) return;
+    smartLoadingRef.current = true;
+    setSmartLoading(true);
+    try {
+      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(`${cur.title} ${cur.channel}`)}`);
+      if (!res.ok) return;
+      const d = await res.json() as { items: YTItem[] };
+      const pool = (d.items ?? []).filter(i => i.videoId !== cur.videoId);
+      if (!pool.length) return;
+      const next = pool[Math.floor(Math.random() * Math.min(5, pool.length))];
+      music.play(next);
+      if (isHost && activeLobby) syncTrack(next, 0, true);
+    } finally {
+      smartLoadingRef.current = false;
+      setSmartLoading(false);
+    }
   }
 
   function copyLink(id: string) {
@@ -351,7 +425,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!activeLobby) return;
     await fetch(`/api/music-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
     music.setActiveLobbyId(null); music.pause();
-    setActiveLobby(null); setActiveQueue([]); setActivePlId(null);
+    setActiveLobby(null); setActiveQueue([]); setActivePlId(null); setActivePlName(null);
+    setIsShuffled(false); originalQueueRef.current = [];
     setView("lobbies");
   }
 
@@ -372,7 +447,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   async function deletePlaylist(id: string) {
     await fetch(`/api/playlists/${id}`, { method: "DELETE" });
     setPlaylists(p => p.filter(pl => pl.id !== id));
-    if (activePlId === id) { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
+    if (activePlId === id) {
+      setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
+      setIsShuffled(false); originalQueueRef.current = [];
+    }
   }
 
   async function importYtPlaylist() {
@@ -489,7 +567,14 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
             <div className="min-w-0 flex-1">
               <p className="font-display font-bold text-[var(--text-primary)] text-xs truncate leading-tight">{track.title}</p>
               <p className="text-[var(--text-muted)] text-[0.6rem] truncate">{track.channel}</p>
-              {activePlId && <p className="text-[0.58rem] text-red-400 flex items-center gap-0.5 mt-0.5"><ListMusic size={8} />{queueIdx + 1}/{activeQueue.length}</p>}
+              {activePlId && (
+                <p className="text-[0.58rem] text-red-400 flex items-center gap-0.5 mt-0.5 truncate">
+                  <ListMusic size={8} className="shrink-0" />
+                  <span className="truncate max-w-[100px]">{activePlName ?? "Playlist"}</span>
+                  <span className="shrink-0">· {queueIdx + 1}/{activeQueue.length}</span>
+                  {isShuffled && <Shuffle size={7} className="shrink-0 ml-0.5" />}
+                </p>
+              )}
               {/* Favorite + add-to-playlist buttons for current track */}
               <div className="flex items-center gap-1 mt-1">
                 <button
@@ -531,21 +616,58 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           </div>
           {/* Controls — host or solo */}
           {(!activeLobby || isHost) && (
-            <div className="flex items-center justify-center gap-4">
-              <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
-              <button onClick={isPlaying ? pause : resume}
-                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
-                {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-              <button onClick={() => {
-                if (activeQueue.length > 0 && queueIdx + 1 < activeQueue.length) {
-                  const ni = queueIdx + 1; setQueueIdx(ni);
-                  const item = activeQueue[ni];
-                  music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-                  if (activeLobby) syncTrack(item, 0, true);
-                } else next();
-              }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={16} /></button>
-            </div>
+            <>
+              <div className="flex items-center justify-center gap-4">
+                <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
+                <button onClick={isPlaying ? pause : resume}
+                  className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
+                  {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                </button>
+                <button onClick={() => {
+                  if (activeQueue.length > 0 && queueIdx + 1 < activeQueue.length) {
+                    const ni = queueIdx + 1; setQueueIdx(ni);
+                    const item = activeQueue[ni];
+                    music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
+                    if (activeLobby) syncTrack(item, 0, true);
+                  } else if (smartShuffle) {
+                    fetchSmartNext();
+                  } else next();
+                }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={16} /></button>
+              </div>
+              {/* Shuffle + Smart shuffle toggles */}
+              <div className="flex items-center justify-center gap-2">
+                {activeQueue.length > 0 && (
+                  <button
+                    onClick={toggleShuffle}
+                    title={isShuffled ? "Shuffle on — click to restore order" : "Shuffle playlist"}
+                    className={[
+                      "flex items-center gap-1 px-2 py-0.5 rounded-lg text-[0.6rem] font-display font-bold border transition-colors",
+                      isShuffled
+                        ? "bg-red-500/15 border-red-500/30 text-red-400"
+                        : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                    ].join(" ")}
+                  >
+                    <Shuffle size={9} />
+                    Shuffle
+                  </button>
+                )}
+                <button
+                  onClick={() => setSmartShuffle(v => !v)}
+                  title="Smart Shuffle — auto-plays similar tracks when queue ends or on skip"
+                  className={[
+                    "flex items-center gap-1 px-2 py-0.5 rounded-lg text-[0.6rem] font-display font-bold border transition-colors",
+                    smartShuffle
+                      ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
+                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                  ].join(" ")}
+                >
+                  {smartLoading
+                    ? <Loader2 size={9} className="animate-spin" />
+                    : <Sparkles size={9} />}
+                  Smart
+                </button>
+              </div>
+            </>
           )}
           {/* Guest status */}
           {activeLobby && !isHost && (

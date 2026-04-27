@@ -4,8 +4,32 @@ import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { sendChatMessage } from "@/actions/chat";
-import { Send, Maximize2, X, MessageSquare, Zap, Reply } from "lucide-react";
+import { Send, Maximize2, X, MessageSquare, Zap, Reply, ExternalLink, AlertTriangle } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+
+const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
+
+function parseContent(text: string): { type: "text" | "url"; value: string }[] {
+  const parts: { type: "text" | "url"; value: string }[] = [];
+  let last = 0;
+  const re = new RegExp(URL_RE.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
+    parts.push({ type: "url", value: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+  return parts;
+}
+
+function isInternal(url: string): boolean {
+  try {
+    return new URL(url).hostname === window.location.hostname;
+  } catch {
+    return false;
+  }
+}
 
 type Message = {
   id: string;
@@ -129,6 +153,30 @@ const ChatPopup = forwardRef<HTMLDivElement, ChatPopupProps>(function ChatPopup(
       setTimeout(() => setMessages((prev) => prev.filter((m) => m.id !== errId)), 6000);
     }
     setSending(false);
+  }
+
+  const [warnUrl, setWarnUrl] = useState<string | null>(null);
+
+  function renderContent(content: string) {
+    return parseContent(content).map((part, i) => {
+      if (part.type === "text") return <span key={i}>{part.value}</span>;
+      if (isInternal(part.value)) {
+        return (
+          <Link key={i} href={part.value} className="text-[var(--accent-orange)] underline break-all" onClick={onClose}>
+            {part.value}
+          </Link>
+        );
+      }
+      return (
+        <button
+          key={i}
+          onClick={() => setWarnUrl(part.value)}
+          className="text-[var(--accent-orange)] underline break-all cursor-pointer bg-transparent border-none p-0 text-[0.8125rem] leading-[1.45] text-left"
+        >
+          {part.value}
+        </button>
+      );
+    });
   }
 
   const [isMobile, setIsMobile] = useState(false);
@@ -283,7 +331,7 @@ function onMouseMove(e: MouseEvent) {
                       borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
                     }}
                   >
-                    {msg.content}
+                    {renderContent(msg.content)}
                   </div>
 
                   {!isMe && session && hoveredId === msg.id && (
@@ -345,6 +393,45 @@ function onMouseMove(e: MouseEvent) {
           <div className="flex gap-[0.375rem]">
             <Link href="/auth/signin" className="btn-ghost no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">Sign In</Link>
             <Link href="/auth/register" className="btn-primary no-underline py-[0.3rem] px-[0.75rem] text-[0.8125rem] flex-1 text-center">Join</Link>
+          </div>
+        </div>
+      )}
+
+      {/* External link warning */}
+      {warnUrl && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" onClick={() => setWarnUrl(null)}>
+          <div
+            className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-5 max-w-[320px] w-[calc(100%-2rem)] shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 text-amber-400">
+              <AlertTriangle size={16} />
+              <span className="font-display font-bold text-sm">External link</span>
+            </div>
+            <p className="text-[var(--text-secondary)] text-[0.8125rem] leading-snug">
+              This link leads outside LightHouse. Continue?
+            </p>
+            <p className="text-[0.75rem] text-[var(--text-muted)] break-all bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <ExternalLink size={11} className="shrink-0 text-[var(--accent-orange)]" />
+              {warnUrl}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setWarnUrl(null)}
+                className="flex-1 py-[0.4rem] rounded-lg text-[0.8125rem] font-semibold bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <a
+                href={warnUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setWarnUrl(null)}
+                className="flex-1 py-[0.4rem] rounded-lg text-[0.8125rem] font-semibold text-center no-underline bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-colors"
+              >
+                Open link
+              </a>
+            </div>
           </div>
         </div>
       )}

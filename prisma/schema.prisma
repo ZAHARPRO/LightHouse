@@ -20,6 +20,7 @@ model User {
   bio           String?
   banner        String?
   badgeShowcase String?
+  favoriteSong  String?   @db.Text
   points          Int       @default(0)
   tier            Tier      @default(FREE)
   role            Role      @default(USER)
@@ -558,11 +559,12 @@ model MusicLobby {
 }
 
 model Playlist {
-  id         String   @id @default(cuid())
-  userId     String
-  name       String
-  tracksJson String?  @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation("UserPlaylists", fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  tracksJson  String?  @db.Text
+  isFavorites Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation("UserPlaylists", fields: [userId], references: [id], onDelete: Cascade)
 }

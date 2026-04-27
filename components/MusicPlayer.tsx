@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
-  History, ListMusic, Trash2, Download, ChevronRight, Youtube,
+  History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -20,7 +20,7 @@ type LobbyListItem = {
 type Member = { id: string; name: string | null; image: string | null; at: number };
 type HistoryItem = { videoId: string; title: string; channel: string; thumbnail: string; at: number };
 type YTItem = { videoId: string; title: string; channel: string; thumbnail: string };
-type Playlist = { id: string; name: string; tracks: YTItem[] };
+type Playlist = { id: string; name: string; tracks: YTItem[]; isFavorites?: boolean };
 type ActiveLobby = {
   id: string; name: string | null; hasPassword: boolean;
   host: { id: string; name: string | null; image: string | null };
@@ -95,6 +95,15 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [queueIdx, setQueueIdx]       = useState(0);
   const [activePlId, setActivePlId]   = useState<string | null>(null);
 
+  // Favorites
+  const [favIds, setFavIds]         = useState<Set<string>>(new Set());
+  const [favLoading, setFavLoading] = useState<Set<string>>(new Set());
+
+  // Add-to-playlist modal
+  const [addToPlItem, setAddToPlItem]     = useState<YTItem | null>(null);
+  const [addingToPlId, setAddingToPlId]   = useState<string | null>(null);
+  const [addPlLoading, setAddPlLoading]   = useState(false);
+
   const isHost = activeLobby?.host.id === session?.user?.id;
   const { track, isPlaying, positionMs, playerReady, playerState,
           pause, resume, seek, setVolume: setMusicVol, prev, next } = music;
@@ -120,6 +129,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Fetch favorites on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch("/api/favorites")
+      .then(r => r.json())
+      .then((d: { tracks: YTItem[] }) => {
+        setFavIds(new Set(d.tracks.map(t => t.videoId)));
+      }).catch(() => {});
+  }, [session?.user?.id]);
+
   // ── Poll active lobby every 4s ─────────────────────────────────────────────
   const fetchActiveLobby = useCallback(async () => {
     if (!activeLobby) return;
@@ -127,7 +146,6 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
     const d = await res.json() as ActiveLobby;
     setActiveLobby(d);
-    // Guest: sync track
     if (!isHost && d.trackUri && d.trackUri !== music.track?.videoId) {
       const est = d.positionMs + (d.isPlaying ? d.elapsedMs : 0);
       music.play({ videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" }, est);
@@ -251,6 +269,45 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setCopied(true); setTimeout(() => setCopied(false), 1500);
   }
 
+  async function toggleFav(item: YTItem) {
+    if (favLoading.has(item.videoId)) return;
+    setFavLoading(s => { const n = new Set(s); n.add(item.videoId); return n; });
+    try {
+      const res = await fetch("/api/favorites", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+      });
+      if (res.ok) {
+        const d = await res.json() as { favorited: boolean };
+        setFavIds(prev => {
+          const n = new Set(prev);
+          if (d.favorited) n.add(item.videoId); else n.delete(item.videoId);
+          return n;
+        });
+      }
+    } finally {
+      setFavLoading(s => { const n = new Set(s); n.delete(item.videoId); return n; });
+    }
+  }
+
+  async function openAddToPl(item: YTItem) {
+    setAddToPlItem(item);
+    if (!plLoaded) {
+      setAddPlLoading(true);
+      try {
+        const res = await fetch("/api/playlists");
+        if (res.ok) { const d = await res.json() as Playlist[]; setPlaylists(d); setPlLoaded(true); }
+      } finally { setAddPlLoading(false); }
+    }
+  }
+
+  async function doAddToPlaylist(plId: string, item: YTItem) {
+    setAddingToPlId(plId);
+    await addToPlaylist(plId, item);
+    setAddingToPlId(null);
+    setAddToPlItem(null);
+  }
+
   async function enterLobby(id: string) {
     const lobbyRes = await fetch(`/api/music-lobbies/${id}`);
     if (!lobbyRes.ok) return;
@@ -298,6 +355,26 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setView("lobbies");
   }
 
+  async function addToPlaylist(plId: string, item: YTItem) {
+    const pl = playlists.find(p => p.id === plId); if (!pl) return;
+    const updated = [...pl.tracks, item];
+    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
+    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
+  }
+
+  async function removeFromPlaylist(plId: string, videoId: string) {
+    const pl = playlists.find(p => p.id === plId); if (!pl) return;
+    const updated = pl.tracks.filter(t => t.videoId !== videoId);
+    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
+    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
+  }
+
+  async function deletePlaylist(id: string) {
+    await fetch(`/api/playlists/${id}`, { method: "DELETE" });
+    setPlaylists(p => p.filter(pl => pl.id !== id));
+    if (activePlId === id) { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
+  }
+
   async function importYtPlaylist() {
     if (!ytUrl.trim()) return;
     setImporting(true); setImportErr(null);
@@ -320,26 +397,6 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setCreatingPl(false);
   }
 
-  async function addToPlaylist(plId: string, item: YTItem) {
-    const pl = playlists.find(p => p.id === plId); if (!pl) return;
-    const updated = [...pl.tracks, item];
-    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
-    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
-  }
-
-  async function removeFromPlaylist(plId: string, videoId: string) {
-    const pl = playlists.find(p => p.id === plId); if (!pl) return;
-    const updated = pl.tracks.filter(t => t.videoId !== videoId);
-    await fetch(`/api/playlists/${plId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tracks: updated }) });
-    setPlaylists(prev => prev.map(p => p.id === plId ? { ...p, tracks: updated } : p));
-  }
-
-  async function deletePlaylist(id: string) {
-    await fetch(`/api/playlists/${id}`, { method: "DELETE" });
-    setPlaylists(p => p.filter(pl => pl.id !== id));
-    if (activePlId === id) { setActiveQueue([]); setQueueIdx(0); setActivePlId(null); }
-  }
-
   // ── Drag / Resize ──────────────────────────────────────────────────────────
   const handleDrag = (e: React.MouseEvent) => {
     if (e.button !== 0) return; e.preventDefault();
@@ -358,6 +415,33 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   };
 
   if (!session?.user) return null;
+
+  // ── Heart button helper ────────────────────────────────────────────────────
+  const FavBtn = ({ item, size: sz = 9 }: { item: YTItem; size?: number }) => (
+    <button
+      onClick={(e) => { e.stopPropagation(); toggleFav(item); }}
+      disabled={favLoading.has(item.videoId)}
+      title={favIds.has(item.videoId) ? "Remove from favorites" : "Add to favorites"}
+      className={[
+        "shrink-0 transition-colors p-0.5 rounded",
+        favIds.has(item.videoId) ? "text-red-400" : "text-[var(--text-muted)] hover:text-red-400",
+        favLoading.has(item.videoId) ? "opacity-50" : "",
+      ].join(" ")}
+    >
+      <Heart size={sz} fill={favIds.has(item.videoId) ? "currentColor" : "none"} />
+    </button>
+  );
+
+  // ── Add-to-playlist button helper ─────────────────────────────────────────
+  const AddPlBtn = ({ item, sz = 9 }: { item: YTItem; sz?: number }) => (
+    <button
+      onClick={(e) => { e.stopPropagation(); openAddToPl(item); }}
+      title="Add to playlist"
+      className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5 rounded"
+    >
+      <ListMusic size={sz} />
+    </button>
+  );
 
   // ── Shared UI pieces ───────────────────────────────────────────────────────
   const SearchBar = (
@@ -382,23 +466,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 <p className="text-xs font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{r.title}</p>
                 <p className="text-[0.58rem] text-[var(--text-muted)] truncate">{r.channel}</p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0">
                 <button onClick={() => playTrack(r)} className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.58rem] font-bold flex items-center gap-0.5 hover:bg-red-500/25">
                   <Play size={8} />Play
                 </button>
-                {isHost && lobbyTab === "playlists" && playlists.length > 0 && (
-                  <div className="relative group/pl">
-                    <button className="px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-muted)] text-[0.58rem] font-bold flex items-center gap-0.5 hover:text-[var(--text-primary)]">
-                      <Plus size={8} />Add
-                    </button>
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg shadow-xl overflow-hidden min-w-[130px] hidden group-hover/pl:block">
-                      {playlists.map(pl => (
-                        <button key={pl.id} onClick={() => addToPlaylist(pl.id, r)}
-                          className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] truncate">{pl.name}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <FavBtn item={r} size={10} />
+                <AddPlBtn item={r} sz={10} />
               </div>
             </div>
           ))}
@@ -413,10 +486,32 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         <>
           <div className="flex items-center gap-2.5">
             <Image src={track.thumbnail} alt="" width={44} height={44} className="rounded-lg shrink-0 shadow object-cover" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-display font-bold text-[var(--text-primary)] text-xs truncate leading-tight">{track.title}</p>
               <p className="text-[var(--text-muted)] text-[0.6rem] truncate">{track.channel}</p>
               {activePlId && <p className="text-[0.58rem] text-red-400 flex items-center gap-0.5 mt-0.5"><ListMusic size={8} />{queueIdx + 1}/{activeQueue.length}</p>}
+              {/* Favorite + add-to-playlist buttons for current track */}
+              <div className="flex items-center gap-1 mt-1">
+                <button
+                  onClick={() => toggleFav(track)}
+                  disabled={favLoading.has(track.videoId)}
+                  className={[
+                    "flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[0.58rem] font-bold border transition-colors",
+                    favIds.has(track.videoId)
+                      ? "bg-red-500/15 border-red-500/30 text-red-400"
+                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/30",
+                  ].join(" ")}
+                >
+                  <Heart size={7} fill={favIds.has(track.videoId) ? "currentColor" : "none"} />
+                  {favIds.has(track.videoId) ? "Saved" : "Like"}
+                </button>
+                <button
+                  onClick={() => openAddToPl(track)}
+                  className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[0.58rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-subtle)] transition-colors"
+                >
+                  <Plus size={7} /> Playlist
+                </button>
+              </div>
             </div>
           </div>
           {/* Progress */}
@@ -685,16 +780,23 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                         <p className="text-[0.65rem] text-[var(--text-muted)]">No tracks played yet</p>
                       </div>
                     ) : activeLobby.history.map((item, i) => (
-                      <button key={`${item.videoId}-${i}`}
-                        onClick={() => isHost && playTrack(item)}
-                        className={["w-full flex items-center gap-2 p-1.5 rounded-lg mb-1 text-left transition-colors", isHost ? "hover:bg-[var(--bg-secondary)] cursor-pointer" : "cursor-default"].join(" ")}>
-                        <Image src={item.thumbnail} alt="" width={32} height={24} className="rounded shrink-0 object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[0.65rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{item.title}</p>
-                          <p className="text-[0.55rem] text-[var(--text-muted)]">{timeAgo(item.at)}</p>
+                      <div key={`${item.videoId}-${i}`}
+                        className="flex items-center gap-2 p-1.5 rounded-lg mb-1">
+                        <button
+                          onClick={() => isHost && playTrack(item)}
+                          className={["flex items-center gap-2 flex-1 min-w-0 text-left", isHost ? "cursor-pointer" : "cursor-default"].join(" ")}>
+                          <Image src={item.thumbnail} alt="" width={32} height={24} className="rounded shrink-0 object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[0.65rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{item.title}</p>
+                            <p className="text-[0.55rem] text-[var(--text-muted)]">{timeAgo(item.at)}</p>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <FavBtn item={item} size={10} />
+                          <AddPlBtn item={item} sz={10} />
+                          {isHost && <Play size={9} className="text-[var(--text-muted)]" />}
                         </div>
-                        {isHost && <Play size={9} className="text-[var(--text-muted)] shrink-0" />}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -770,6 +872,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                                   <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
+                                  <FavBtn item={t} size={9} />
                                   {isHost && (
                                     <button onClick={() => {
                                       setQueueIdx(i); setActivePlId(pl.id); setActiveQueue(pl.tracks);
@@ -791,6 +894,42 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Add-to-playlist modal */}
+      {addToPlItem && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 rounded-2xl">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-3 w-[85%] shadow-2xl">
+            <p className="text-xs font-display font-bold text-[var(--text-primary)] mb-1">Add to playlist</p>
+            <p className="text-[0.6rem] text-[var(--text-muted)] mb-2.5 truncate">{addToPlItem.title}</p>
+            {(addPlLoading && !plLoaded) ? (
+              <div className="flex justify-center py-3"><Loader2 size={14} className="animate-spin text-[var(--text-muted)]" /></div>
+            ) : playlists.length === 0 ? (
+              <p className="text-[0.62rem] text-[var(--text-muted)] text-center py-2 mb-2">No playlists yet. Create one first.</p>
+            ) : (
+              <div className="max-h-36 overflow-y-auto flex flex-col gap-0.5 mb-2.5">
+                {playlists.map(pl => (
+                  <button key={pl.id} onClick={() => doAddToPlaylist(pl.id, addToPlItem!)}
+                    disabled={addingToPlId === pl.id || pl.tracks.some(t => t.videoId === addToPlItem.videoId)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5 disabled:opacity-40">
+                    {addingToPlId === pl.id
+                      ? <Loader2 size={9} className="animate-spin shrink-0" />
+                      : pl.tracks.some(t => t.videoId === addToPlItem.videoId)
+                        ? <Check size={9} className="text-green-400 shrink-0" />
+                        : <ListMusic size={9} className="shrink-0" />
+                    }
+                    <span className="truncate flex-1">{pl.name}</span>
+                    <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{pl.tracks.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setAddToPlItem(null)}
+              className="w-full py-1 rounded-lg text-xs font-display font-semibold bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

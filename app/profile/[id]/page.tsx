@@ -13,6 +13,7 @@ import BanBanner from "@/components/BanBanner";
 import MessageButton from "@/components/MessageButton";
 import BlockButton from "@/components/BlockButton";
 import UserAvatar from "@/components/UserAvatar";
+import FavoriteSongCard from "@/components/FavoriteSongCard";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -229,6 +230,28 @@ export default async function PublicProfilePage({
                     </p>
                   </div>
                 )}
+
+                {/* Favorite song */}
+                {(() => {
+                  const song = (user as { favoriteSong?: string | null }).favoriteSong;
+                  if (!song) return null;
+                  try {
+                    const parsed = JSON.parse(song);
+                    if (!parsed?.videoId) return null;
+                    return (
+                      <div style={{ marginBottom: "1.25rem", maxWidth: 400 }}>
+                        <p style={{
+                          fontSize: "0.6875rem", fontFamily: "var(--font-display)", fontWeight: 700,
+                          color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em",
+                          marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.375rem",
+                        }}>
+                          🎵 Favorite Song
+                        </p>
+                        <FavoriteSongCard song={parsed} />
+                      </div>
+                    );
+                  } catch { return null; }
+                })()}
 
                 {/* ELO ranks */}
                 {(() => {

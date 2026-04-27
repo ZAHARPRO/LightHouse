@@ -7,8 +7,8 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const playlists = await prisma.playlist.findMany({
-    where: { userId: session.user.id },
-    select: { id: true, name: true, tracksJson: true, createdAt: true },
+    where: { userId: session.user.id, isFavorites: false },
+    select: { id: true, name: true, tracksJson: true, isFavorites: true, createdAt: true },
     orderBy: { updatedAt: "desc" },
   });
 

@@ -9,6 +9,7 @@ import AvatarUpload from "@/components/AvatarUpload";
 import UsernameEditor from "@/components/UsernameEditor";
 import BioEditor from "@/components/BioEditor";
 import BannerUpload from "@/components/BannerUpload";
+import ProfilePlaylists from "@/components/ProfilePlaylists";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -99,6 +100,9 @@ export default async function ProfilePage() {
                 <ExternalLink size={13} />
                 Public Profile
               </Link>
+              <ProfilePlaylists
+                initialFavSong={user.favoriteSong ? (() => { try { return JSON.parse(user.favoriteSong!); } catch { return null; } })() : null}
+              />
             </div>
 
             <p className="text-[var(--text-muted)] text-sm mb-2">{user.email}</p>

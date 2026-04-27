@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-const MEMBER_TTL = 30_000;
+const MEMBER_TTL  = 30_000;
+const EMPTY_CLOSE = 5 * 60 * 1000; // 5 minutes
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       id: true, name: true, status: true,
       trackUri: true, trackName: true, trackArtist: true, trackImage: true,
       positionMs: true, isPlaying: true, syncedAt: true, membersJson: true,
-      passwordHash: true,
+      historyJson: true, passwordHash: true, updatedAt: true,
       host: { select: { id: true, name: true, image: true } },
     },
   });
@@ -26,12 +27,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         .filter(m => now - m.at < MEMBER_TTL)
     : [];
 
+  // Auto-close if lobby has been empty for 5+ minutes
+  if (
+    lobby.status === "ACTIVE" &&
+    members.length === 0 &&
+    now - new Date(lobby.updatedAt).getTime() > EMPTY_CLOSE
+  ) {
+    await prisma.spotifyLobby.update({ where: { id }, data: { status: "CLOSED" } });
+    return NextResponse.json({ error: "Lobby closed (empty)." }, { status: 404 });
+  }
+
+  const history = lobby.historyJson ? JSON.parse(lobby.historyJson) : [];
+
   return NextResponse.json({
     ...lobby,
     membersJson: undefined,
+    historyJson: undefined,
     passwordHash: undefined,
+    updatedAt: undefined,
     hasPassword: !!lobby.passwordHash,
     members,
+    history,
     elapsedMs: lobby.isPlaying ? now - new Date(lobby.syncedAt).getTime() : 0,
   });
 }

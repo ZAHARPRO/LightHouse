@@ -47,6 +47,7 @@ type MusicCtx = {
   setActiveLobbyId: (id: string | null) => void;
   track: YTTrack | null;
   isPlaying: boolean;
+  playerState: number;
   positionMs: number;
   playerReady: boolean;
   play: (track: YTTrack, positionMs?: number) => void;
@@ -74,6 +75,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [playerReady, setPlayerReady] = useState(false);
   const [track, setTrack]             = useState<YTTrack | null>(null);
   const [isPlaying, setIsPlaying]     = useState(false);
+  const [playerState, setPlayerState] = useState(-1);
   const [positionMs, setPositionMs]   = useState(0);
   const [activeLobbyId, setActiveLobbyId] = useState<string | null>(null);
 
@@ -98,8 +100,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         events: {
           onReady: () => setPlayerReady(true),
           onStateChange: (e) => {
+            setPlayerState(e.data);
             setIsPlaying(e.data === 1);
-            if (e.data === 0) { setIsPlaying(false); } // ended
           },
         },
       });
@@ -142,7 +144,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   return (
     <MusicContext.Provider value={{
       activeLobbyId, setActiveLobbyId,
-      track, isPlaying, positionMs, playerReady,
+      track, isPlaying, playerState, positionMs, playerReady,
       play, pause, resume, seek, setVolume, next, prev,
       playerRef,
     }}>

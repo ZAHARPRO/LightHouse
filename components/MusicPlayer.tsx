@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useMusicContext, type YTTrack } from "@/contexts/MusicContext";
+import { useMusicContext } from "@/contexts/MusicContext";
 
 type Lobby = {
   id: string;
@@ -19,6 +19,14 @@ type Lobby = {
   trackArtist: string | null;
   trackImage: string | null;
   isPlaying: boolean;
+  host: { id: string; name: string | null; image: string | null };
+};
+
+type ActiveLobby = {
+  id: string;
+  name: string | null;
+  hasPassword: boolean;
+  members: { id: string; name: string | null; image: string | null; at: number }[];
   host: { id: string; name: string | null; image: string | null };
 };
 
@@ -44,10 +52,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   });
   const [size, setSize]       = useState({ w: 320, h: 220 });
   const [minimized, setMin]   = useState(false);
-  const [view, setView]       = useState<"player" | "lobbies" | "create">("player");
+  const [view, setView]       = useState<"player" | "lobbies" | "create" | "lobby">("player");
+  const [volume, setVolumeState] = useState(70);
 
   // Lobbies
-  const [lobbies, setLobbies]     = useState<Lobby[]>([]);
+  const [lobbies, setLobbies]         = useState<Lobby[]>([]);
+  const [activeLobby, setActiveLobby] = useState<ActiveLobby | null>(null);
   const [lobbyName, setLobbyName] = useState("");
   const [lobbyPass, setLobbyPass] = useState("");
   const [creating, setCreating]   = useState(false);
@@ -75,6 +85,21 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     const t = setInterval(fetchLobbies, 5000);
     return () => clearInterval(t);
   }, [view, fetchLobbies]);
+
+  // Poll active lobby members every 5s
+  useEffect(() => {
+    if (view !== "lobby" || !activeLobby) return;
+    const poll = async () => {
+      const res = await fetch(`/api/spotify-lobbies/${activeLobby.id}`);
+      if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
+      const d = await res.json() as { members: ActiveLobby["members"]; host: ActiveLobby["host"]; name: string | null; hasPassword: boolean };
+      setActiveLobby(prev => prev ? { ...prev, members: d.members } : null);
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, activeLobby?.id]);
 
   // Search debounce
   useEffect(() => {
@@ -141,8 +166,13 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       if (res.ok) {
         const { id } = await res.json() as { id: string };
         music.setActiveLobbyId(id);
-        window.open(`/music/${id}`, "_blank");
-        setView("lobbies"); setLobbyName(""); setLobbyPass("");
+        const lobbyRes = await fetch(`/api/spotify-lobbies/${id}`);
+        if (lobbyRes.ok) {
+          const d = await lobbyRes.json() as ActiveLobby & { hasPassword: boolean };
+          setActiveLobby({ id, name: lobbyName || null, hasPassword: !!lobbyPass, members: d.members ?? [], host: d.host });
+        }
+        setLobbyName(""); setLobbyPass("");
+        setView("lobby");
       }
     } finally { setCreating(false); }
   }
@@ -159,9 +189,25 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pass || undefined }),
       });
-      if (res.ok) { music.setActiveLobbyId(lobbyId); window.open(`/music/${lobbyId}`, "_blank"); }
-      else { const d = await res.json(); alert(d.error ?? "Error"); }
+      if (res.ok) {
+        music.setActiveLobbyId(lobbyId);
+        const lobbyRes = await fetch(`/api/spotify-lobbies/${lobbyId}`);
+        if (lobbyRes.ok) {
+          const d = await lobbyRes.json() as ActiveLobby & { hasPassword: boolean };
+          setActiveLobby({ id: lobbyId, name: d.name, hasPassword: d.hasPassword, members: d.members ?? [], host: d.host });
+        }
+        setView("lobby");
+      } else { const d = await res.json(); alert(d.error ?? "Error"); }
     } finally { setJoining(null); }
+  }
+
+  async function leaveLobby() {
+    if (!activeLobby) return;
+    await fetch(`/api/spotify-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
+    music.setActiveLobbyId(null);
+    music.pause();
+    setActiveLobby(null);
+    setView("lobbies");
   }
 
   function copyLobbyLink(id: string) {
@@ -198,7 +244,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   if (!session?.user) return null;
 
-  const { track, isPlaying, positionMs, playerReady, pause, resume, seek, setVolume, prev, next } = music;
+  const { track, isPlaying, positionMs, playerReady, pause, resume, seek, setVolume: setMusicVolume, prev, next } = music;
+
+  function handleVolume(v: number) {
+    setVolumeState(v);
+    setMusicVolume(v);
+  }
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
 
@@ -212,18 +263,20 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] cursor-grab active:cursor-grabbing select-none">
         <Music2 size={13} className="text-red-500 shrink-0" />
         <span className="flex-1 text-[0.7rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider truncate">
-          {view === "player" ? "Music" : view === "lobbies" ? "Lobbies" : "Create Lobby"}
+          {view === "player" ? "Music" : view === "lobbies" ? "Lobbies" : view === "create" ? "Create Lobby" : (activeLobby?.name || "My Lobby")}
         </span>
         {music.activeLobbyId && (
-          <Link href={`/music/${music.activeLobbyId}`} target="_blank"
-            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Open lobby">
+          <Link href={`/music/${music.activeLobbyId}`}
+            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Open lobby page">
             <ExternalLink size={12} />
           </Link>
         )}
-        <button onClick={() => setView(view === "player" ? "lobbies" : "player")}
-          className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Lobbies">
-          <Users size={13} />
-        </button>
+        {view !== "lobby" && (
+          <button onClick={() => setView(view === "player" ? "lobbies" : "player")}
+            className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5" title="Lobbies">
+            <Users size={13} />
+          </button>
+        )}
         <button onClick={() => setMin(m => !m)}
           className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
           {minimized ? <ChevronDown size={13} /> : <Minus size={13} />}
@@ -316,8 +369,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                   {/* Volume */}
                   <div className="flex items-center gap-2">
                     <Volume2 size={11} className="text-[var(--text-muted)] shrink-0" />
-                    <input type="range" min={0} max={100} defaultValue={70}
-                      onChange={e => setVolume(Number(e.target.value))}
+                    <input type="range" min={0} max={100} value={volume}
+                      onChange={e => handleVolume(Number(e.target.value))}
                       className="flex-1 h-1 accent-red-500 cursor-pointer"
                     />
                   </div>
@@ -395,6 +448,75 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── ACTIVE LOBBY VIEW ───────────────────────────────────── */}
+          {view === "lobby" && activeLobby && (
+            <div className="flex flex-col p-3 gap-3">
+              {/* Lobby info */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  {activeLobby.hasPassword && <Lock size={10} className="text-[var(--text-muted)]" />}
+                  <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">
+                    {activeLobby.name || `${activeLobby.host.name ?? "?"}'s lobby`}
+                  </span>
+                </div>
+                <button onClick={() => copyLobbyLink(activeLobby.id)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.6rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                  {copied ? <Check size={9} className="text-green-400" /> : <Copy size={9} />}
+                  {copied ? "Copied!" : "Copy link"}
+                </button>
+              </div>
+
+              {/* Members */}
+              <div>
+                <p className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                  Listeners ({activeLobby.members.length})
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {/* Host */}
+                  <div className="flex items-center gap-2">
+                    {activeLobby.host.image
+                      ? <Image src={activeLobby.host.image} alt="" width={20} height={20} className="rounded-full shrink-0" />
+                      : <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-[0.55rem] font-bold">{activeLobby.host.name?.[0] ?? "?"}</div>
+                    }
+                    <span className="text-xs text-[var(--text-secondary)] truncate">{activeLobby.host.name ?? "Host"}</span>
+                    <span className="text-[0.55rem] text-red-400 font-bold ml-auto">host</span>
+                  </div>
+                  {activeLobby.members.filter(m => m.id !== activeLobby.host.id).map(m => (
+                    <div key={m.id} className="flex items-center gap-2">
+                      {m.image
+                        ? <Image src={m.image} alt="" width={18} height={18} className="rounded-full shrink-0" />
+                        : <div className="w-[18px] h-[18px] rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] text-[0.5rem] font-bold">{m.name?.[0] ?? "?"}</div>
+                      }
+                      <span className="text-xs text-[var(--text-secondary)] truncate">{m.name ?? "Anonymous"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Volume */}
+              <div className="flex items-center gap-2">
+                <Volume2 size={11} className="text-[var(--text-muted)] shrink-0" />
+                <input type="range" min={0} max={100} value={volume}
+                  onChange={e => handleVolume(Number(e.target.value))}
+                  className="flex-1 h-1 accent-red-500 cursor-pointer"
+                />
+                <span className="text-[0.6rem] text-[var(--text-muted)] w-6 text-right">{volume}</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <button onClick={() => setView("player")}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-display font-semibold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                  ← Player
+                </button>
+                <button onClick={leaveLobby}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-display font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors">
+                  {session?.user?.id === activeLobby.host.id ? "Close Lobby" : "Leave"}
+                </button>
+              </div>
             </div>
           )}
 

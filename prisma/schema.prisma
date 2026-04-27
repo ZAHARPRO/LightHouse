@@ -62,6 +62,7 @@ model User {
   chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
   chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
   spotifyLobbies       SpotifyLobby[]       @relation("SpotifyHost")
+  playlists            Playlist[]           @relation("UserPlaylists")
   chessElo             Int                  @default(400)
   minesweeperElo       Int                  @default(400)
   muteExpiresAt        DateTime?
@@ -546,9 +547,20 @@ model SpotifyLobby {
   isPlaying    Boolean  @default(false)
   syncedAt     DateTime @default(now())
   membersJson  String?  @db.Text
+  historyJson  String?  @db.Text
   status       String   @default("ACTIVE")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   host         User     @relation("SpotifyHost", fields: [hostId], references: [id], onDelete: Cascade)
+}
+
+model Playlist {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  tracksJson String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation("UserPlaylists", fields: [userId], references: [id], onDelete: Cascade)
 }

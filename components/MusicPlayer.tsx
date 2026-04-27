@@ -92,17 +92,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [importErr, setImportErr]     = useState<string | null>(null);
   const [creatingPl, setCreatingPl]   = useState(false);
   const [expandedPl, setExpandedPl]   = useState<string | null>(null);
-  const [activeQueue, setActiveQueue] = useState<YTItem[]>([]);
-  const [queueIdx, setQueueIdx]       = useState(0);
-  const [activePlId, setActivePlId]   = useState<string | null>(null);
-  const [activePlName, setActivePlName] = useState<string | null>(null);
-  const [isShuffled, setIsShuffled]   = useState(false);
-  const [smartShuffle, setSmartShuffle] = useState(false);
-  const [smartLoading, setSmartLoading] = useState(false);
-  const originalQueueRef = useRef<YTItem[]>([]);
-  const smartLoadingRef  = useRef(false);
-  const smartShuffleRef  = useRef(false);
-  const trackRef         = useRef<YTItem | null>(null);
+  // Queue / playlist / shuffle state lives in MusicContext (playerEngine)
 
   // Favorites
   const [favIds, setFavIds]         = useState<Set<string>>(new Set());
@@ -114,14 +104,15 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [addPlLoading, setAddPlLoading]   = useState(false);
 
   const isHost = activeLobby?.host.id === session?.user?.id;
-  const { track, isPlaying, positionMs, playerReady, playerState,
-          pause, resume, seek, setVolume: setMusicVol, prev, next } = music;
+  const {
+    track, isPlaying, positionMs, playerReady,
+    pause, resume, seek, setVolume: setMusicVol, prev, next,
+    queue: activeQueue, activePlId, activePlName, isShuffled,
+    smartShuffle, smartLoading,
+    toggleShuffle, setSmartShuffle,
+  } = music;
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
-
-  // Keep refs in sync for stale-closure-safe use inside effects
-  useEffect(() => { trackRef.current = track; }, [track]);
-  useEffect(() => { smartShuffleRef.current = smartShuffle; }, [smartShuffle]);
 
   function handleVol(v: number) { setVol(v); setMusicVol(v); }
 
@@ -194,26 +185,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     return () => { if (syncRef.current) clearInterval(syncRef.current); };
   }, [view, isHost, activeLobby?.id, track, positionMs, isPlaying]);
 
-  // ── Auto-advance: playlist queue or smart shuffle on track end ───────────
+  // Auto-advance is now handled inside MusicContext (playerEngine NEXT action)
+  // The host still needs to sync the new track to the lobby when it changes
+  const prevTrackIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isHost || playerState !== 0) return;
-    if (activeQueue.length > 0) {
-      const nextIdx = queueIdx + 1;
-      if (nextIdx < activeQueue.length) {
-        setQueueIdx(nextIdx);
-        const item = activeQueue[nextIdx];
-        music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-        if (activeLobby) syncTrack(item, 0, true);
-      } else {
-        setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
-        setIsShuffled(false); originalQueueRef.current = [];
-        if (smartShuffleRef.current) fetchSmartNext();
-      }
-    } else if (smartShuffleRef.current) {
-      fetchSmartNext();
-    }
+    if (!isHost || !activeLobby || !track) return;
+    if (track.videoId === prevTrackIdRef.current) return;
+    prevTrackIdRef.current = track.videoId;
+    syncTrack(track, 0, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerState]);
+  }, [track?.videoId]);
 
   // ── Lobby list ─────────────────────────────────────────────────────────────
   const fetchLobbies = useCallback(async () => {
@@ -270,72 +251,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     });
   }
 
-  function shuffleArray<T>(arr: T[]): T[] {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
-    setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
-    setIsShuffled(false); originalQueueRef.current = [];
-    music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
+    music.playNow(item);
     if (isHost && activeLobby) syncTrack(item, 0, true);
   }
 
   function startPlaylist(pl: Playlist) {
     if (!pl.tracks.length) return;
-    setActiveQueue(pl.tracks); setQueueIdx(0); setActivePlId(pl.id); setActivePlName(pl.name);
-    setIsShuffled(false); originalQueueRef.current = [];
-    const first = pl.tracks[0];
-    music.play({ videoId: first.videoId, title: first.title, channel: first.channel, thumbnail: first.thumbnail });
-    if (isHost && activeLobby) syncTrack(first, 0, true);
-  }
-
-  function toggleShuffle() {
-    if (!activeQueue.length) return;
-    if (!isShuffled) {
-      originalQueueRef.current = [...activeQueue];
-      const current = activeQueue[queueIdx];
-      const rest = shuffleArray(activeQueue.filter((_, i) => i !== queueIdx));
-      const newQueue = [current, ...rest];
-      setActiveQueue(newQueue);
-      setQueueIdx(0);
-      setIsShuffled(true);
-    } else {
-      const current = activeQueue[queueIdx];
-      const restored = originalQueueRef.current;
-      const idx = restored.findIndex(t => t.videoId === current.videoId);
-      setActiveQueue(restored);
-      setQueueIdx(idx >= 0 ? idx : 0);
-      setIsShuffled(false);
-      originalQueueRef.current = [];
-    }
-  }
-
-  async function fetchSmartNext() {
-    if (smartLoadingRef.current) return;
-    const cur = trackRef.current;
-    if (!cur) return;
-    smartLoadingRef.current = true;
-    setSmartLoading(true);
-    try {
-      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(`${cur.title} ${cur.channel}`)}`);
-      if (!res.ok) return;
-      const d = await res.json() as { items: YTItem[] };
-      const pool = (d.items ?? []).filter(i => i.videoId !== cur.videoId);
-      if (!pool.length) return;
-      const next = pool[Math.floor(Math.random() * Math.min(5, pool.length))];
-      music.play(next);
-      if (isHost && activeLobby) syncTrack(next, 0, true);
-    } finally {
-      smartLoadingRef.current = false;
-      setSmartLoading(false);
-    }
+    music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks });
+    if (isHost && activeLobby) syncTrack(pl.tracks[0], 0, true);
   }
 
   function copyLink(id: string) {
@@ -425,8 +350,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!activeLobby) return;
     await fetch(`/api/music-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
     music.setActiveLobbyId(null); music.pause();
-    setActiveLobby(null); setActiveQueue([]); setActivePlId(null); setActivePlName(null);
-    setIsShuffled(false); originalQueueRef.current = [];
+    setActiveLobby(null);
+    music.clearQueue();
     setView("lobbies");
   }
 
@@ -447,10 +372,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   async function deletePlaylist(id: string) {
     await fetch(`/api/playlists/${id}`, { method: "DELETE" });
     setPlaylists(p => p.filter(pl => pl.id !== id));
-    if (activePlId === id) {
-      setActiveQueue([]); setQueueIdx(0); setActivePlId(null); setActivePlName(null);
-      setIsShuffled(false); originalQueueRef.current = [];
-    }
+    if (activePlId === id) music.clearQueue();
   }
 
   async function importYtPlaylist() {
@@ -571,7 +493,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 <p className="text-[0.58rem] text-red-400 flex items-center gap-0.5 mt-0.5 truncate">
                   <ListMusic size={8} className="shrink-0" />
                   <span className="truncate max-w-[100px]">{activePlName ?? "Playlist"}</span>
-                  <span className="shrink-0">· {queueIdx + 1}/{activeQueue.length}</span>
+                  <span className="shrink-0">· {activeQueue.length} left</span>
                   {isShuffled && <Shuffle size={7} className="shrink-0 ml-0.5" />}
                 </p>
               )}
@@ -623,18 +545,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                   className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
                   {isPlaying ? <Pause size={14} /> : <Play size={14} />}
                 </button>
-                <button onClick={() => {
-                  if (activeQueue.length > 0 && queueIdx + 1 < activeQueue.length) {
-                    const ni = queueIdx + 1; setQueueIdx(ni);
-                    const item = activeQueue[ni];
-                    music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
-                    if (activeLobby) syncTrack(item, 0, true);
-                  } else if (smartShuffle) {
-                    fetchSmartNext();
-                  } else next();
-                }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={16} /></button>
+                <button onClick={next} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={16} /></button>
               </div>
-              {/* Shuffle + Smart shuffle toggles */}
+              {/* Playback mode toggles */}
               <div className="flex items-center justify-center gap-2">
                 {activeQueue.length > 0 && (
                   <button
@@ -651,20 +564,21 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                     Shuffle
                   </button>
                 )}
+                {/* Smart shuffle — always visible; auto-fetches YouTube recs when queue is empty */}
                 <button
-                  onClick={() => setSmartShuffle(v => !v)}
-                  title="Smart Shuffle — auto-plays similar tracks when queue ends or on skip"
+                  onClick={() => setSmartShuffle(!smartShuffle)}
+                  title={smartShuffle ? "Smart: ON — auto-plays YouTube recommendations when queue ends" : "Smart: OFF — enable to auto-play recommendations"}
                   className={[
-                    "flex items-center gap-1 px-2 py-0.5 rounded-lg text-[0.6rem] font-display font-bold border transition-colors",
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[0.65rem] font-display font-bold border transition-all",
                     smartShuffle
-                      ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
-                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                      ? "bg-purple-500/20 border-purple-500/40 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.25)]"
+                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-purple-500/30 hover:text-purple-400",
                   ].join(" ")}
                 >
                   {smartLoading
-                    ? <Loader2 size={9} className="animate-spin" />
-                    : <Sparkles size={9} />}
-                  Smart
+                    ? <Loader2 size={10} className="animate-spin" />
+                    : <Sparkles size={10} className={smartShuffle ? "text-purple-300" : ""} />}
+                  {smartShuffle ? "Smart ON" : "Smart"}
                 </button>
               </div>
             </>
@@ -987,7 +901,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                               <p className="text-[0.62rem] text-[var(--text-muted)] text-center py-2">Empty</p>
                             ) : pl.tracks.map((t, i) => (
                               <div key={`${t.videoId}-${i}`}
-                                className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", activePlId === pl.id && queueIdx === i ? "bg-red-500/10" : ""].join(" ")}>
+                                className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", track?.videoId === t.videoId ? "bg-red-500/10" : ""].join(" ")}>
                                 <span className="text-[0.5rem] text-[var(--text-muted)] w-3 shrink-0">{i + 1}</span>
                                 <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
                                 <div className="min-w-0 flex-1">
@@ -997,8 +911,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                                   <FavBtn item={t} size={9} />
                                   {isHost && (
                                     <button onClick={() => {
-                                      setQueueIdx(i); setActivePlId(pl.id); setActiveQueue(pl.tracks);
-                                      music.play({ videoId: t.videoId, title: t.title, channel: t.channel, thumbnail: t.thumbnail });
+                                      music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
                                       if (activeLobby) syncTrack(t, 0, true);
                                     }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
                                   )}

@@ -11,7 +11,7 @@ export default function FavoriteSongCard({ song }: { song: YTItem }) {
 
   return (
     <button
-      onClick={() => music.play(song)}
+      onClick={() => music.playNow(song)}
       className="w-full flex items-center gap-3 p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-red-500/40 hover:bg-red-500/5 transition-all group text-left"
     >
       <div className="relative shrink-0">

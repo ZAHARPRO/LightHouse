@@ -98,7 +98,7 @@ export default function ProfilePlaylists({
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => music.play(favSong)}
+                      onClick={() => music.playNow(favSong)}
                       className="p-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
                       title="Play"
                     >
@@ -142,7 +142,7 @@ export default function ProfilePlaylists({
                           key={t.videoId} item={t}
                           isProfileSong={favSong?.videoId === t.videoId}
                           saving={saving === t.videoId}
-                          onPlay={() => music.play(t)}
+                          onPlay={() => music.playNow(t)}
                           onPin={() => setProfileSong(favSong?.videoId === t.videoId ? null : t)}
                         />
                       ))}
@@ -166,7 +166,7 @@ export default function ProfilePlaylists({
                           key={t.videoId} item={t}
                           isProfileSong={favSong?.videoId === t.videoId}
                           saving={saving === t.videoId}
-                          onPlay={() => music.play(t)}
+                          onPlay={() => music.playNow(t)}
                           onPin={() => setProfileSong(favSong?.videoId === t.videoId ? null : t)}
                         />
                       ))}

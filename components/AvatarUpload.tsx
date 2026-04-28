@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Camera, Trash2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { updateUserAvatar, removeUserAvatar } from "@/actions/profile";
 
 function compressImage(file: File): Promise<string> {
@@ -34,10 +35,11 @@ interface Props {
 }
 
 export default function AvatarUpload({ currentImage, tierColor, name }: Props) {
-  const [image, setImage]   = useState(currentImage);
-  const [pending, start]    = useTransition();
+  const [image, setImage]     = useState(currentImage);
+  const [pending, start]      = useTransition();
   const [showDel, setShowDel] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef               = useRef<HTMLInputElement>(null);
+  const { update }            = useSession();
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -47,7 +49,8 @@ export default function AvatarUpload({ currentImage, tierColor, name }: Props) {
       try {
         const dataUrl = await compressImage(file);
         setImage(dataUrl);
-        await updateUserAvatar(dataUrl);
+        const result = await updateUserAvatar(dataUrl);
+        if (result.ok) await update(); // refresh session → navbar avatar updates instantly
       } catch { /* ignore */ }
     });
   }
@@ -56,7 +59,10 @@ export default function AvatarUpload({ currentImage, tierColor, name }: Props) {
     e.stopPropagation();
     setImage(null);
     setShowDel(false);
-    start(async () => { await removeUserAvatar(); });
+    start(async () => {
+      await removeUserAvatar();
+      await update(); // refresh session → navbar clears avatar instantly
+    });
   }
 
   return (

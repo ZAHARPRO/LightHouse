@@ -6,8 +6,8 @@ import { setLocale } from "@/actions/locale";
 import { type Locale, locales, localeNames } from "@/i18n/config";
 
 const FLAGS: Record<Locale, string> = {
-  en: "🇬🇧",
-  uk: "🇺🇦",
+  en: "EN",
+  uk: "UA",
   meme: "🤡",
 };
 

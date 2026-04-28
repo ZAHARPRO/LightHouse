@@ -20,8 +20,6 @@ export const authConfig: NextAuthConfig = {
         token.id   = user.id;
         token.role = (user as { role?: string }).role ?? "USER";
       }
-      // Never store image in the JWT — it can be a large base64 data URL
-      // that exceeds the 4 KB browser cookie limit and breaks the session.
       delete token.picture;
       return token;
     },

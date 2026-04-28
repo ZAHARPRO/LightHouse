@@ -156,7 +156,15 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     const rtt = Date.now() - t0; // round-trip time; use half as one-way estimate
     setActiveLobby(d);
 
-    if (!d.trackUri) return;
+    if (!d.trackUri) {
+      if (syncedTrackRef.current && !isHost) {
+        syncedTrackRef.current = null;
+        prevIsPlayingRef.current = null;
+        music.pause();
+        music.clearQueue();
+      }
+      return;
+    }
 
     if (d.trackUri !== music.track?.videoId) {
       // New track — one-time position sync then play locally
@@ -179,7 +187,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         // Host resumed — re-sync position once then play locally
         prevIsPlayingRef.current = true;
         const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
-        music.seek(serverPos);
+        const localPos = music.playerRef.current
+          ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
+        if (Math.abs(serverPos - localPos) > 3000) music.seek(serverPos);
         music.resume();
       } else if (d.isPlaying) {
         // Normal playback — only fix extreme drift (>30s means host manually seeked)
@@ -215,13 +225,22 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Host sync every 5s ─────────────────────────────────────────────────────
   useEffect(() => {
     if (view !== "lobby" || !isHost || !activeLobby || !track) return;
-    const push = () => fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: track.videoId, trackName: track.title, trackArtist: track.channel, trackImage: track.thumbnail, positionMs, isPlaying }),
-    });
+    const lobbyId = activeLobby.id;
+    const videoId = track.videoId; const title = track.title;
+    const channel = track.channel; const thumbnail = track.thumbnail;
+    const push = () => {
+      const currentPosMs = music.playerRef.current
+        ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
+      const currentIsPlaying = music.playerRef.current?.getPlayerState() === 1;
+      fetch(`/api/music-lobbies/${lobbyId}/sync`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackUri: videoId, trackName: title, trackArtist: channel, trackImage: thumbnail, positionMs: currentPosMs, isPlaying: currentIsPlaying }),
+      });
+    };
     syncRef.current = setInterval(push, 5000);
     return () => { if (syncRef.current) clearInterval(syncRef.current); };
-  }, [view, isHost, activeLobby?.id, track, positionMs, isPlaying]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, isHost, activeLobby?.id, track?.videoId]);
 
   // Auto-advance is now handled inside MusicContext (playerEngine NEXT action)
   // The host still needs to sync the new track to the lobby when it changes
@@ -391,6 +410,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setActiveLobby(null);
     music.clearQueue();
     setView("lobbies");
+  }
+
+  async function closeSong() {
+    if (!activeLobby) return;
+    music.pause();
+    music.clearQueue();
+    await fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackUri: null, isPlaying: false, positionMs: 0 }),
+    }).catch(() => {});
   }
 
   async function addToPlaylist(plId: string, item: YTItem) {
@@ -574,6 +603,15 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
             </div>
           </div>
+          {/* Close song — host only */}
+          {activeLobby && isHost && (
+            <div className="flex justify-end">
+              <button onClick={closeSong}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors">
+                <X size={9} /> Close song
+              </button>
+            </div>
+          )}
           {/* Controls — host or solo */}
           {(!activeLobby || isHost) && (
             <>

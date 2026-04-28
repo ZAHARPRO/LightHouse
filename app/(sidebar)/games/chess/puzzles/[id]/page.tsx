@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, RotateCcw, Trophy, CheckCircle2, XCircle, ChevronLeft, Puzzle } from "lucide-react";
+import { Loader2, RotateCcw, Trophy, CheckCircle2, XCircle, ChevronLeft, Puzzle, ChevronRight, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import {
   fromFEN, getLegalMoves, applyMove, getAllLegalMoves,
@@ -36,6 +36,10 @@ function uciToMove(state: GameState, uci: string): Move | null {
 }
 
 // ── Static board for read-only display ───────────────────────────────────────
+function squareToRC(sq: string): [number, number] {
+  return [8 - parseInt(sq[1]), sq.charCodeAt(0) - 97];
+}
+
 function PuzzleBoard({
   state,
   flip,
@@ -45,6 +49,8 @@ function PuzzleBoard({
   shake,
   onSquare,
   disabled,
+  hintFrom,
+  hintTo,
 }: {
   state: GameState;
   flip: boolean;
@@ -54,6 +60,8 @@ function PuzzleBoard({
   shake: boolean;
   onSquare: (r: number, c: number) => void;
   disabled: boolean;
+  hintFrom?: [number, number] | null;
+  hintTo?: [number, number] | null;
 }) {
   const ranks = flip ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
   const fileRow = flip ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
@@ -96,9 +104,13 @@ function PuzzleBoard({
               lastMove &&
               ((lastMove[0][0] === r && lastMove[0][1] === c) ||
                 (lastMove[1][0] === r && lastMove[1][1] === c));
+            const isHintFrom = hintFrom?.[0] === r && hintFrom?.[1] === c;
+            const isHintTo   = hintTo?.[0]   === r && hintTo?.[1]   === c;
 
             let bg = light ? "#f0d9b5" : "#b58863";
             if (isSel) bg = "#f6f669";
+            else if (isHintTo)   bg = light ? "#f5c842" : "#d4a017";
+            else if (isHintFrom) bg = light ? "#f5c842" : "#d4a017";
             else if (isLast) bg = light ? "#cdd16f" : "#aaa23a";
 
             const key = `${r}-${c}`;
@@ -135,10 +147,10 @@ function PuzzleBoard({
                       lineHeight: 1,
                       position: "relative",
                       zIndex: 1,
-                      filter:
-                        piece.color === "w"
-                          ? "drop-shadow(0 1px 1px rgba(0,0,0,0.4))"
-                          : "drop-shadow(0 1px 1px rgba(255,255,255,0.15))",
+                      color: piece.color === "w" ? "#fff" : "#1a1a1a",
+                      textShadow: piece.color === "w"
+                        ? "0 0 3px #000,0 0 6px #000,0 1px 2px #000"
+                        : "0 1px 2px rgba(255,255,255,0.3)",
                     }}
                   >
                     {PIECE_UNICODE[`${piece.color}${piece.type}`]}
@@ -213,6 +225,10 @@ export default function PuzzleSolverPage() {
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<Status>("playing");
   const [shake, setShake] = useState(false);
+  const [nextId, setNextId] = useState<string | null>(null);
+  const [hintStage, setHintStage] = useState<0 | 1 | 2>(0);
+  const [hintFrom, setHintFrom] = useState<[number, number] | null>(null);
+  const [hintTo, setHintTo]     = useState<[number, number] | null>(null);
   const puzzleFen = useRef("");
 
   // Load puzzle (public endpoint — solution NOT exposed)
@@ -247,6 +263,9 @@ export default function PuzzleSolverPage() {
     setStatus("playing");
     setShake(false);
     setPromoState(null);
+    setHintStage(0);
+    setHintFrom(null);
+    setHintTo(null);
   }, [puzzle]);
 
   const submitMove = useCallback(
@@ -288,6 +307,14 @@ export default function PuzzleSolverPage() {
 
       if (data.solved) {
         setStatus("solved");
+        fetch("/api/puzzles")
+          .then((r) => r.json())
+          .then((list: { id: string; solved: boolean }[]) => {
+            const idx = list.findIndex((p) => p.id === puzzle.id);
+            const next = list.slice(idx + 1).find((p) => !p.solved) ?? list.slice(0, idx).find((p) => !p.solved);
+            setNextId(next?.id ?? null);
+          })
+          .catch(() => {});
         return;
       }
 
@@ -388,6 +415,21 @@ export default function PuzzleSolverPage() {
     </main>
   );
 
+  async function handleHint() {
+    if (status !== "playing" || !puzzle) return;
+    if (hintStage === 0) {
+      const d = await fetch(`/api/puzzles/${puzzle.id}/hint`).then((r) => r.json()) as { from: string; to: string };
+      setHintFrom(squareToRC(d.from));
+      setHintTo(null);
+      setHintStage(1);
+    } else if (hintStage === 1) {
+      const d = await fetch(`/api/puzzles/${puzzle.id}/hint`).then((r) => r.json()) as { from: string; to: string };
+      setHintFrom(squareToRC(d.from));
+      setHintTo(squareToRC(d.to));
+      setHintStage(2);
+    }
+  }
+
   const turnLabel = state.turn === "w" ? "White" : "Black";
   const diffLabel = DIFF_LABEL[puzzle.difficulty];
 
@@ -428,6 +470,8 @@ export default function PuzzleSolverPage() {
             shake={shake}
             onSquare={handleSquare}
             disabled={status !== "playing"}
+            hintFrom={hintFrom}
+            hintTo={hintTo}
           />
           {promoState && (
             <div className="absolute inset-0 bg-black/30 rounded-md flex items-center justify-center">
@@ -487,6 +531,17 @@ export default function PuzzleSolverPage() {
             ⇅ Flip board
           </button>
 
+          {status === "playing" && (
+            <button
+              onClick={handleHint}
+              disabled={hintStage === 2}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-display font-semibold hover:bg-amber-500/20 disabled:opacity-40 transition-colors"
+            >
+              <Lightbulb size={13} />
+              {hintStage === 0 ? "Hint" : hintStage === 1 ? "Show move" : "Hint used"}
+            </button>
+          )}
+
           <button
             onClick={() => reset()}
             className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-violet-400 transition-colors"
@@ -495,12 +550,22 @@ export default function PuzzleSolverPage() {
           </button>
 
           {status === "solved" && (
-            <Link
-              href="/games/chess/puzzles"
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-display font-bold hover:bg-violet-500/25 transition-colors no-underline"
-            >
-              ← More puzzles
-            </Link>
+            <>
+              {nextId && (
+                <Link
+                  href={`/games/chess/puzzles/${nextId}`}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-violet-500 text-white text-xs font-display font-bold hover:opacity-90 transition-opacity no-underline"
+                >
+                  Next puzzle <ChevronRight size={13} />
+                </Link>
+              )}
+              <Link
+                href="/games/chess/puzzles"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-display font-bold hover:bg-violet-500/25 transition-colors no-underline"
+              >
+                ← More puzzles
+              </Link>
+            </>
           )}
         </div>
       </div>

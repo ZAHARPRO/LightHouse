@@ -584,6 +584,7 @@ model ChessPuzzle {
   fen        String   @db.Text
   solution   String   @db.Text  // JSON: string[] of UCI moves (e.g. ["e2e4","e7e5","d1h5"])
   difficulty String   // "mate1" | "mate2"
+  rating     Int      @default(1200)
   solveCount Int      @default(0)
   createdAt  DateTime @default(now())
 

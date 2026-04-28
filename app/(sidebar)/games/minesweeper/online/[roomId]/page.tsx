@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star } from "lucide-react";
+import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star, Eye } from "lucide-react";
 import Image from "next/image";
 import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
-import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 
@@ -456,13 +455,31 @@ export default function GameRoomPage() {
   }
 
   // ── PLAYING ────────────────────────────────────────────────────────────────
-  const mPx       = mainCellPx(cols);
-  const oPx       = oppCellPx(cols);
-  const rBreak    = cols >= 30 ? "" : "lg:flex-row";
+  const isSpectator = room.myRole === "spectator";
+  const mPx         = mainCellPx(cols);
+  const oPx         = oppCellPx(cols);
+  const rBreak      = cols >= 30 ? "" : "lg:flex-row";
   const myFlagsLeft = (room.mineCount ?? 0) - room.myFlagged.length;
+
+  // Progress helper: how many non-mine cells each player has revealed
+  const totalSafe = rows * cols - (room.mineCount ?? 0);
+  const myProgress  = totalSafe > 0 ? Math.round((room.myRevealed.length  / totalSafe) * 100) : 0;
+  const oppProgress = totalSafe > 0 ? Math.round((room.oppRevealed.length / totalSafe) * 100) : 0;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6">
+      {/* Spectator banner */}
+      {isSpectator && (
+        <div className="flex items-center justify-center gap-2 mb-5 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+          <Eye size={14} className="text-indigo-400" />
+          <span className="font-display font-bold text-indigo-400 text-sm">Spectating</span>
+          <span className="text-[var(--border-subtle)]">·</span>
+          <span className="text-[var(--text-secondary)] text-sm">
+            {room.hostName ?? "?"} <span className="text-[var(--text-muted)]">vs</span> {room.guestName ?? "?"}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <span className="flex items-center gap-1.5 text-xs text-green-400 font-display font-semibold">
@@ -475,11 +492,13 @@ export default function GameRoomPage() {
         )}
         <span className="text-[var(--text-muted)] text-xs">{DIFF_LABEL[room.difficulty]} · {cols}×{rows}</span>
         <div className="ml-auto flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-sm font-display font-semibold text-[var(--text-secondary)]">
-            <Flag size={13} className="text-[var(--accent-orange)]" />
-            {myFlagsLeft}
-          </span>
-          {room.guestId && (
+          {!isSpectator && (
+            <span className="flex items-center gap-1.5 text-sm font-display font-semibold text-[var(--text-secondary)]">
+              <Flag size={13} className="text-[var(--accent-orange)]" />
+              {myFlagsLeft}
+            </span>
+          )}
+          {!isSpectator && room.guestId && (
             <GameReportButton
               targetId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId}
               targetName={oppName ?? "Opponent"}
@@ -487,27 +506,38 @@ export default function GameRoomPage() {
               roomId={room.id}
             />
           )}
-          <button onClick={handleLeave}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
-            <LogOut size={12} /> Surrender
-          </button>
+          {!isSpectator && (
+            <button onClick={handleLeave}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
+              <LogOut size={12} /> Surrender
+            </button>
+          )}
         </div>
       </div>
 
       {/* Boards — stacked on small screens, side-by-side on wider */}
       <div className={`flex flex-col ${rBreak} gap-6 items-start`}>
 
-        {/* My board — interactive, larger cells */}
+        {/* My board (or host board for spectators) — interactive, larger cells */}
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Avatar name={myName} image={myImage} size={26} />
-            <span className="font-display font-bold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
-            <span className="ml-auto text-[0.7rem] text-[var(--text-muted)]">
-              {room.myHit ? "💥 Explosion" : "Your field"}
+            <span className="font-display font-bold text-[var(--text-primary)] text-sm">
+              {myName ?? (isSpectator ? room.hostName ?? "Host" : "You")}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              {isSpectator && (
+                <span className="text-[0.65rem] font-display font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-full">
+                  {myProgress}% cleared
+                </span>
+              )}
+              <span className="text-[0.7rem] text-[var(--text-muted)]">
+                {room.myHit ? "💥 Explosion" : isSpectator ? "Host's field" : "Your field"}
+              </span>
             </span>
           </div>
           <MineBoard rows={rows} cols={cols} mines={room.myMines} revealed={room.myRevealed} flagged={room.myFlagged}
-            isHit={room.myHit} interactive={!room.myHit} cellPx={mPx}
+            isHit={room.myHit} interactive={!isSpectator && !room.myHit} cellPx={mPx}
             onReveal={handleReveal} onFlag={handleFlag} />
         </div>
 
@@ -520,9 +550,18 @@ export default function GameRoomPage() {
             {room.guestId ? (
               <>
                 <Avatar name={oppName} image={oppImage} size={26} />
-                <span className="font-display font-bold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
-                <span className="ml-auto text-[0.7rem] text-[var(--text-muted)]">
-                  {room.oppHit ? "💥 Explosion" : "Opponent's field"}
+                <span className="font-display font-bold text-[var(--text-primary)] text-sm">
+                  {oppName ?? (isSpectator ? room.guestName ?? "Guest" : "Opponent")}
+                </span>
+                <span className="ml-auto flex items-center gap-2">
+                  {isSpectator && (
+                    <span className="text-[0.65rem] font-display font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-full">
+                      {oppProgress}% cleared
+                    </span>
+                  )}
+                  <span className="text-[0.7rem] text-[var(--text-muted)]">
+                    {room.oppHit ? "💥 Explosion" : isSpectator ? "Guest's field" : "Opponent's field"}
+                  </span>
                 </span>
               </>
             ) : (
@@ -534,11 +573,13 @@ export default function GameRoomPage() {
         </div>
       </div>
 
-      <p className="text-[var(--text-muted)] text-xs mt-5 text-center">
-        LMB — reveal · RMB — flag
-      </p>
+      {!isSpectator && (
+        <p className="text-[var(--text-muted)] text-xs mt-5 text-center">
+          LMB — reveal · RMB — flag
+        </p>
+      )}
 
-      {room.myRole !== "spectator" && (
+      {!isSpectator && (
         <div className="mt-4 w-full max-w-sm">
           <GameChat
             msgs={room.chat}

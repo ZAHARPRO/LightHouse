@@ -23,13 +23,22 @@ import Image from "next/image";
 import { getRank } from "@/lib/elo";
 import { useTranslations } from "next-intl";
 
+function PuzzleIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5A2.5 2.5 0 0 0 10.5 1 2.5 2.5 0 0 0 8 3.5V5H4a2 2 0 0 0-2 2v3.8h1.5a2.5 2.5 0 0 1 0 5H2V19a2 2 0 0 0 2 2h3.8v-1.5a2.5 2.5 0 0 1 5 0V21H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5Z"/>
+    </svg>
+  );
+}
+
 const GAMES = [
-  { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: MineIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
-  { href: "/games/minesweeper/online",       title: "MS Online",          description: "1 vs 1",                        icon: MineIcon, color: "text-indigo-400",  bg: "bg-indigo-500/10 border-indigo-500/20"    },
-  { href: "/games/minesweeper/online/rated", title: "MS Rated",           description: "Earn ELO",                      icon: MineIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
-  { href: "/games/chess",                    title: "Chess vs Bot",       description: "3 difficulty levels",           icon: ChessIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
-  { href: "/games/chess/online",             title: "Chess Online",       description: "1 vs 1 with timer",             icon: ChessIcon, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
-  { href: "/games/chess/online/rated",       title: "Chess Rated",        description: "Earn ELO",                      icon: ChessIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: MineIcon,   color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/minesweeper/online",       title: "MS Online",          description: "1 vs 1",                        icon: MineIcon,   color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
+  { href: "/games/minesweeper/online/rated", title: "MS Rated",           description: "Earn ELO",                      icon: MineIcon,   color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/chess",                    title: "Chess vs Bot",       description: "3 difficulty levels",           icon: ChessIcon,  color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/chess/online",             title: "Chess Online",       description: "1 vs 1 with timer",             icon: ChessIcon,  color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
+  { href: "/games/chess/online/rated",       title: "Chess Rated",        description: "Earn ELO",                      icon: ChessIcon,  color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/chess/puzzles",            title: "Chess Puzzles",      description: "Mate in 1 or 2 moves",          icon: PuzzleIcon, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20"  },
 ];
 
 type LeaderEntry = {

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star } from "lucide-react";
+import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star, Eye } from "lucide-react";
 import Image from "next/image";
 import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
@@ -547,15 +547,26 @@ export default function ChessOnlineRoom() {
   // ── PLAYING ────────────────────────────────────────────────────────────────
   if (!room.fen) return null;
   const state = fromFEN(room.fen);
-  const myColor = getMyColor(room);
+  const isSpectator = room.myRole === "spectator";
+
+  // Spectators always see white at the bottom
+  const myColor = isSpectator ? "w" : getMyColor(room);
   const oppColor = myColor === "w" ? "b" : "w";
   const isMyTurn = state.turn === myColor;
-  const flip = myColor === "b";
+  const flip = !isSpectator && myColor === "b";
 
-  const myName = room.myRole === "host" ? room.hostName : room.guestName;
-  const myImage = room.myRole === "host" ? room.hostImage : room.guestImage;
-  const oppName = room.myRole === "host" ? room.guestName : room.hostName;
-  const oppImage = room.myRole === "host" ? room.guestImage : room.hostImage;
+  // White/black player names (resolved from hostColor)
+  const whiteName  = room.hostColor === "w" ? room.hostName  : room.guestName;
+  const blackName  = room.hostColor === "w" ? room.guestName : room.hostName;
+  const whiteImage = room.hostColor === "w" ? room.hostImage : room.guestImage;
+  const blackImage = room.hostColor === "w" ? room.guestImage : room.hostImage;
+  const whiteElo   = room.hostColor === "w" ? room.hostElo   : room.guestElo;
+  const blackElo   = room.hostColor === "w" ? room.guestElo  : room.hostElo;
+
+  const myName  = isSpectator ? whiteName  : (room.myRole === "host" ? room.hostName  : room.guestName);
+  const myImage = isSpectator ? whiteImage : (room.myRole === "host" ? room.hostImage : room.guestImage);
+  const oppName  = isSpectator ? blackName  : (room.myRole === "host" ? room.guestName : room.hostName);
+  const oppImage = isSpectator ? blackImage : (room.myRole === "host" ? room.guestImage : room.hostImage);
 
   const myTimeMs = myColor === "w" ? room.whiteTimeMs : room.blackTimeMs;
   const oppTimeMs = myColor === "w" ? room.blackTimeMs : room.whiteTimeMs;
@@ -565,8 +576,32 @@ export default function ChessOnlineRoom() {
   const oppCaptured = oppColor === "w" ? captured.white : captured.black;
   const myCaptured  = myColor  === "w" ? captured.white : captured.black;
 
+  const oppEloDisplay = isSpectator ? blackElo : (room.myRole === "host" ? room.guestElo : room.hostElo);
+  const myEloDisplay  = isSpectator ? whiteElo : (room.myRole === "host" ? room.hostElo  : room.guestElo);
+
+  // Turn text for the indicator strip
+  const turnText = isSpectator
+    ? `${state.turn === "w" ? "♔" : "♚"} ${state.turn === "w" ? (whiteName ?? "White") : (blackName ?? "Black")}'s turn`
+    : isMyTurn ? "✦ Your turn" : "Waiting for opponent's move…";
+
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
+      {/* Spectator banner */}
+      {isSpectator && (
+        <div className="flex items-center justify-center gap-2 mb-5 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+          <Eye size={14} className="text-indigo-400" />
+          <span className="font-display font-bold text-indigo-400 text-sm">Spectating</span>
+          <span className="text-[var(--border-subtle)]">·</span>
+          <span className="text-[var(--text-secondary)] text-sm">
+            {whiteName ?? "?"} <span className="text-[var(--text-muted)]">vs</span> {blackName ?? "?"}
+          </span>
+          <span className="text-[var(--border-subtle)]">·</span>
+          <span className={`text-xs font-display font-bold ${state.turn === "w" ? "text-slate-200" : "text-slate-500"}`}>
+            {state.turn === "w" ? "♔" : "♚"} {state.turn === "w" ? (whiteName ?? "White") : (blackName ?? "Black")}'s turn
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col xl:flex-row gap-6 items-start">
         {/* Board column */}
         <div>
@@ -578,11 +613,10 @@ export default function ChessOnlineRoom() {
                 <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
                 <span className="text-xs text-[var(--text-muted)]">{oppColor==="w"?"(white)":"(black)"}</span>
                 {room.rated && (() => {
-                  const oppElo = room.myRole === "host" ? room.guestElo : room.hostElo;
-                  const rank = oppElo ? getRank(oppElo) : null;
-                  return oppElo ? (
+                  const rank = oppEloDisplay ? getRank(oppEloDisplay) : null;
+                  return oppEloDisplay ? (
                     <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>
-                      {oppElo} ELO{rank ? ` · ${rank.label}` : ""}
+                      {oppEloDisplay} ELO{rank ? ` · ${rank.label}` : ""}
                     </span>
                   ) : null;
                 })()}
@@ -590,7 +624,7 @@ export default function ChessOnlineRoom() {
               <CapturedRow color={oppColor as "w"|"b"} captured={oppCaptured} />
             </div>
             <div className="ml-auto flex items-center gap-2">
-              {room.guestId && room.guestId !== room.hostId && (
+              {!isSpectator && room.guestId && room.guestId !== room.hostId && (
                 <GameReportButton
                   targetId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId}
                   targetName={oppName ?? "Opponent"}
@@ -611,7 +645,7 @@ export default function ChessOnlineRoom() {
             lastMove={room.lastMove}
             onSquare={handleSquare}
             onDrop={handleDrop}
-            disabled={!isMyTurn}
+            disabled={isSpectator || !isMyTurn}
             cellPx={cellPx}
           />
 
@@ -620,15 +654,14 @@ export default function ChessOnlineRoom() {
             <Avatar name={myName} image={myImage} size={28}/>
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
+                <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? (isSpectator ? "White" : "You")}</span>
                 <span className="text-xs text-[var(--text-muted)]">{myColor==="w"?"(white)":"(black)"}</span>
                 {inCheck && isMyTurn && <span className="text-red-400 text-xs font-bold">Check!</span>}
                 {room.rated && (() => {
-                  const myElo = room.myRole === "host" ? room.hostElo : room.guestElo;
-                  const rank  = myElo ? getRank(myElo) : null;
-                  return myElo ? (
+                  const rank = myEloDisplay ? getRank(myEloDisplay) : null;
+                  return myEloDisplay ? (
                     <span className="text-[0.65rem] font-bold" style={{ color: rank?.color ?? "#888" }}>
-                      {myElo} ELO{rank ? ` · ${rank.label}` : ""}
+                      {myEloDisplay} ELO{rank ? ` · ${rank.label}` : ""}
                     </span>
                   ) : null;
                 })()}
@@ -639,8 +672,8 @@ export default function ChessOnlineRoom() {
           </div>
 
           {/* Turn indicator */}
-          <p className="mt-2 text-center text-xs text-[var(--text-muted)]">
-            {isMyTurn ? "✦ Your turn" : "Waiting for opponent's move…"}
+          <p className={`mt-2 text-center text-xs font-semibold ${isSpectator ? "text-indigo-400" : "text-[var(--text-muted)]"}`}>
+            {turnText}
           </p>
         </div>
 
@@ -651,10 +684,12 @@ export default function ChessOnlineRoom() {
               <Star size={11}/> Rated Match
             </div>
           )}
+          {!isSpectator && (
           <button onClick={handleResign}
             className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
             <LogOut size={12}/> Resign
           </button>
+          )}
 
           <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3" style={{ minHeight:200, maxHeight:300 }}>
             <div className="flex items-center gap-2 mb-2">

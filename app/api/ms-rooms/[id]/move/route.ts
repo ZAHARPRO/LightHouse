@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMines, computeNeighbors, floodReveal, checkWin } from "@/lib/minesweeper";
-import { awardBadge } from "@/lib/awardBadge";
+import { awardBadge, awardMineEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -103,14 +103,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (winner && loser) {
         const [delta] = calculateEloDelta(winner.minesweeperElo, loser.minesweeperElo);
         const hostIsWinner = winnerId === room.hostId;
+        const winnerNew = Math.max(100, winner.minesweeperElo + delta);
         await prisma.$transaction([
-          prisma.user.update({ where: { id: winnerId }, data: { minesweeperElo: Math.max(100, winner.minesweeperElo + delta) } }),
+          prisma.user.update({ where: { id: winnerId }, data: { minesweeperElo: winnerNew } }),
           prisma.user.update({ where: { id: loserId  }, data: { minesweeperElo: Math.max(100, loser.minesweeperElo  - delta) } }),
           prisma.minesweeperRoom.update({ where: { id }, data: {
             hostEloDelta:  hostIsWinner ?  delta : -delta,
             guestEloDelta: hostIsWinner ? -delta :  delta,
           }}),
         ]);
+        await awardMineEloBadges(prisma, winnerId, winnerNew);
       }
     }
   }

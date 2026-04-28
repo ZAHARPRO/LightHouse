@@ -62,6 +62,7 @@ model User {
   msRoomsAsGuest       MinesweeperRoom[]    @relation("MSGuest")
   chessRoomsAsHost     ChessRoom[]          @relation("ChessHost")
   chessRoomsAsGuest    ChessRoom[]          @relation("ChessGuest")
+  puzzleSolves         UserPuzzleSolve[]
   musicLobbies         MusicLobby[]         @relation("MusicHost")
   playlists            Playlist[]           @relation("UserPlaylists")
   chessElo             Int                  @default(400)
@@ -368,9 +369,17 @@ enum RewardType {
   CUSTOM
   CHESS_WIN
   CHESS_ONLINE_WIN
+  CHESS_SILVER
+  CHESS_GOLD
+  CHESS_PLATINUM
+  CHESS_DIAMOND
   MINESWEEPER_WIN
   MINESWEEPER_EXPERT
   MINESWEEPER_ONLINE_WIN
+  MINE_SILVER
+  MINE_GOLD
+  MINE_PLATINUM
+  MINE_DIAMOND
 }
 
 enum ContactStatus {
@@ -567,4 +576,28 @@ model Playlist {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation("UserPlaylists", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ChessPuzzle {
+  id         String   @id @default(cuid())
+  title      String
+  fen        String   @db.Text
+  solution   String   @db.Text  // JSON: string[] of UCI moves (e.g. ["e2e4","e7e5","d1h5"])
+  difficulty String   // "mate1" | "mate2"
+  solveCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  solves     UserPuzzleSolve[]
+}
+
+model UserPuzzleSolve {
+  id       String   @id @default(cuid())
+  solvedAt DateTime @default(now())
+
+  userId   String
+  user     User        @relation(fields: [userId],   references: [id], onDelete: Cascade)
+  puzzleId String
+  puzzle   ChessPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, puzzleId])
 }

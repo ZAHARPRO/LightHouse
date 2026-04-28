@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, isCheckmate, isStalemate } from "@/lib/chess";
-import { awardBadge } from "@/lib/awardBadge";
+import { awardBadge, awardChessEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 
 const CAPTURE_BONUS: Record<string, number> = { P: 1000, N: 2000, B: 2000, R: 3000, Q: 4000 };
@@ -81,27 +81,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
       });
 
+      // Award badges to timeout winner
+      const hColorT = room.hostColor ?? "w";
+      const timeoutWinnerId = timeoutWinner === "white"
+        ? (hColorT === "w" ? room.hostId : room.guestId)
+        : (hColorT === "b" ? room.hostId : room.guestId);
+      if (timeoutWinnerId) {
+        await awardBadge(prisma, timeoutWinnerId, "CHESS_WIN");
+        await awardBadge(prisma, timeoutWinnerId, "CHESS_ONLINE_WIN");
+      }
+
       if (room.rated && room.guestId) {
-        const hColor = room.hostColor ?? "w";
-        const winnerId = timeoutWinner === "white"
-          ? (hColor === "w" ? room.hostId : room.guestId)
-          : (hColor === "b" ? room.hostId : room.guestId);
-        const loserId = winnerId === room.hostId ? room.guestId : room.hostId;
+        const loserId = timeoutWinnerId === room.hostId ? room.guestId : room.hostId;
         const [winner, loser] = await Promise.all([
-          prisma.user.findUnique({ where: { id: winnerId }, select: { chessElo: true } }),
+          prisma.user.findUnique({ where: { id: timeoutWinnerId! }, select: { chessElo: true } }),
           prisma.user.findUnique({ where: { id: loserId! }, select: { chessElo: true } }),
         ]);
         if (winner && loser) {
           const [delta] = calculateEloDelta(winner.chessElo, loser.chessElo);
-          const hostIsWinner = winnerId === room.hostId;
+          const hostIsWinner = timeoutWinnerId === room.hostId;
+          const winnerNew = Math.max(100, winner.chessElo + delta);
           await prisma.$transaction([
-            prisma.user.update({ where: { id: winnerId }, data: { chessElo: Math.max(100, winner.chessElo + delta) } }),
+            prisma.user.update({ where: { id: timeoutWinnerId! }, data: { chessElo: winnerNew } }),
             prisma.user.update({ where: { id: loserId! }, data: { chessElo: Math.max(100, loser.chessElo - delta) } }),
             prisma.chessRoom.update({ where: { id }, data: {
               hostEloDelta:  hostIsWinner ?  delta : -delta,
               guestEloDelta: hostIsWinner ? -delta :  delta,
             }}),
           ]);
+          if (timeoutWinnerId) await awardChessEloBadges(prisma, timeoutWinnerId, winnerNew);
         }
       }
 
@@ -161,6 +169,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             guestEloDelta: hostIsWinner ? -delta :  delta,
           }}),
         ]);
+        await awardChessEloBadges(prisma, winnerId, winnerNew);
       }
     }
   }

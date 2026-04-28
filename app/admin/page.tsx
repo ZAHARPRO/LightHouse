@@ -1,5 +1,5 @@
 import { getAdminStats } from "@/actions/admin";
-import { Users, Video, FileText, Headphones, Award } from "lucide-react";
+import { Users, Video, FileText, Headphones, Award, Puzzle } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
@@ -59,6 +59,13 @@ export default async function AdminDashboard() {
         <Link href="/admin/staff" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("staffManagement")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("staffManagementDesc")}</p>
+        </Link>
+        <Link href="/admin/puzzles" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-violet-500/30 transition-colors group">
+          <div className="flex items-center gap-2 mb-1">
+            <Puzzle size={15} className="text-violet-400" />
+            <h2 className="font-display font-bold text-base text-[var(--text-primary)] group-hover:text-violet-400 transition-colors">Chess Puzzles</h2>
+          </div>
+          <p className="text-sm text-[var(--text-muted)]">Create and manage mate-in-1 and mate-in-2 puzzles</p>
         </Link>
       </div>
     </div>

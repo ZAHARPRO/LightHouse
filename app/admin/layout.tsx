@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Users, Award, ShieldCheck, Flag, Newspaper, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Users, Award, ShieldCheck, Flag, Newspaper, ArrowLeft, Puzzle } from "lucide-react";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -14,6 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/news",    icon: Newspaper,    label: "News"    },
     { href: "/admin/reports", icon: Flag,         label: "Reports" },
     { href: "/admin/staff",   icon: ShieldCheck,  label: "Staff"   },
+    { href: "/admin/puzzles", icon: Puzzle,        label: "Puzzles" },
   ];
 
   return (

@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Eye, Loader2, Search, Star, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { getRank } from "@/lib/elo";
+import MatchHistoryButton from "@/components/MatchHistory";
 
 type RoomItem = {
   id: string;
@@ -31,6 +33,7 @@ type Phase = "idle" | "searching";
 
 export default function RatedMinesweeperLobby() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [playing, setPlaying]       = useState<RoomItem[]>([]);
   const [difficulty, setDifficulty] = useState("medium");
   const [phase, setPhase]           = useState<Phase>("idle");
@@ -127,7 +130,8 @@ export default function RatedMinesweeperLobby() {
         <Star size={20} className="text-yellow-400" />
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">Rated Minesweeper</h1>
       </div>
-      <p className="text-[var(--text-muted)] mb-8">Win to gain ELO · Lose to drop ELO</p>
+      <p className="text-[var(--text-muted)] mb-6">Win to gain ELO · Lose to drop ELO</p>
+      {session?.user?.id && <div className="mb-6"><MatchHistoryButton userId={session.user.id} label="My History" /></div>}
 
       {/* ── Matchmaking card ── */}
       {phase === "idle" ? (

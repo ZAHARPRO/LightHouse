@@ -14,6 +14,7 @@ import MessageButton from "@/components/MessageButton";
 import BlockButton from "@/components/BlockButton";
 import UserAvatar from "@/components/UserAvatar";
 import FavoriteSongCard from "@/components/FavoriteSongCard";
+import MatchHistoryButton from "@/components/MatchHistory";
 import { getTranslations } from "next-intl/server";
 
 const TIER_COLORS: Record<string, string> = {
@@ -166,6 +167,7 @@ export default async function PublicProfilePage({
             <div className="profile-avatar-row">
               <UserAvatar name={user.name ?? "?"} image={user.image} tier={user.tier} size="xl" />
               <div className="profile-action-buttons">
+                <MatchHistoryButton userId={id} />
                 {isMe ? (
                   <Link
                     href="/profile"

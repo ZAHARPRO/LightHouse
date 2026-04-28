@@ -27,3 +27,29 @@ export async function awardBadge(
 
   return { awarded: true, badge: def };
 }
+
+const CHESS_ELO_BADGES: [number, string][] = [
+  [700,  "CHESS_SILVER"],
+  [1300, "CHESS_GOLD"],
+  [2200, "CHESS_PLATINUM"],
+  [3400, "CHESS_DIAMOND"],
+];
+
+const MINE_ELO_BADGES: [number, string][] = [
+  [700,  "MINE_SILVER"],
+  [1300, "MINE_GOLD"],
+  [2200, "MINE_PLATINUM"],
+  [3400, "MINE_DIAMOND"],
+];
+
+export async function awardChessEloBadges(prisma: PrismaClient, userId: string, newElo: number) {
+  for (const [threshold, type] of CHESS_ELO_BADGES) {
+    if (newElo >= threshold) await awardBadge(prisma, userId, type);
+  }
+}
+
+export async function awardMineEloBadges(prisma: PrismaClient, userId: string, newElo: number) {
+  for (const [threshold, type] of MINE_ELO_BADGES) {
+    if (newElo >= threshold) await awardBadge(prisma, userId, type);
+  }
+}

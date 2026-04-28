@@ -488,7 +488,7 @@ export default function PuzzleSolverPage() {
           </button>
 
           <button
-            onClick={reset}
+            onClick={() => reset()}
             className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-violet-400 transition-colors"
           >
             <RotateCcw size={13} /> Reset puzzle

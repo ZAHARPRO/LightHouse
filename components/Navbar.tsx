@@ -11,6 +11,7 @@ import {
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
 import LanguageSwitcher from "./LanguageSwitcher";
+import ThemeSwitcher from "./ThemeSwitcher";
 import { useLocale } from "next-intl";
 import type { Locale } from "@/i18n/config";
 import ChatPopup from "./ChatPopup";
@@ -552,6 +553,7 @@ export default function Navbar() {
                     <User size={16} className="text-[var(--accent-orange)]" />
                   )}
                 </Link>
+                <ThemeSwitcher />
                 <LanguageSwitcher current={locale} />
                 <button
                   onClick={() => signOut()}

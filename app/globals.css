@@ -4,7 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme="dark"] {
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
 
@@ -12,6 +13,7 @@
   --bg-secondary: #111111;
   --bg-card: #161616;
   --bg-elevated: #1e1e1e;
+  --bg-hover: #252525;
 
   --text-primary: #f5f5f5;
   --text-secondary: #909090;
@@ -24,7 +26,46 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.2);
+
+  --scrollbar-thumb: var(--accent-orange);
+  --selection-bg: rgba(249, 115, 22, 0.3);
 }
+
+/* ── Pink / light theme ────────────────────────────────────────────────────── */
+[data-theme="pink"] {
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+
+  --bg-primary:   #fdf4f7;
+  --bg-secondary: #fce8f0;
+  --bg-card:      #ffffff;
+  --bg-elevated:  #fde8f2;
+  --bg-hover:     #fbd5e8;
+
+  --text-primary:   #1a0510;
+  --text-secondary: #7c3554;
+  --text-muted:     #b87898;
+
+  --accent-orange: #db2777;
+  --accent-amber:  #f472b6;
+  --accent-red:    #be185d;
+
+  --border-subtle:  rgba(219, 39, 119, 0.10);
+  --border-default: rgba(219, 39, 119, 0.18);
+  --border-strong:  rgba(219, 39, 119, 0.30);
+
+  --scrollbar-thumb: #db2777;
+  --selection-bg: rgba(219, 39, 119, 0.20);
+}
+
+[data-theme="pink"] body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+[data-theme="pink"] ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+[data-theme="pink"] ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); }
+[data-theme="pink"] ::selection { background: var(--selection-bg); color: var(--text-primary); }
 
 * {
   box-sizing: border-box;

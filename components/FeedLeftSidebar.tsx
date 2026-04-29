@@ -56,7 +56,7 @@ export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpand
         }}
       >
         <div
-          className="rounded-full flex items-center justify-center shrink-0 border-2 border-orange-500/30"
+          className="rounded-full flex items-center justify-center shrink-0 border-2 border-pink-500/30"
           style={{
             width: expanded ? 52 : 34,
             height: expanded ? 52 : 34,

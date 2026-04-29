@@ -157,7 +157,7 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
 
   return (
     <Link href={`/watch/${video.id}`} className="block no-underline group mb-8">
-      <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-elevated)] transition-all duration-300 group-hover:shadow-xl border border-[var(--border-subtle)] group-hover:border-orange-500/40">
+      <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-elevated)] transition-all duration-300 group-hover:shadow-xl border border-[var(--border-subtle)] group-hover:border-pink-500/40">
         {/* Thumbnail */}
         <div
           className="relative overflow-hidden shrink-0"
@@ -211,7 +211,7 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
 
         {/* Info panel */}
         <div className="flex-1 p-5 sm:p-6 flex flex-col justify-center gap-3.5">
-          <span className="self-start text-[0.62rem] font-display font-bold tracking-[0.15em] uppercase text-[var(--accent-orange)] bg-orange-500/15 border border-orange-500/30 px-3 py-1.5 rounded-full shadow-sm">
+          <span className="self-start text-[0.62rem] font-display font-bold tracking-[0.15em] uppercase text-[var(--accent-orange)] bg-pink-500/15 border border-pink-500/30 px-3 py-1.5 rounded-full shadow-sm">
             🔥 {t("trendingNow")}
           </span>
 
@@ -237,7 +237,7 @@ function HeroCard({ video, index, userTier }: { video: Video; index: number; use
           {/* Engagement metrics */}
           <div className="flex gap-4 text-[0.75rem] text-[var(--text-muted)]">
             <span className="flex items-center gap-1">
-              <span className="text-orange-500 font-bold">{formatViews(video._count.likes ?? 0)}</span> {t("likesLabel")}
+              <span className="text-pink-500 font-bold">{formatViews(video._count.likes ?? 0)}</span> {t("likesLabel")}
             </span>
             <span className="flex items-center gap-1">
               <span className="text-blue-400 font-bold">{formatViews(video._count.comments ?? 0)}</span> {t("commentsLabel")}
@@ -399,7 +399,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
                 <Link
                   key={p.id}
                   href={`/post/${p.id}`}
-                  className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-4 py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                  className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-4 py-3 transition-[border-color] duration-150 hover:border-pink-500/30"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <UserAvatar name={p.author.name ?? "?"} image={p.author.image} tier={p.author.tier} size="xs" />
@@ -418,7 +418,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
             </div>
             <Link
               href="/community"
-              className="block text-center mt-4 px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)]"
+              className="block text-center mt-4 px-4 py-[0.625rem] rounded-[10px] bg-pink-500/[0.08] border border-pink-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)]"
             >
               {tc("seeMorePosts")}
             </Link>
@@ -434,7 +434,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
           "lg:hidden fixed bottom-6 right-1/2 z-[200]",
           "w-11 h-11 rounded-full flex items-center justify-center",
           "bg-[var(--accent-orange)] text-white shadow-[0_4px_20px_rgba(249,115,22,0.45)]",
-          "border border-orange-400/40",
+          "border border-pink-400/40",
           "transition-[opacity,transform] duration-300 ease-out",
           showScrollTop
             ? "opacity-50 translate-y-0 pointer-events-auto"

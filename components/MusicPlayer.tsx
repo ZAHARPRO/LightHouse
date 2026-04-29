@@ -191,16 +191,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
         if (Math.abs(serverPos - localPos) > 3000) music.seek(serverPos);
         music.resume();
-      } else if (d.isPlaying) {
-        // Normal playback — only fix extreme drift (>30s means host manually seeked)
-        const localPos = music.playerRef.current
-          ? Math.floor(music.playerRef.current.getCurrentTime() * 1000)
-          : 0;
-        const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
-        if (Math.abs(serverPos - localPos) > 30_000) {
-          music.seek(serverPos);
-        }
       }
+      // During normal playback → do nothing; no drift correction to avoid choppiness
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLobby?.id, isHost]);
@@ -412,8 +404,20 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setView("lobbies");
   }
 
+  function pushSync(playing: boolean, overridePosMs?: number) {
+    if (!activeLobby || !track) return;
+    const pos = overridePosMs ?? (music.playerRef.current
+      ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0);
+    fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackUri: track.videoId, trackName: track.title, trackArtist: track.channel, trackImage: track.thumbnail, positionMs: pos, isPlaying: playing }),
+    }).catch(() => {});
+  }
+
   async function closeSong() {
     if (!activeLobby) return;
+    // Cancel the 5s interval immediately to avoid it racing and re-publishing the old track
+    if (syncRef.current) { clearInterval(syncRef.current); syncRef.current = null; }
     music.pause();
     music.clearQueue();
     await fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
@@ -617,7 +621,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
             <>
               <div className="flex items-center justify-center gap-4">
                 <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
-                <button onClick={isPlaying ? pause : resume}
+                <button
+                  onClick={() => {
+                    if (isPlaying) { pause(); if (activeLobby && isHost) pushSync(false); }
+                    else { resume(); if (activeLobby && isHost) pushSync(true); }
+                  }}
                   className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
                   {isPlaying ? <Pause size={14} /> : <Play size={14} />}
                 </button>

@@ -261,7 +261,7 @@ function onMouseMove(e: MouseEvent) {
             href="/chat"
             title="Open full chat"
             onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150"
+            className="w-7 h-7 rounded-md flex items-center justify-center no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-orange)] hover:border-pink-500/40 transition-colors duration-150"
           >
             <Maximize2 size={13} />
           </Link>
@@ -326,8 +326,8 @@ function onMouseMove(e: MouseEvent) {
                   <div
                     className="px-[0.625rem] py-2 text-[0.8125rem] text-[var(--text-primary)] leading-[1.45] break-words"
                     style={{
-                      background: isMe ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-                      border: isMe ? "1px solid rgba(249,115,22,0.2)" : "1px solid var(--border-subtle)",
+                      background: isMe ? "rgba(219,39,119,0.12)" : "var(--bg-elevated)",
+                      border: isMe ? "1px solid rgba(219,39,119,0.2)" : "1px solid var(--border-subtle)",
                       borderRadius: isMe ? "10px 3px 10px 10px" : "3px 10px 10px 10px",
                     }}
                   >
@@ -337,7 +337,7 @@ function onMouseMove(e: MouseEvent) {
                   {!isMe && session && hoveredId === msg.id && (
                     <button
                       onClick={() => { setReplyTo({ id: msg.id, name: msg.author.name ?? "?" }); setTimeout(() => inputRef.current?.focus(), 50); }}
-                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-orange-500/40 transition-colors duration-150 mb-[2px]"
+                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-pink-500/40 transition-colors duration-150 mb-[2px]"
                       title={`Reply to ${msg.author.name}`}
                     >
                       <Reply size={11} />

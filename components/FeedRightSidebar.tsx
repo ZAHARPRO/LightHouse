@@ -83,7 +83,7 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
                 <Link
                   key={p.id}
                   href={`/post/${p.id}`}
-                  className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-[0.875rem] py-3 transition-[border-color] duration-150 hover:border-orange-500/30"
+                  className="block no-underline rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] px-[0.875rem] py-3 transition-[border-color] duration-150 hover:border-pink-500/30"
                 >
                   <div className="flex items-center gap-2 mb-[0.5rem]">
                     <UserAvatar name={p.author.name ?? "?"} image={p.author.image} tier={p.author.tier} size="xs" />
@@ -114,7 +114,7 @@ export default function FeedRightSidebar({ communityPosts, isLoggedIn, visible, 
 
           <Link
             href="/community"
-            className="block text-center px-4 py-[0.625rem] rounded-[10px] bg-orange-500/[0.08] border border-orange-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] transition-colors duration-200 hover:bg-orange-500/[0.12]"
+            className="block text-center px-4 py-[0.625rem] rounded-[10px] bg-pink-500/[0.08] border border-pink-500/20 no-underline font-display font-semibold text-[0.8125rem] text-[var(--accent-orange)] transition-colors duration-200 hover:bg-pink-500/[0.12]"
           >
             {t("seeMorePosts")}
           </Link>

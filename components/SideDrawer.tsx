@@ -47,7 +47,8 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
   }, [onClose]);
 
   function handleMouseLeave(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
+    const 
+    rect = e.currentTarget.getBoundingClientRect();
     if (e.clientX <= rect.right + 5) return;
     leaveTimer.current = setTimeout(onClose, 150);
   }
@@ -71,6 +72,10 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
         onMouseEnter={handleMouseEnter}
         className={[
           "fixed left-0 top-0 z-[500] flex flex-col",
+
+
+
+
           "w-full sm:w-[280px] h-dvh",
           "bg-[var(--bg-card)] border-r border-[var(--border-subtle)]",
           "shadow-[6px_0_40px_rgba(0,0,0,0.5)]",
@@ -94,10 +99,10 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
         <div className="px-[0.875rem] pt-4 pb-2">
           <div
             onClick={onOpenChat}
-            className="flex items-center justify-between px-[0.875rem] py-[0.625rem] rounded-[10px] bg-orange-500/[0.07] border border-orange-500/20 cursor-pointer"
+            className="flex items-center justify-between px-[0.875rem] py-[0.625rem] rounded-[10px] bg-[var(--accent-orange)]/[0.07] border border-[var(--accent-orange)] cursor-pointer"
           >
             <div className="flex items-center gap-[0.625rem]">
-              <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center bg-orange-500/15 border-2 border-orange-500/30 shrink-0">
+              <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center bg--[var(--accent-orange)]/15 border-2 border-[var(--accent-orange)] shrink-0">
                 <MessageSquare size={16} className="text-[var(--accent-orange)]" />
               </div>
               <span className="font-display font-bold text-sm text-[var(--text-primary)]">
@@ -120,7 +125,7 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
           <Link
             href="/community"
             onClick={onClose}
-            className="flex items-center gap-[0.625rem] px-[0.875rem] py-[0.625rem] rounded-[10px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] no-underline transition-colors duration-150 hover:border-orange-500/30 hover:bg-orange-500/[0.05]"
+            className="flex items-center gap-[0.625rem] px-[0.875rem] py-[0.625rem] rounded-[10px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] no-underline transition-colors duration-150 hover:border-pink-500/30 hover:bg-pink-500/[0.05]"
           >
             <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-subtle)] shrink-0">
               <Newspaper size={16} className="text-[var(--text-secondary)]" />

@@ -471,6 +471,7 @@ model MinesweeperRoom {
   guestEloSnapshot Int?
   hostEloDelta     Int?
   guestEloDelta    Int?
+  resultReverted   Boolean      @default(false)
 
   hostMines     String?  @db.Text
   guestMines    String?  @db.Text
@@ -515,6 +516,7 @@ model ChessRoom {
   guestEloSnapshot Int?
   hostEloDelta     Int?
   guestEloDelta    Int?
+  resultReverted   Boolean         @default(false)
 
   fen          String?         @db.Text // current FEN
   movesSAN     String?         @db.Text // JSON: string[]

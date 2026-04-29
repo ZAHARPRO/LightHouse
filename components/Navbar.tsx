@@ -11,7 +11,6 @@ import {
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
 import LanguageSwitcher from "./LanguageSwitcher";
-import ThemeSwitcher from "./ThemeSwitcher";
 import { useLocale } from "next-intl";
 import type { Locale } from "@/i18n/config";
 import ChatPopup from "./ChatPopup";
@@ -271,7 +270,7 @@ export default function Navbar() {
     "flex items-center justify-center w-[38px] h-[38px] rounded-lg cursor-pointer transition-[background,border-color] duration-150",
     "border",
     active
-      ? "bg-orange-500/10 border-orange-500/35 text-[var(--accent-orange)]"
+      ? "bg-[rgba(219,39,119,0.1)] border-[rgba(219,39,119,0.35)] text-[var(--accent-orange)]"
       : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
   ].join(" ");
 
@@ -481,7 +480,7 @@ export default function Navbar() {
                     "font-display font-semibold text-[0.8125rem] whitespace-nowrap",
                     "border transition-[background,border-color,color] duration-150",
                     createOpen
-                      ? "bg-orange-500/10 border-orange-500/35 text-[var(--accent-orange)]"
+                      ? "bg--[var(--accent-orange)]/10 border-[var(--accent-orange)]/35 text-[var(--accent-orange)]"
                       : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
                   ].join(" ")}
                 >
@@ -553,7 +552,6 @@ export default function Navbar() {
                     <User size={16} className="text-[var(--accent-orange)]" />
                   )}
                 </Link>
-                <ThemeSwitcher />
                 <LanguageSwitcher current={locale} />
                 <button
                   onClick={() => signOut()}

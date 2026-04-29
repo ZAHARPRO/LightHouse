@@ -1,5 +1,5 @@
 import { getAdminStats } from "@/actions/admin";
-import { Users, Video, FileText, Headphones, Award, Puzzle } from "lucide-react";
+import { Users, Video, FileText, Headphones, Award, Puzzle, Swords } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
@@ -7,10 +7,10 @@ export default async function AdminDashboard() {
   const [stats, t] = await Promise.all([getAdminStats(), getTranslations("admin")]);
 
   const cards = [
-    { icon: Users,      label: t("totalUsers"),    value: stats.users,       href: "/admin/users",  color: "#6366f1" },
-    { icon: Video,      label: t("videos"),         value: stats.videos,      href: "/feed",         color: "#f97316" },
+    { icon: Users,      label: t("totalUsers"),    value: stats.users,       href: "/admin/users",  color: "#ec4899" },
+    { icon: Video,      label: t("videos"),         value: stats.videos,      href: "/feed",         color: "#ec4899" },
     { icon: FileText,   label: t("posts"),          value: stats.posts,       href: "/feed",         color: "#10b981" },
-    { icon: Headphones, label: t("openTickets"),   value: stats.openTickets, href: "/feed",         color: "#fbbf24" },
+    { icon: Headphones, label: t("openTickets"),   value: stats.openTickets, href: "/feed",         color: "#c084fc" },
     { icon: Award,      label: t("badgesAwarded"), value: stats.rewards,     href: "/admin/badges", color: "#ec4899" },
   ];
 
@@ -40,23 +40,23 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link href="/admin/users" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+        <Link href="/admin/users" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-[var(--accent-orange)]/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("userManagement")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("userManagementDesc")}</p>
         </Link>
-        <Link href="/admin/badges" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+        <Link href="/admin/badges" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-[var(--accent-orange)]/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("badgeCreator")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("badgeCreatorDesc")}</p>
         </Link>
-        <Link href="/admin/reports" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+        <Link href="/admin/reports" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-[var(--accent-orange)]/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("reportCenter")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("reportCenterDesc")}</p>
         </Link>
-        <Link href="/admin/news" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+        <Link href="/admin/news" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-[var(--accent-orange)]/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("newsManagement")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("newsManagementDesc")}</p>
         </Link>
-        <Link href="/admin/staff" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-orange-500/30 transition-colors group">
+        <Link href="/admin/staff" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-[var(--accent-orange)]/30 transition-colors group">
           <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-1 group-hover:text-[var(--accent-orange)] transition-colors">{t("staffManagement")}</h2>
           <p className="text-sm text-[var(--text-muted)]">{t("staffManagementDesc")}</p>
         </Link>
@@ -66,6 +66,13 @@ export default async function AdminDashboard() {
             <h2 className="font-display font-bold text-base text-[var(--text-primary)] group-hover:text-violet-400 transition-colors">Chess Puzzles</h2>
           </div>
           <p className="text-sm text-[var(--text-muted)]">Create and manage mate-in-1 and mate-in-2 puzzles</p>
+        </Link>
+        <Link href="/admin/rooms" className="no-underline bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6 hover:border-blue-500/30 transition-colors group">
+          <div className="flex items-center gap-2 mb-1">
+            <Swords size={15} className="text-blue-400" />
+            <h2 className="font-display font-bold text-base text-[var(--text-primary)] group-hover:text-blue-400 transition-colors">Rated Rooms</h2>
+          </div>
+          <p className="text-sm text-[var(--text-muted)]">Monitor active matches, force-close rooms, and revert ELO results</p>
         </Link>
       </div>
     </div>

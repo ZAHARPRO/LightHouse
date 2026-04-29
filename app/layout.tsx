@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f97316",
+  themeColor: "#db2777",
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
@@ -52,9 +52,6 @@ export default async function RootLayout({
   const raw = cookieStore.get("LOCALE")?.value;
   const locale: Locale = locales.includes(raw as Locale) ? (raw as Locale) : "en";
 
-  const rawTheme = cookieStore.get("THEME")?.value;
-  const theme = rawTheme === "pink" ? "pink" : "dark";
-
   let messages: Record<string, unknown> = {};
   try {
     messages = (await import(`../messages/${locale}.json`)).default;
@@ -66,7 +63,7 @@ export default async function RootLayout({
   const intlLocale = locale === "meme" ? "en" : locale;
 
   return (
-    <html lang={intlLocale} data-theme={theme}>
+    <html lang={intlLocale} data-theme="pink">
       <body>
         <SessionProvider session={session}>
           <NextIntlClientProvider locale={locale} messages={messages}>

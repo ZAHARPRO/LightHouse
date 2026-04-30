@@ -108,8 +108,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [addingToPlId, setAddingToPlId]   = useState<string | null>(null);
   const [addPlLoading, setAddPlLoading]   = useState(false);
 
-  const syncedTrackRef   = useRef<string | null>(null);
-  const prevIsPlayingRef = useRef<boolean | null>(null);
+  const syncedTrackRef      = useRef<string | null>(null);
+  const prevIsPlayingRef    = useRef<boolean | null>(null);
+  const lastLocalActionRef  = useRef<number>(0);
+  const lastSyncRef         = useRef<{ playing: boolean | null; pos: number }>({ playing: null, pos: 0 });
 
   const isHost = activeLobby?.host.id === session?.user?.id;
   const {
@@ -154,7 +156,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   }, [session?.user?.id]);
 
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
-  const applyLobbySync = useCallback((d: Partial<ActiveLobby>) => {
+  const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
+    // Ignore SSE echoes that arrive shortly after we triggered the action ourselves
+    if (!fromLocalAction && Date.now() - lastLocalActionRef.current < 800) return;
+
     if (!d.trackUri) {
       if (syncedTrackRef.current) {
         syncedTrackRef.current = null;
@@ -176,17 +181,21 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         serverPos()
       );
     } else {
-      const wasPlaying = prevIsPlayingRef.current;
-      if (!d.isPlaying && wasPlaying !== false) {
+      // Use real current playback state, not stale ref, to avoid redundant calls
+      const locallyPlaying = music.playerRef.current
+        ? (music.playerRef.current as { getPlayerState?: () => number }).getPlayerState?.() === 1
+        : prevIsPlayingRef.current === true;
+
+      if (!d.isPlaying && locallyPlaying) {
         prevIsPlayingRef.current = false;
         music.pause();
-      } else if (d.isPlaying && wasPlaying === false) {
+      } else if (d.isPlaying && !locallyPlaying) {
         prevIsPlayingRef.current = true;
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
         if (Math.abs(serverPos() - localPos) > 1500) music.seek(serverPos());
         music.resume();
-      } else if (d.isPlaying && wasPlaying !== false) {
+      } else if (d.isPlaying) {
         // Soft drift correction during normal playback
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
@@ -436,6 +445,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!track) return;
     const pos = overridePosMs ?? (music.playerRef.current
       ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0);
+    // Skip if nothing meaningful changed
+    if (
+      lastSyncRef.current.playing === playing &&
+      Math.abs(lastSyncRef.current.pos - pos) < 500
+    ) return;
+    lastSyncRef.current = { playing, pos };
     hostSync(track, pos, playing);
   }
 
@@ -620,8 +635,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
                 seek(ms);
                 if (activeLobby) {
+                  lastLocalActionRef.current = Date.now();
                   if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
-                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 50);
+                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 120);
                 }
               }}>
               <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />
@@ -646,6 +662,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
                 <button
                   onClick={() => {
+                    lastLocalActionRef.current = Date.now();
                     if (isPlaying) { pause(); if (activeLobby) pushSync(false); }
                     else { resume(); if (activeLobby) pushSync(true); }
                   }}

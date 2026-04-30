@@ -534,7 +534,7 @@ export default function ChessOnlineRoom() {
               </div>
               <MovePanel moves={room.movesSAN} />
             </div>
-            <button onClick={() => router.push("/games/chess/online")}
+            <button onClick={() => router.push("/games/")}
               className="px-5 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-bold text-sm hover:text-[var(--text-primary)] transition-colors text-center">
               ← Back to Lobby
             </button>

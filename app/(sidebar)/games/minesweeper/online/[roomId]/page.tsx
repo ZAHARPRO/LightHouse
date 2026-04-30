@@ -445,7 +445,7 @@ export default function GameRoomPage() {
         </div>
 
         <div className="flex justify-center">
-          <button onClick={() => router.push("/games/minesweeper/online/rated")}
+          <button onClick={() => router.push("/games/")}
             className="px-6 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-bold text-sm hover:text-[var(--text-primary)] transition-colors">
             ← Back to Lobby
           </button>

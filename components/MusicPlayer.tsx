@@ -75,6 +75,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [lobbyTab, setLobbyTab]       = useState<LobbyTab>("player");
   const heartbeatRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const seekSyncRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseRef        = useRef<EventSource | null>(null);
 
   // Search
   const [searchQ, setSearchQ]       = useState("");
@@ -133,6 +134,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           setActiveLobby(d as ActiveLobby);
           setSize({ w: 360 });
           setView("lobby");
+          applyLobbySync(d);
         } else {
           music.setActiveLobbyId(null);
         }
@@ -151,14 +153,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       }).catch(() => {});
   }, [session?.user?.id]);
 
-  // ── Poll active lobby every 2s ─────────────────────────────────────────────
-  const fetchActiveLobby = useCallback(async () => {
-    if (!activeLobby) return;
-    const res = await fetch(`/api/music-lobbies/${activeLobby.id}`);
-    if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
-    const d = await res.json() as ActiveLobby;
-    setActiveLobby(d);
-
+  // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
+  const applyLobbySync = useCallback((d: Partial<ActiveLobby>) => {
     if (!d.trackUri) {
       if (syncedTrackRef.current) {
         syncedTrackRef.current = null;
@@ -169,48 +165,80 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    // Estimated server position: positionMs + time elapsed since host last synced
-    const serverPos = () => d.positionMs + (d.isPlaying ? Date.now() - new Date(d.syncedAt).getTime() : 0);
+    const serverPos = () =>
+      (d.positionMs ?? 0) + (d.isPlaying ? Date.now() - new Date(d.syncedAt!).getTime() : 0);
 
     if (d.trackUri !== syncedTrackRef.current) {
-      // New track — one-time position sync then play locally
       syncedTrackRef.current = d.trackUri;
-      prevIsPlayingRef.current = d.isPlaying;
+      prevIsPlayingRef.current = d.isPlaying ?? null;
       music.play(
         { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
         serverPos()
       );
     } else {
-      // Same track — react to state transitions (all members follow server)
       const wasPlaying = prevIsPlayingRef.current;
-
       if (!d.isPlaying && wasPlaying !== false) {
         prevIsPlayingRef.current = false;
         music.pause();
       } else if (d.isPlaying && wasPlaying === false) {
-        // Host resumed — re-sync position once if drifted >5s
         prevIsPlayingRef.current = true;
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
-        if (Math.abs(serverPos() - localPos) > 5000) music.seek(serverPos());
+        if (Math.abs(serverPos() - localPos) > 1500) music.seek(serverPos());
         music.resume();
-      }
-      // Soft drift correction during normal playback — only if drifted >3s
-      else if (d.isPlaying && wasPlaying !== false) {
+      } else if (d.isPlaying && wasPlaying !== false) {
+        // Soft drift correction during normal playback
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
         const drift = Math.abs(serverPos() - localPos);
-        if (drift > 3000 && drift < 60000) music.seek(serverPos());
+        if (drift > 1500 && drift < 60000) music.seek(serverPos());
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLobby?.id, isHost]);
+  }, []);
+
+  // ── SSE connection — real-time sync ────────────────────────────────────────
+  useEffect(() => {
+    if (view !== "lobby" || !activeLobby) return;
+    const lobbyId = activeLobby.id;
+
+    const es = new EventSource(`/api/music-lobbies/${lobbyId}/sse`);
+    sseRef.current = es;
+
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data as string) as Partial<ActiveLobby>;
+        setActiveLobby(prev => prev ? { ...prev, ...d } : prev);
+        applyLobbySync(d);
+      } catch { /* ignore malformed */ }
+    };
+
+    es.onerror = () => {
+      // EventSource auto-reconnects; nothing extra needed
+    };
+
+    return () => {
+      es.close();
+      sseRef.current = null;
+    };
+  }, [view, activeLobby?.id, applyLobbySync]);
+
+  // ── Slow poll (30s) to refresh member list & detect closed lobby ──────────
+  const refreshLobby = useCallback(async () => {
+    if (!activeLobby) return;
+    const res = await fetch(`/api/music-lobbies/${activeLobby.id}`);
+    if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
+    const d = await res.json() as ActiveLobby;
+    // Only update non-sync fields (members, history) — SSE handles track/play state
+    setActiveLobby(prev => prev ? { ...prev, members: d.members, history: d.history } : prev);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLobby?.id]);
 
   useEffect(() => {
     if (view !== "lobby" || !activeLobby) return;
-    const t = setInterval(fetchActiveLobby, 5000);
+    const t = setInterval(refreshLobby, 30_000);
     return () => clearInterval(t);
-  }, [view, fetchActiveLobby, activeLobby]);
+  }, [view, refreshLobby, activeLobby]);
 
   // ── Heartbeat ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -362,6 +390,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setActiveLobby(d);
     setSize({ w: 360 });
     setView("lobby"); setLobbyTab("player");
+    // Apply current track immediately so guest doesn't wait for first SSE event
+    applyLobbySync(d);
   }
 
   async function createLobby() {
@@ -591,7 +621,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 seek(ms);
                 if (activeLobby) {
                   if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
-                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 300);
+                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 50);
                 }
               }}>
               <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sseBroadcast } from "@/lib/lobby-sse";
 
 const MAX_HISTORY = 50;
 
@@ -50,6 +51,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
+  const syncedAt = new Date();
+
   await prisma.musicLobby.update({
     where: { id },
     data: {
@@ -59,9 +62,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       trackImage:  body.trackImage  ?? null,
       positionMs:  body.positionMs  ?? 0,
       isPlaying:   body.isPlaying   ?? false,
-      syncedAt:    new Date(),
+      syncedAt,
       ...(historyJson !== lobby.historyJson ? { historyJson } : {}),
     },
+  });
+
+  // Broadcast to all SSE subscribers of this lobby immediately
+  sseBroadcast(id, {
+    trackUri:    body.trackUri    ?? null,
+    trackName:   body.trackName   ?? null,
+    trackArtist: body.trackArtist ?? null,
+    trackImage:  body.trackImage  ?? null,
+    positionMs:  body.positionMs  ?? 0,
+    isPlaying:   body.isPlaying   ?? false,
+    syncedAt:    syncedAt.toISOString(),
   });
 
   return NextResponse.json({ ok: true });

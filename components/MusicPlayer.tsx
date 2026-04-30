@@ -28,7 +28,7 @@ type ActiveLobby = {
   members: Member[];
   history: HistoryItem[];
   trackUri: string | null; trackName: string | null; trackArtist: string | null; trackImage: string | null;
-  isPlaying: boolean; positionMs: number; elapsedMs: number;
+  isPlaying: boolean; positionMs: number; syncedAt: string;
 };
 
 type LobbyTab = "player" | "listeners" | "history" | "playlists";
@@ -56,7 +56,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [size, setSize]     = useState({ w: 350 });
   const [minimized, setMin] = useState(false);
   const [view, setView]     = useState<"player" | "lobbies" | "create" | "lobby">("player");
-  const [volume, setVol]    = useState(70);
+  const [volume, setVol]    = useState(() =>
+    typeof window !== "undefined" ? Number(localStorage.getItem("music_vol") ?? 70) : 70
+  );
 
   // Lobby list
   const [lobbies, setLobbies]   = useState<LobbyListItem[]>([]);
@@ -65,13 +67,14 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [creating, setCreating] = useState(false);
   const [joinPass, setJoinPass] = useState<Record<string, string>>({});
   const [joining, setJoining]   = useState<string | null>(null);
-  const [copied, setCopied]     = useState(false);
+  const [joinError, setJoinError] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Active lobby
   const [activeLobby, setActiveLobby] = useState<ActiveLobby | null>(null);
   const [lobbyTab, setLobbyTab]       = useState<LobbyTab>("player");
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const syncRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const seekSyncRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Search
   const [searchQ, setSearchQ]       = useState("");
@@ -117,7 +120,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
 
-  function handleVol(v: number) { setVol(v); setMusicVol(v); }
+  function handleVol(v: number) { setVol(v); setMusicVol(v); localStorage.setItem("music_vol", String(v)); }
 
   // ── Restore lobby view on mount if already in a lobby ─────────────────────
   useEffect(() => {
@@ -149,11 +152,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Poll active lobby every 2s ─────────────────────────────────────────────
   const fetchActiveLobby = useCallback(async () => {
     if (!activeLobby) return;
-    const t0 = Date.now();
     const res = await fetch(`/api/music-lobbies/${activeLobby.id}`);
     if (!res.ok) { setActiveLobby(null); music.setActiveLobbyId(null); setView("lobbies"); return; }
     const d = await res.json() as ActiveLobby;
-    const rtt = Date.now() - t0; // round-trip time; use half as one-way estimate
     setActiveLobby(d);
 
     if (!d.trackUri) {
@@ -166,40 +167,46 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    if (d.trackUri !== music.track?.videoId) {
+    // Estimated server position: positionMs + time elapsed since host last synced
+    const serverPos = () => d.positionMs + (d.isPlaying ? Date.now() - new Date(d.syncedAt).getTime() : 0);
+
+    if (d.trackUri !== syncedTrackRef.current) {
       // New track — one-time position sync then play locally
       syncedTrackRef.current = d.trackUri;
       prevIsPlayingRef.current = d.isPlaying;
-      const est = d.positionMs + (d.isPlaying ? d.elapsedMs + rtt / 2 : 0);
       music.play(
         { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
-        est
+        serverPos()
       );
     } else if (!isHost) {
-      // Same track — only react to state transitions, no continuous drift correction
+      // Same track — only react to state transitions
       const wasPlaying = prevIsPlayingRef.current;
 
       if (!d.isPlaying && wasPlaying !== false) {
-        // Host paused
         prevIsPlayingRef.current = false;
         music.pause();
       } else if (d.isPlaying && wasPlaying === false) {
-        // Host resumed — re-sync position once then play locally
+        // Host resumed — re-sync position once if drifted >5s
         prevIsPlayingRef.current = true;
-        const serverPos = d.positionMs + d.elapsedMs + rtt / 2;
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
-        if (Math.abs(serverPos - localPos) > 3000) music.seek(serverPos);
+        if (Math.abs(serverPos() - localPos) > 5000) music.seek(serverPos());
         music.resume();
       }
-      // During normal playback → do nothing; no drift correction to avoid choppiness
+      // Soft drift correction during normal playback — only if drifted >3s
+      else if (d.isPlaying && wasPlaying !== false) {
+        const localPos = music.playerRef.current
+          ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
+        const drift = Math.abs(serverPos() - localPos);
+        if (drift > 3000 && drift < 60000) music.seek(serverPos());
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLobby?.id, isHost]);
 
   useEffect(() => {
     if (view !== "lobby" || !activeLobby) return;
-    const t = setInterval(fetchActiveLobby, 2000);
+    const t = setInterval(fetchActiveLobby, 5000);
     return () => clearInterval(t);
   }, [view, fetchActiveLobby, activeLobby]);
 
@@ -214,25 +221,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
   }, [view, activeLobby?.id, session?.user?.id]);
 
-  // ── Host sync every 5s ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (view !== "lobby" || !isHost || !activeLobby || !track) return;
-    const lobbyId = activeLobby.id;
-    const videoId = track.videoId; const title = track.title;
-    const channel = track.channel; const thumbnail = track.thumbnail;
-    const push = () => {
-      const currentPosMs = music.playerRef.current
-        ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
-      const currentIsPlaying = music.playerRef.current?.getPlayerState() === 1;
-      fetch(`/api/music-lobbies/${lobbyId}/sync`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackUri: videoId, trackName: title, trackArtist: channel, trackImage: thumbnail, positionMs: currentPosMs, isPlaying: currentIsPlaying }),
-      });
-    };
-    syncRef.current = setInterval(push, 5000);
-    return () => { if (syncRef.current) clearInterval(syncRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, isHost, activeLobby?.id, track?.videoId]);
+  // Host syncs only on events (pause/resume/seek/new track) — no polling interval
 
   // Auto-advance is now handled inside MusicContext (playerEngine NEXT action)
   // The host still needs to sync the new track to the lobby when it changes
@@ -241,7 +230,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (!isHost || !activeLobby || !track) return;
     if (track.videoId === prevTrackIdRef.current) return;
     prevTrackIdRef.current = track.videoId;
-    syncTrack(track, 0, true);
+    hostSync(track, 0, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.videoId]);
 
@@ -292,29 +281,32 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   }, [lobbyTab, plLoaded]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  function syncTrack(item: YTItem, pos: number, playing: boolean) {
+  function hostSync(item: YTItem | null, posMs = 0, playing = true) {
     if (!activeLobby) return;
     fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: pos, isPlaying: playing }),
-    });
+      body: JSON.stringify(item
+        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing }
+        : { trackUri: null, isPlaying: false, positionMs: 0 }
+      ),
+    }).catch(() => {});
   }
 
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
     music.playNow(item);
-    if (activeLobby) syncTrack(item, 0, true);
+    if (activeLobby) hostSync(item, 0, true);
   }
 
   function startPlaylist(pl: Playlist) {
     if (!pl.tracks.length) return;
     music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks });
-    if (activeLobby) syncTrack(pl.tracks[0], 0, true);
+    if (activeLobby) hostSync(pl.tracks[0], 0, true);
   }
 
   function copyLink(id: string) {
     navigator.clipboard.writeText(`${window.location.origin}/music/${id}`);
-    setCopied(true); setTimeout(() => setCopied(false), 1500);
+    setCopiedId(id); setTimeout(() => setCopiedId(null), 1500);
   }
 
   async function toggleFav(item: YTItem) {
@@ -391,7 +383,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ password: pass || undefined }),
       });
       if (res.ok) await enterLobby(lobbyId);
-      else { const d = await res.json(); alert(d.error ?? "Error"); }
+      else { const d = await res.json(); setJoinError(p => ({ ...p, [lobbyId]: d.error ?? "Error" })); }
     } finally { setJoining(null); }
   }
 
@@ -405,25 +397,17 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   }
 
   function pushSync(playing: boolean, overridePosMs?: number) {
-    if (!activeLobby || !track) return;
+    if (!track) return;
     const pos = overridePosMs ?? (music.playerRef.current
       ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0);
-    fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: track.videoId, trackName: track.title, trackArtist: track.channel, trackImage: track.thumbnail, positionMs: pos, isPlaying: playing }),
-    }).catch(() => {});
+    hostSync(track, pos, playing);
   }
 
   async function closeSong() {
     if (!activeLobby) return;
-    // Cancel the 5s interval immediately to avoid it racing and re-publishing the old track
-    if (syncRef.current) { clearInterval(syncRef.current); syncRef.current = null; }
     music.pause();
     music.clearQueue();
-    await fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: null, isPlaying: false, positionMs: 0 }),
-    }).catch(() => {});
+    hostSync(null);
   }
 
   async function addToPlaylist(plId: string, item: YTItem) {
@@ -598,7 +582,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               onClick={e => {
                 if (!isHost && activeLobby) return;
                 const rect = e.currentTarget.getBoundingClientRect();
-                seek(Math.floor(((e.clientX - rect.left) / rect.width) * duration));
+                const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
+                seek(ms);
+                if (activeLobby && isHost) {
+                  if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
+                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 300);
+                }
               }}>
               <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />
             </div>
@@ -765,7 +754,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                     {lobby.hasPassword && <Lock size={10} className="text-[var(--text-muted)] shrink-0" />}
                     <span className="text-[0.6rem] text-[var(--text-muted)] flex items-center gap-0.5 shrink-0"><Users size={9} />{lobby.memberCount}</span>
                     <button onClick={() => copyLink(lobby.id)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                      {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
+                      {copiedId === lobby.id ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
                     </button>
                   </div>
                   {lobby.trackName && (
@@ -776,10 +765,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                       onChange={e => setJoinPass(p => ({ ...p, [lobby.id]: e.target.value }))}
                       className="w-full mb-1.5 px-2 py-1 rounded-md text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none" />
                   )}
-                  <button onClick={() => joinLobby(lobby.id, lobby.hasPassword)} disabled={joining === lobby.id}
+                  <button onClick={() => { setJoinError(p => ({ ...p, [lobby.id]: "" })); joinLobby(lobby.id, lobby.hasPassword); }} disabled={joining === lobby.id}
                     className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.62rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-50">
                     {joining === lobby.id ? <Loader2 size={9} className="animate-spin" /> : <ExternalLink size={9} />} Join
                   </button>
+                  {joinError[lobby.id] && <p className="text-[0.58rem] text-red-400 mt-1">{joinError[lobby.id]}</p>}
                 </div>
               ))}
             </div>
@@ -825,8 +815,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 </div>
                 <button onClick={() => copyLink(activeLobby.id)}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                  {copied ? <Check size={8} className="text-green-400" /> : <Copy size={8} />}
-                  {copied ? "Copied" : "Share"}
+                  {copiedId === activeLobby.id ? <Check size={8} className="text-green-400" /> : <Copy size={8} />}
+                  {copiedId === activeLobby.id ? "Copied" : "Share"}
                 </button>
                 <button onClick={leaveLobby}
                   className="shrink-0 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors">
@@ -994,7 +984,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                                   {isHost && (
                                     <button onClick={() => {
                                       music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
-                                      if (activeLobby) syncTrack(t, 0, true);
+                                      if (activeLobby) hostSync(t, 0, true);
                                     }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
                                   )}
                                   <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}

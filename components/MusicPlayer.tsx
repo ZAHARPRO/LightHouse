@@ -99,6 +99,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   // Favorites
   const [favIds, setFavIds]         = useState<Set<string>>(new Set());
+  const [favTracks, setFavTracks]   = useState<YTItem[]>([]);
   const [favLoading, setFavLoading] = useState<Set<string>>(new Set());
 
   // Add-to-playlist modal
@@ -146,6 +147,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       .then(r => r.json())
       .then((d: { tracks: YTItem[] }) => {
         setFavIds(new Set(d.tracks.map(t => t.videoId)));
+        setFavTracks(d.tracks);
       }).catch(() => {});
   }, [session?.user?.id]);
 
@@ -158,7 +160,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setActiveLobby(d);
 
     if (!d.trackUri) {
-      if (syncedTrackRef.current && !isHost) {
+      if (syncedTrackRef.current) {
         syncedTrackRef.current = null;
         prevIsPlayingRef.current = null;
         music.pause();
@@ -178,8 +180,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
         serverPos()
       );
-    } else if (!isHost) {
-      // Same track — only react to state transitions
+    } else {
+      // Same track — react to state transitions (all members follow server)
       const wasPlaying = prevIsPlayingRef.current;
 
       if (!d.isPlaying && wasPlaying !== false) {
@@ -324,6 +326,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           if (d.favorited) n.add(item.videoId); else n.delete(item.videoId);
           return n;
         });
+        setFavTracks(prev => d.favorited
+          ? [item, ...prev.filter(t => t.videoId !== item.videoId)]
+          : prev.filter(t => t.videoId !== item.videoId)
+        );
       }
     } finally {
       setFavLoading(s => { const n = new Set(s); n.delete(item.videoId); return n; });
@@ -505,7 +511,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
         <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
           onFocus={() => results.length > 0 && setSearchOpen(true)}
-          placeholder={isHost && activeLobby ? "Search & play for everyone…" : "Search YouTube…"}
+          placeholder={activeLobby ? "Search & play for everyone…" : "Search YouTube…"}
           className="w-full h-7 pl-7 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs outline-none focus:border-red-500/40 placeholder:text-[var(--text-muted)]"
         />
         {searching && <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />}
@@ -580,11 +586,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           <div>
             <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full cursor-pointer group"
               onClick={e => {
-                if (!isHost && activeLobby) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
                 seek(ms);
-                if (activeLobby && isHost) {
+                if (activeLobby) {
                   if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
                   seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 300);
                 }
@@ -596,8 +601,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
             </div>
           </div>
-          {/* Close song — host only */}
-          {activeLobby && isHost && (
+          {/* Close song */}
+          {activeLobby && (
             <div className="flex justify-end">
               <button onClick={closeSong}
                 className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors">
@@ -605,15 +610,14 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           )}
-          {/* Controls — host or solo */}
-          {(!activeLobby || isHost) && (
-            <>
-              <div className="flex items-center justify-center gap-4">
+          {/* Controls */}
+          <>
+            <div className="flex items-center justify-center gap-4">
                 <button onClick={prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={16} /></button>
                 <button
                   onClick={() => {
-                    if (isPlaying) { pause(); if (activeLobby && isHost) pushSync(false); }
-                    else { resume(); if (activeLobby && isHost) pushSync(true); }
+                    if (isPlaying) { pause(); if (activeLobby) pushSync(false); }
+                    else { resume(); if (activeLobby) pushSync(true); }
                   }}
                   className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
                   {isPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -655,12 +659,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             </>
-          )}
-          {/* Guest status */}
-          {activeLobby && !isHost && (
+          {/* Live indicator */}
+          {activeLobby && (
             <div className="flex items-center gap-1.5 text-[0.6rem] text-[var(--text-muted)]">
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeLobby.isPlaying ? "bg-red-500 animate-pulse" : "bg-[var(--text-muted)]"}`} />
-              {activeLobby.isPlaying ? "Playing (synced to host)" : "Paused by host"}
+              {activeLobby.isPlaying ? "Live" : "Paused"}
             </div>
           )}
           {/* Volume */}
@@ -676,7 +679,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col items-center gap-1.5 py-3 text-center">
           <Music2 size={20} className="text-[var(--text-muted)] opacity-30" />
           <p className="text-[var(--text-muted)] text-xs">
-            {activeLobby && !isHost ? "Waiting for host…" : "Search a track to play"}
+            Search a track to play
           </p>
           {!playerReady && <p className="text-[0.58rem] text-[var(--text-muted)] opacity-60">Loading player…</p>}
         </div>
@@ -891,8 +894,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                       <div key={`${item.videoId}-${i}`}
                         className="flex items-center gap-2 p-1.5 rounded-lg mb-1">
                         <button
-                          onClick={() => isHost && playTrack(item)}
-                          className={["flex items-center gap-2 flex-1 min-w-0 text-left", isHost ? "cursor-pointer" : "cursor-default"].join(" ")}>
+                          onClick={() => playTrack(item)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left">
                           <Image src={item.thumbnail} alt="" width={32} height={24} className="rounded shrink-0 object-cover" />
                           <div className="min-w-0 flex-1">
                             <p className="text-[0.65rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{item.title}</p>
@@ -902,7 +905,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                         <div className="flex items-center gap-0.5 shrink-0">
                           <FavBtn item={item} size={10} />
                           <AddPlBtn item={item} sz={10} />
-                          {isHost && <Play size={9} className="text-[var(--text-muted)]" />}
+                          <Play size={9} className="text-[var(--text-muted)]" />
                         </div>
                       </div>
                     ))}
@@ -940,6 +943,48 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                       </div>
                     )}
 
+                    {/* ── Pinned: Favorites ──────────────────────────── */}
+                    {favTracks.length > 0 && (
+                      <div className="mb-2 rounded-xl border border-red-500/20 overflow-hidden">
+                        <div className="flex items-center gap-1.5 px-2.5 py-2 bg-red-500/5">
+                          <button onClick={() => setExpandedPl(expandedPl === "__fav__" ? null : "__fav__")}
+                            className="flex items-center gap-1 flex-1 min-w-0 text-left">
+                            <ChevronRight size={10} className={`text-red-400 shrink-0 transition-transform ${expandedPl === "__fav__" ? "rotate-90" : ""}`} />
+                            <Heart size={9} className="text-red-400 shrink-0" fill="currentColor" />
+                            <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">Favorites</span>
+                            <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{favTracks.length}</span>
+                          </button>
+                          <button onClick={() => { music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks }); if (activeLobby) hostSync(favTracks[0], 0, true); }}
+                            className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
+                              activePlId === "__fav__" ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
+                            <Play size={7} />{activePlId === "__fav__" ? "Playing" : "Play all"}
+                          </button>
+                        </div>
+                        {expandedPl === "__fav__" && (
+                          <div className="max-h-44 overflow-y-auto">
+                            {favTracks.map((t, i) => (
+                              <div key={t.videoId}
+                                className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", track?.videoId === t.videoId ? "bg-red-500/10" : ""].join(" ")}>
+                                <span className="text-[0.5rem] text-[var(--text-muted)] w-3 shrink-0">{i + 1}</span>
+                                <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
+                                  <p className="text-[0.52rem] text-[var(--text-muted)] truncate">{t.channel}</p>
+                                </div>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <FavBtn item={t} size={9} />
+                                  <button onClick={() => {
+                                    music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks.slice(i) });
+                                    if (activeLobby) hostSync(t, 0, true);
+                                  }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {!plLoaded ? (
                       <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-[var(--text-muted)]" /></div>
                     ) : playlists.length === 0 ? (
@@ -956,13 +1001,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                             <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">{pl.name}</span>
                             <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{pl.tracks.length}</span>
                           </button>
-                          {isHost && (
-                            <button onClick={() => startPlaylist(pl)}
-                              className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
-                                activePlId === pl.id ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
-                              <Play size={7} />{activePlId === pl.id ? "Playing" : "Play"}
-                            </button>
-                          )}
+                          <button onClick={() => startPlaylist(pl)}
+                            className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
+                              activePlId === pl.id ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
+                            <Play size={7} />{activePlId === pl.id ? "Playing" : "Play"}
+                          </button>
                           <button onClick={() => deletePlaylist(pl.id)} className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors">
                             <Trash2 size={10} />
                           </button>
@@ -981,12 +1024,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
                                   <FavBtn item={t} size={9} />
-                                  {isHost && (
-                                    <button onClick={() => {
-                                      music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
-                                      if (activeLobby) hostSync(t, 0, true);
-                                    }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
-                                  )}
+                                  <button onClick={() => {
+                                    music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
+                                    if (activeLobby) hostSync(t, 0, true);
+                                  }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
                                   <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}
                                     className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><X size={9} /></button>
                                 </div>

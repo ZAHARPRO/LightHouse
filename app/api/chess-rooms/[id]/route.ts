@@ -19,6 +19,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const userId = session?.user?.id ?? null;
   const myRole = userId === room.hostId ? "host" : userId === room.guestId ? "guest" : "spectator";
 
+  const nowMs = Date.now();
+  const spectators: { id: string; at: number }[] = room.spectatorsJson ? JSON.parse(room.spectatorsJson as string) : [];
+  const spectatorCount = spectators.filter(s => nowMs - s.at < 60_000).length;
+
   // Compute time remaining (accounting for time elapsed since last move)
   let whiteTimeMs = room.whiteTimeMs;
   let blackTimeMs = room.blackTimeMs;
@@ -109,5 +113,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     hostEloDelta: room.hostEloDelta,
     guestEloDelta: room.guestEloDelta,
     chat: room.chatJson ? JSON.parse(room.chatJson) : [],
+    spectatorCount,
   });
 }

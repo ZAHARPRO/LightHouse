@@ -106,6 +106,7 @@ export default function GamesPage() {
   const [board, setBoard] = useState<Cell[][]>([]);
   const [minesLeft, setMinesLeft] = useState(0);
   const [firstClick, setFirstClick] = useState(true);
+  const [hitPos, setHitPos] = useState<{ r: number; c: number } | null>(null);
 
   const cfg = DIFFICULTIES[difficulty];
 
@@ -115,6 +116,7 @@ export default function GamesPage() {
     setMinesLeft(DIFFICULTIES[diff].mines);
     setGameState("playing");
     setFirstClick(true);
+    setHitPos(null);
   }, [difficulty]);
 
   const handleReveal = useCallback((r: number, c: number) => {
@@ -131,6 +133,7 @@ export default function GamesPage() {
 
       if (b[r][c].isMine) {
         b = b.map(row => row.map(cell => cell.isMine ? { ...cell, isRevealed: true } : cell));
+        setHitPos({ r, c });
         setGameState("lost");
         return b;
       }
@@ -248,10 +251,19 @@ export default function GamesPage() {
 
                   if (cell.isRevealed) {
                     if (cell.isMine) {
-                      bg = gameState === "lost"
-                        ? "bg-red-500/20 border-red-500/40"
-                        : "bg-[var(--bg-card)] border-[var(--border-subtle)]";
-                      content = <Bomb size={12} className="text-red-400" />;
+                      const isDeath = hitPos?.r === r && hitPos?.c === c;
+                      bg = isDeath
+                        ? "bg-red-500/55 border-red-500/70"
+                        : gameState === "lost"
+                          ? "bg-red-500/10 border-red-500/20"
+                          : "bg-[var(--bg-card)] border-[var(--border-subtle)]";
+                      content = (
+                        <Bomb
+                          size={12}
+                          className={isDeath ? "text-red-400" : "text-red-400/40"}
+                          style={isDeath ? { filter: "drop-shadow(0 0 4px rgba(239,68,68,0.8))" } : undefined}
+                        />
+                      );
                     } else {
                       bg = "bg-[var(--bg-secondary)] border-[var(--border-subtle)]";
                       if (cell.neighborCount > 0) {

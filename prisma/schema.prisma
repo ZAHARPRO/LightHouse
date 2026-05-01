@@ -487,6 +487,9 @@ model MinesweeperRoom {
   chatJson   String?      @db.Text // JSON: ChatMsg[]
   spectatorsJson String?  @db.Text // JSON: { id: string; at: number }[]
 
+  hostLastSeen  DateTime?
+  guestLastSeen DateTime?
+
   startedAt  DateTime?
   endedAt    DateTime?
   createdAt  DateTime     @default(now())
@@ -530,6 +533,9 @@ model ChessRoom {
   winReason    String?         // "checkmate" | "stalemate" | "timeout" | "resigned"
   chatJson     String?         @db.Text // JSON: ChatMsg[]
   spectatorsJson String?       @db.Text // JSON: { id: string; at: number }[]
+
+  hostLastSeen  DateTime?
+  guestLastSeen DateTime?
 
   startedAt    DateTime?
   endedAt      DateTime?

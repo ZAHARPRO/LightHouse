@@ -7,6 +7,7 @@ import Image from "next/image";
 import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
+import SpectatorBadge from "@/components/SpectatorBadge";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -42,6 +43,7 @@ type RoomData = {
   hostEloDelta: number | null;
   guestEloDelta: number | null;
   chat: ChatMsg[];
+  spectatorCount: number;
 };
 
 const NUM_COLORS: Record<number, string> = {
@@ -57,6 +59,7 @@ const WIN_REASON: Record<string, string> = {
   cleared: "cleared the board",
   exploded: "opponent hit a mine",
   left: "opponent left",
+  disconnected: "opponent disconnected",
 };
 
 // ── Cell sizes — never shrink, scroll instead ────────────────────────────────
@@ -85,13 +88,14 @@ interface BoardProps {
   revealed: number[];
   flagged: number[];
   isHit: boolean;
+  hitIdx?: number;
   interactive: boolean;
   cellPx?: number;
   onReveal?: (idx: number) => void;
   onFlag?: (e: React.MouseEvent, idx: number) => void;
 }
 
-function MineBoard({ rows, cols, mines, revealed, flagged, isHit, interactive, cellPx = 32, onReveal, onFlag }: BoardProps) {
+function MineBoard({ rows, cols, mines, revealed, flagged, isHit, hitIdx, interactive, cellPx = 32, onReveal, onFlag }: BoardProps) {
   const mineSet   = new Set(mines ?? []);
   const revSet    = new Set(revealed);
   const flagSet   = new Set(flagged);
@@ -121,11 +125,18 @@ function MineBoard({ rows, cols, mines, revealed, flagged, isHit, interactive, c
 
           /* ── Revealed mine ── */
           if (isRevealed && isMine) {
+            const isDeath = idx === hitIdx;
             return (
               <div key={idx}
-                style={{ width: cellPx, height: cellPx, background: isHit ? "rgba(239,68,68,0.25)" : "rgba(239,68,68,0.08)", borderRadius: 3 }}
+                style={{
+                  width: cellPx, height: cellPx, borderRadius: 3,
+                  background: isDeath
+                    ? "rgba(239,68,68,0.55)"
+                    : isHit ? "rgba(239,68,68,0.10)" : "rgba(239,68,68,0.06)",
+                  boxShadow: isDeath ? "0 0 6px 2px rgba(239,68,68,0.55)" : undefined,
+                }}
                 className="flex items-center justify-center">
-                <Bomb size={iconPx} style={{ color: isHit ? "#f87171" : "#f87171aa" }} />
+                <Bomb size={iconPx} style={{ color: isDeath ? "#ef4444" : "#f87171" + (isHit ? "99" : "44") }} />
               </div>
             );
           }
@@ -236,6 +247,19 @@ export default function GameRoomPage() {
     return () => clearInterval(t);
   }, [room?.myRole, room?.status, roomId]);
 
+  // Player heartbeat — lets server detect disconnects and forfeit the leaver
+  useEffect(() => {
+    if (!room || (room.myRole !== "host" && room.myRole !== "guest") || room.status !== "PLAYING") return;
+    const ping = () =>
+      fetch(`/api/ms-rooms/${roomId}/ping`, { method: "POST" })
+        .then(r => r.json())
+        .then((d: { disconnectWin?: boolean }) => { if (d.disconnectWin) fetchRoom(); })
+        .catch(() => {});
+    ping();
+    const t = setInterval(ping, 10_000);
+    return () => clearInterval(t);
+  }, [room?.myRole, room?.status, roomId, fetchRoom]);
+
   const doAction = useCallback(async (path: string, body?: object) => {
     fetchAbortRef.current?.abort();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -302,10 +326,11 @@ export default function GameRoomPage() {
     </main>
   );
 
-  const myName   = room.myRole === "host" ? room.hostName  : room.guestName;
-  const oppName  = room.myRole === "host" ? room.guestName : room.hostName;
-  const oppImage = room.myRole === "host" ? room.guestImage : room.hostImage;
-  const myImage  = room.myRole === "host" ? room.hostImage  : room.guestImage;
+  // For spectators: API maps myRevealed→host, oppRevealed→guest, so names must match
+  const myName   = room.myRole === "host"      ? room.hostName   : room.myRole === "guest" ? room.guestName  : room.hostName;
+  const oppName  = room.myRole === "host"      ? room.guestName  : room.myRole === "guest" ? room.hostName   : room.guestName;
+  const myImage  = room.myRole === "host"      ? room.hostImage  : room.myRole === "guest" ? room.guestImage : room.hostImage;
+  const oppImage = room.myRole === "host"      ? room.guestImage : room.myRole === "guest" ? room.hostImage  : room.guestImage;
   const iWon     = room.winner === room.myRole;
   const rows     = room.rows ?? 9;
   const cols     = room.cols ?? 9;
@@ -428,7 +453,9 @@ export default function GameRoomPage() {
                 : <Skull size={13} className="text-red-400 ml-auto" />}
             </div>
             <MineBoard rows={rows} cols={cols} mines={room.myMines} revealed={room.myRevealed} flagged={room.myFlagged}
-              isHit={room.myHit} interactive={false} cellPx={fPx} />
+              isHit={room.myHit}
+              hitIdx={room.myHit && room.myMines ? room.myRevealed.find(i => room.myMines!.includes(i)) : undefined}
+              interactive={false} cellPx={fPx} />
           </div>
 
           <div>
@@ -440,7 +467,9 @@ export default function GameRoomPage() {
                 : <Trophy size={13} className="text-yellow-400 ml-auto" />}
             </div>
             <MineBoard rows={rows} cols={cols} mines={room.oppMines} revealed={room.oppRevealed} flagged={room.oppFlagged}
-              isHit={room.oppHit} interactive={false} cellPx={fPx} />
+              isHit={room.oppHit}
+              hitIdx={room.oppHit && room.oppMines ? room.oppRevealed.find(i => room.oppMines!.includes(i)) : undefined}
+              interactive={false} cellPx={fPx} />
           </div>
         </div>
 
@@ -491,6 +520,7 @@ export default function GameRoomPage() {
           </span>
         )}
         <span className="text-[var(--text-muted)] text-xs">{DIFF_LABEL[room.difficulty]} · {cols}×{rows}</span>
+        <SpectatorBadge count={room.spectatorCount} />
         <div className="ml-auto flex items-center gap-3">
           {!isSpectator && (
             <span className="flex items-center gap-1.5 text-sm font-display font-semibold text-[var(--text-secondary)]">
@@ -537,7 +567,9 @@ export default function GameRoomPage() {
             </span>
           </div>
           <MineBoard rows={rows} cols={cols} mines={room.myMines} revealed={room.myRevealed} flagged={room.myFlagged}
-            isHit={room.myHit} interactive={!isSpectator && !room.myHit} cellPx={mPx}
+            isHit={room.myHit}
+            hitIdx={room.myHit && room.myMines ? room.myRevealed.find(i => room.myMines!.includes(i)) : undefined}
+            interactive={!isSpectator && !room.myHit} cellPx={mPx}
             onReveal={handleReveal} onFlag={handleFlag} />
         </div>
 

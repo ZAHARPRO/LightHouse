@@ -9,6 +9,7 @@ import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } f
 import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
+import SpectatorBadge from "@/components/SpectatorBadge";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -32,6 +33,7 @@ type RoomData = {
   hostElo: number|null; guestElo: number|null;
   hostEloDelta: number|null; guestEloDelta: number|null;
   chat: ChatMsg[];
+  spectatorCount: number;
 };
 
 function useCellPx() {
@@ -341,6 +343,19 @@ export default function ChessOnlineRoom() {
     return () => clearInterval(t);
   }, [room?.myRole, room?.status, roomId]);
 
+  // Player heartbeat — lets server detect disconnects for untimed rated games
+  useEffect(() => {
+    if (!room || (room.myRole !== "host" && room.myRole !== "guest") || room.status !== "PLAYING") return;
+    const ping = () =>
+      fetch(`/api/chess-rooms/${roomId}/ping`, { method: "POST" })
+        .then(r => r.json())
+        .then((d: { disconnectWin?: boolean }) => { if (d.disconnectWin) fetchRoom(); })
+        .catch(() => {});
+    ping();
+    const t = setInterval(ping, 10_000);
+    return () => clearInterval(t);
+  }, [room?.myRole, room?.status, roomId, fetchRoom]);
+
   const doAction = useCallback(async (path: string, body?: object) => {
     fetchAbortRef.current?.abort();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -489,7 +504,7 @@ export default function ChessOnlineRoom() {
     const myColorName = myColor === "w" ? "white" : "black";
     const iWon = room.winner === myColorName;
     const isDraw = room.winner === "draw";
-    const reasons: Record<string,string> = { checkmate:"Checkmate",stalemate:"Stalemate — draw",timeout:"Time up",resigned:"Resigned" };
+    const reasons: Record<string,string> = { checkmate:"Checkmate",stalemate:"Stalemate — draw",timeout:"Time up",resigned:"Resigned",disconnected:"Opponent disconnected" };
     const state = room.fen ? fromFEN(room.fen) : null;
     const flip = myColor === "b";
 
@@ -624,6 +639,7 @@ export default function ChessOnlineRoom() {
               <CapturedRow color={oppColor as "w"|"b"} captured={oppCaptured} />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <SpectatorBadge count={room.spectatorCount} />
               {!isSpectator && room.guestId && room.guestId !== room.hostId && (
                 <GameReportButton
                   targetId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId}

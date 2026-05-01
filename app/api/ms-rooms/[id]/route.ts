@@ -18,6 +18,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const userId = session?.user?.id ?? null;
   const myRole = userId === room.hostId ? "host" : userId === room.guestId ? "guest" : "spectator";
+
+  const now = Date.now();
+  const spectators: { id: string; at: number }[] = room.spectatorsJson ? JSON.parse(room.spectatorsJson as string) : [];
+  const spectatorCount = spectators.filter(s => now - s.at < 60_000).length;
   const isHost = myRole === "host";
   const isGuest = myRole === "guest";
   const isFinished = room.status === "FINISHED";
@@ -43,8 +47,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     myMines = guestMines; myRevealed = guestRevealed; myFlagged = guestFlagged; myHit = room.guestHit;
     oppMines = isFinished ? hostMines : null; oppRevealed = hostRevealed; oppFlagged = hostFlagged; oppHit = room.hostHit;
   } else {
-    myMines = null; myRevealed = []; myFlagged = []; myHit = false;
-    oppMines = null; oppRevealed = []; oppFlagged = []; oppHit = false;
+    // Spectator: see both boards without mines (mines only revealed on finish)
+    myMines  = isFinished ? hostMines  : null; myRevealed  = hostRevealed;  myFlagged  = hostFlagged;  myHit  = room.hostHit;
+    oppMines = isFinished ? guestMines : null; oppRevealed = guestRevealed; oppFlagged = guestFlagged; oppHit = room.guestHit;
   }
 
   return NextResponse.json({
@@ -79,5 +84,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     hostEloDelta: room.hostEloDelta,
     guestEloDelta: room.guestEloDelta,
     chat: room.chatJson ? JSON.parse(room.chatJson) : [],
+    spectatorCount,
   });
 }

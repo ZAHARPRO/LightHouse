@@ -17,7 +17,14 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rooms = await prisma.minesweeperRoom.findMany({
-    where: { OR: [{ hostId: userId }, { guestId: userId }], status: "FINISHED", guestId: { not: null } },
+    where: {
+      OR: [
+        { hostId: userId, hostHistoryHidden: false },
+        { guestId: userId, guestHistoryHidden: false },
+      ],
+      status: "FINISHED",
+      guestId: { not: null },
+    },
     orderBy: { endedAt: "desc" },
     skip: page * PER_PAGE,
     take: PER_PAGE + 1,
@@ -27,8 +34,8 @@ export async function GET(req: Request) {
       hostId: true, guestId: true,
       hostEloDelta: true, guestEloDelta: true,
       hostEloSnapshot: true, guestEloSnapshot: true,
-      hostMines: true, hostRevealed: true, hostFlagged: true, hostHit: true,
-      guestMines: true, guestRevealed: true, guestFlagged: true, guestHit: true,
+      hostMines: true, hostRevealed: true, hostFlagged: true, hostHit: true, hostMovesJson: true,
+      guestMines: true, guestRevealed: true, guestFlagged: true, guestHit: true, guestMovesJson: true,
       host:  { select: { id: true, name: true, image: true } },
       guest: { select: { id: true, name: true, image: true } },
     },
@@ -61,12 +68,33 @@ export async function GET(req: Request) {
       myRevealed: parse(isHost ? room.hostRevealed : room.guestRevealed),
       myFlagged:  parse(isHost ? room.hostFlagged  : room.guestFlagged),
       myHit:    isHost ? room.hostHit  : room.guestHit,
+      myMoves:  room[isHost ? "hostMovesJson" : "guestMovesJson"] ? JSON.parse(room[isHost ? "hostMovesJson" : "guestMovesJson"] as string) : null,
       oppMines:    parse(isHost ? room.guestMines    : room.hostMines),
       oppRevealed: parse(isHost ? room.guestRevealed : room.hostRevealed),
       oppFlagged:  parse(isHost ? room.guestFlagged  : room.hostFlagged),
       oppHit:   isHost ? room.guestHit : room.hostHit,
+      oppMoves: room[isHost ? "guestMovesJson" : "hostMovesJson"] ? JSON.parse(room[isHost ? "guestMovesJson" : "hostMovesJson"] as string) : null,
     };
   });
 
   return NextResponse.json({ items, hasMore });
+}
+
+export async function DELETE() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await prisma.$transaction([
+    prisma.minesweeperRoom.updateMany({
+      where: { hostId: userId, status: "FINISHED", guestId: { not: null } },
+      data: { hostHistoryHidden: true },
+    }),
+    prisma.minesweeperRoom.updateMany({
+      where: { guestId: userId, status: "FINISHED" },
+      data: { guestHistoryHidden: true },
+    }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

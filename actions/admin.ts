@@ -64,6 +64,30 @@ export async function changeUserTier(userId: string, tier: string) {
   return { ok: true };
 }
 
+/* ── Clear match history for a user ── */
+export async function clearUserMatchHistory(userId: string) {
+  await requireAdmin();
+  await prisma.$transaction([
+    prisma.chessRoom.updateMany({
+      where: { hostId: userId, status: "FINISHED", guestId: { not: null } },
+      data: { hostHistoryHidden: true },
+    }),
+    prisma.chessRoom.updateMany({
+      where: { guestId: userId, status: "FINISHED" },
+      data: { guestHistoryHidden: true },
+    }),
+    prisma.minesweeperRoom.updateMany({
+      where: { hostId: userId, status: "FINISHED", guestId: { not: null } },
+      data: { hostHistoryHidden: true },
+    }),
+    prisma.minesweeperRoom.updateMany({
+      where: { guestId: userId, status: "FINISHED" },
+      data: { guestHistoryHidden: true },
+    }),
+  ]);
+  return { ok: true };
+}
+
 /* ── Delete user ── */
 export async function deleteUser(userId: string) {
   const session = await requireAdmin();

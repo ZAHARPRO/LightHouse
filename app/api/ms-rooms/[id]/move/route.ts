@@ -42,10 +42,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const updateData: Record<string, unknown> = {};
 
+  // Move log helpers
+  type ME = { k: "r" | "f"; i: number; d: number[]; t: number; h?: 1 };
+  const movesKey = isHost ? "hostMovesJson" : "guestMovesJson";
+  const existingMovesRaw = isHost ? (room as Record<string, unknown>).hostMovesJson : (room as Record<string, unknown>).guestMovesJson;
+  const moveLog: ME[] = existingMovesRaw ? JSON.parse(existingMovesRaw as string) : [];
+  const elapsed = room.startedAt ? Date.now() - new Date(room.startedAt).getTime() : 0;
+
   if (type === "flag") {
     if (revealed.has(idx)) return NextResponse.json({ ok: true });
     if (flagged.has(idx)) flagged.delete(idx); else flagged.add(idx);
     updateData[flaggedKey] = JSON.stringify([...flagged]);
+    moveLog.push({ k: "f", i: idx, d: [...flagged], t: elapsed });
+    updateData[movesKey] = JSON.stringify(moveLog);
   } else {
     if (revealed.has(idx) || flagged.has(idx)) return NextResponse.json({ ok: true });
 
@@ -68,10 +77,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       updateData.winReason = "exploded";
       updateData.endedAt = new Date();
       updateData.chatJson = null;
+      moveLog.push({ k: "r", i: idx, d: [idx], t: elapsed, h: 1 });
+      updateData[movesKey] = JSON.stringify(moveLog);
     } else {
+      const prevRevealed = new Set(revealed);
       const neighbors = computeNeighbors(rows, cols, mineSet);
       revealed = floodReveal(rows, cols, mineSet, neighbors, revealed, idx);
       updateData[revealedKey] = JSON.stringify([...revealed]);
+      const newCells = [...revealed].filter(x => !prevRevealed.has(x));
+      moveLog.push({ k: "r", i: idx, d: newCells, t: elapsed });
+      updateData[movesKey] = JSON.stringify(moveLog);
 
       if (checkWin(rows, cols, mineCount, revealed)) {
         updateData.status = "FINISHED";

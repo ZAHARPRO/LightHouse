@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
+import MatchHistoryButton from "@/components/MatchHistory";
 import { getTranslations } from "next-intl/server";
 import BanBanner from "@/components/BanBanner";
 import AvatarUpload from "@/components/AvatarUpload";
@@ -102,6 +103,7 @@ export default async function ProfilePage() {
                 <ExternalLink size={13} />
                 {t("publicProfile")}
               </Link>
+              <MatchHistoryButton userId={user.id} />
               <ProfilePlaylists
                 initialFavSong={user.favoriteSong ? (() => { try { return JSON.parse(user.favoriteSong!); } catch { return null; } })() : null}
               />

@@ -114,6 +114,10 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const lastSyncRef         = useRef<{ playing: boolean | null; pos: number }>({ playing: null, pos: 0 });
 
   const isHost = activeLobby?.host.id === session?.user?.id;
+  // Ref so applyLobbySync (useCallback with [] deps) always sees fresh isHost value
+  const isHostRef = useRef(false);
+  isHostRef.current = isHost;
+
   const {
     track, isPlaying, positionMs, playerReady,
     pause, resume, seek, setVolume: setMusicVol, prev, next,
@@ -160,8 +164,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     // Ignore SSE echoes that arrive shortly after we triggered the action ourselves
     if (!fromLocalAction && Date.now() - lastLocalActionRef.current < 800) return;
 
+    // Host is the source of truth — SSE echoes must never override its play/pause state
+    const hostReceivingSSE = isHostRef.current && !fromLocalAction;
+
     if (!d.trackUri) {
-      if (syncedTrackRef.current) {
+      if (syncedTrackRef.current && !hostReceivingSSE) {
         syncedTrackRef.current = null;
         prevIsPlayingRef.current = null;
         music.pause();
@@ -176,12 +183,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (d.trackUri !== syncedTrackRef.current) {
       syncedTrackRef.current = d.trackUri;
       prevIsPlayingRef.current = d.isPlaying ?? null;
-      music.play(
-        { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
-        serverPos()
-      );
-    } else {
-      // Use real current playback state, not stale ref, to avoid redundant calls
+      // Host: only sync the track when it genuinely changed (e.g. lobby restore on mount)
+      // but skip if it's an SSE echo — the host already loaded the track locally
+      if (!hostReceivingSSE) {
+        music.play(
+          { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
+          serverPos()
+        );
+      }
+    } else if (!hostReceivingSSE) {
+      // Guests: sync play/pause state and drift-correct position
       const locallyPlaying = music.playerRef.current
         ? (music.playerRef.current as { getPlayerState?: () => number }).getPlayerState?.() === 1
         : prevIsPlayingRef.current === true;
@@ -196,7 +207,6 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         if (Math.abs(serverPos() - localPos) > 1500) music.seek(serverPos());
         music.resume();
       } else if (d.isPlaying) {
-        // Soft drift correction during normal playback
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
         const drift = Math.abs(serverPos() - localPos);
@@ -575,6 +585,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               <div className="flex items-center gap-0.5 shrink-0">
                 <button onClick={() => playTrack(r)} className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.58rem] font-bold flex items-center gap-0.5 hover:bg-red-500/25">
                   <Play size={8} />Play
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); music.playNext(r); setSearchOpen(false); setSearchQ(""); }}
+                  title="Play next (add to queue)"
+                  className="px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-muted)] text-[0.58rem] font-bold flex items-center gap-0.5 hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors">
+                  <Plus size={8} />Queue
                 </button>
                 <FavBtn item={r} size={10} />
                 <AddPlBtn item={r} sz={10} />

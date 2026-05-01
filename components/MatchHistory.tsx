@@ -21,6 +21,8 @@ type ChessGame = {
   movesSAN: string[]; totalMoves: number;
 };
 
+type MoveEntry = { k: "r" | "f"; i: number; d: number[]; t: number; h?: 1 };
+
 type MineGame = {
   id: string; rated: boolean; difficulty: string;
   rows: number; cols: number; mineCount: number;
@@ -29,7 +31,9 @@ type MineGame = {
   myEloDelta: number | null; myEloSnapshot: number | null;
   oppName: string | null; oppImage: string | null;
   myMines: number[]; myRevealed: number[]; myFlagged: number[]; myHit: boolean;
+  myMoves: MoveEntry[] | null;
   oppMines: number[]; oppRevealed: number[]; oppFlagged: number[]; oppHit: boolean;
+  oppMoves: MoveEntry[] | null;
 };
 
 // ─────────────────────────────────────────────────────────── chess constants
@@ -416,12 +420,75 @@ function MineBoardView({ mines, revealed, flagged, isHit, rows, cols, label }:
   );
 }
 
-function MineFinalModal({ game, onClose }: { game: MineGame; onClose: () => void }) {
+function MineReplayModal({ game, onClose }: { game: MineGame; onClose: () => void }) {
+  type Step = MoveEntry & { player: 0 | 1 };
+
+  const steps = useMemo<Step[]>(() => {
+    const my  = (game.myMoves  ?? []).map(m => ({ ...m, player: 0 as const }));
+    const opp = (game.oppMoves ?? []).map(m => ({ ...m, player: 1 as const }));
+    return [...my, ...opp].sort((a, b) => a.t - b.t);
+  }, [game.myMoves, game.oppMoves]);
+
+  const hasReplay = steps.length > 0;
+  const [stepIdx, setStepIdx] = useState(hasReplay ? steps.length - 1 : 0);
+  const [autoplay, setAutoplay] = useState(false);
+
+  const go = useCallback((n: number) => {
+    setAutoplay(false);
+    setStepIdx(Math.max(0, Math.min(steps.length - 1, n)));
+  }, [steps.length]);
+
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (!autoplay || !hasReplay) return;
+    const t = setInterval(() => {
+      setStepIdx(i => {
+        if (i >= steps.length - 1) { setAutoplay(false); return i; }
+        return i + 1;
+      });
+    }, 250);
+    return () => clearInterval(t);
+  }, [autoplay, hasReplay, steps.length]);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  go(stepIdx - 1);
+      if (e.key === "ArrowRight") go(stepIdx + 1);
+      if (e.key === " " && hasReplay) { e.preventDefault(); setAutoplay(a => !a); }
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [onClose]);
+  }, [stepIdx, go, onClose, hasReplay]);
+
+  const { myBoardState, oppBoardState } = useMemo(() => {
+    if (!hasReplay) return {
+      myBoardState:  { revealed: game.myRevealed,  flagged: game.myFlagged,  isHit: game.myHit },
+      oppBoardState: { revealed: game.oppRevealed, flagged: game.oppFlagged, isHit: game.oppHit },
+    };
+    const myRev  = new Set<number>();
+    const oppRev = new Set<number>();
+    let myFlag:  number[] = [], oppFlag:  number[] = [];
+    let myHit = false, oppHit = false;
+    for (let s = 0; s <= stepIdx; s++) {
+      const step = steps[s];
+      if (step.player === 0) {
+        if (step.k === "r") { step.d.forEach(x => myRev.add(x)); if (step.h) { myHit = true; game.myMines.forEach(m => myRev.add(m)); } }
+        else myFlag = step.d;
+      } else {
+        if (step.k === "r") { step.d.forEach(x => oppRev.add(x)); if (step.h) { oppHit = true; game.oppMines.forEach(m => oppRev.add(m)); } }
+        else oppFlag = step.d;
+      }
+    }
+    return {
+      myBoardState:  { revealed: [...myRev],  flagged: myFlag,  isHit: myHit },
+      oppBoardState: { revealed: [...oppRev], flagged: oppFlag, isHit: oppHit },
+    };
+  }, [hasReplay, stepIdx, steps, game]);
+
+  const currentStep = hasReplay ? steps[stepIdx] : null;
+  const stepLabel = currentStep
+    ? `Step ${stepIdx + 1} / ${steps.length} · ${currentStep.player === 0 ? "Your move" : `${game.oppName ?? "Opp"}'s move`}`
+    : null;
 
   return createPortal(
     <div className="fixed inset-0 z-[960] flex flex-col sm:items-center sm:justify-center sm:p-4"
@@ -453,13 +520,44 @@ function MineFinalModal({ game, onClose }: { game: MineGame; onClose: () => void
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
             <MineBoardView
-              mines={game.myMines} revealed={game.myRevealed} flagged={game.myFlagged}
-              isHit={game.myHit} rows={game.rows} cols={game.cols} label="Your board" />
+              mines={game.myMines} revealed={myBoardState.revealed} flagged={myBoardState.flagged}
+              isHit={myBoardState.isHit} rows={game.rows} cols={game.cols} label="Your board" />
             <MineBoardView
-              mines={game.oppMines} revealed={game.oppRevealed} flagged={game.oppFlagged}
-              isHit={game.oppHit} rows={game.rows} cols={game.cols}
+              mines={game.oppMines} revealed={oppBoardState.revealed} flagged={oppBoardState.flagged}
+              isHit={oppBoardState.isHit} rows={game.rows} cols={game.cols}
               label={`${game.oppName ?? "Opponent"}'s board`} />
           </div>
+
+          {hasReplay && (
+            <div className="mt-5 flex flex-col items-center gap-3">
+              {stepLabel && <p className="text-[0.65rem] text-[var(--text-muted)]">{stepLabel}</p>}
+              <input type="range" min={0} max={steps.length - 1} value={stepIdx}
+                onChange={e => go(+e.target.value)}
+                className="w-full max-w-sm accent-cyan-500" />
+              <div className="flex items-center gap-1">
+                <button onClick={() => go(0)} title="First"
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronsLeft size={16}/>
+                </button>
+                <button onClick={() => go(stepIdx - 1)} title="Prev"
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronLeft size={16}/>
+                </button>
+                <button onClick={() => setAutoplay(a => !a)} title={autoplay ? "Pause" : "Play"}
+                  className="p-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-colors touch-manipulation">
+                  {autoplay ? <Pause size={16}/> : <Play size={16}/>}
+                </button>
+                <button onClick={() => go(stepIdx + 1)} title="Next"
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronRight size={16}/>
+                </button>
+                <button onClick={() => go(steps.length - 1)} title="Last"
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronsRight size={16}/>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>,
@@ -556,7 +654,7 @@ function MineGameCard({ game, onView }: { game: MineGame; onView: () => void }) 
         <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
         <button onClick={onView}
           className="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 text-[0.62rem] font-bold hover:bg-cyan-500/20 active:bg-cyan-500/25 transition-colors touch-manipulation whitespace-nowrap">
-          View
+          Replay
         </button>
       </div>
     </div>
@@ -572,13 +670,17 @@ function ChessHistoryPanel({ userId }: { userId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [replay, setReplay]   = useState<ChessGame | null>(null);
 
-  useEffect(() => {
+  function load(p: number) {
     setLoading(true);
-    fetch(`/api/chess-rooms/history?userId=${userId}&page=${page}`)
+    fetch(`/api/chess-rooms/history?userId=${userId}&page=${p}`)
       .then(r => r.ok ? r.json() : { items: [], hasMore: false })
-      .then(d => { setGames(p => page===0 ? d.items : [...p,...d.items]); setHasMore(d.hasMore); })
+      .then(d => { setGames(prev => p===0 ? d.items : [...prev,...d.items]); setHasMore(d.hasMore); })
       .finally(() => setLoading(false));
-  }, [userId, page]);
+  }
+
+  useEffect(() => { load(0); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (page > 0) load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading && page===0) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
   if (!loading && games.length===0) return (
@@ -610,13 +712,17 @@ function MineHistoryPanel({ userId }: { userId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [view, setView]       = useState<MineGame | null>(null);
 
-  useEffect(() => {
+  function load(p: number) {
     setLoading(true);
-    fetch(`/api/ms-rooms/history?userId=${userId}&page=${page}`)
+    fetch(`/api/ms-rooms/history?userId=${userId}&page=${p}`)
       .then(r => r.ok ? r.json() : { items: [], hasMore: false })
-      .then(d => { setGames(p => page===0 ? d.items : [...p,...d.items]); setHasMore(d.hasMore); })
+      .then(d => { setGames(prev => p===0 ? d.items : [...prev,...d.items]); setHasMore(d.hasMore); })
       .finally(() => setLoading(false));
-  }, [userId, page]);
+  }
+
+  useEffect(() => { load(0); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (page > 0) load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading && page===0) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
   if (!loading && games.length===0) return (
@@ -636,7 +742,7 @@ function MineHistoryPanel({ userId }: { userId: string }) {
           {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
         </button>
       )}
-      {view && <MineFinalModal game={view} onClose={() => setView(null)} />}
+      {view && <MineReplayModal game={view} onClose={() => setView(null)} />}
     </>
   );
 }
@@ -652,8 +758,7 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
 
-  return (
-    // Full-screen on mobile, centered card on sm+
+  return createPortal(
     <div className="fixed inset-0 z-[955] sm:flex sm:items-center sm:justify-center sm:p-4"
       style={{ background: "rgba(0,0,0,0.75)" }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -690,7 +795,8 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
             : <MineHistoryPanel  userId={userId} />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

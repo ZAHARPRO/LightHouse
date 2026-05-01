@@ -480,10 +480,15 @@ model MinesweeperRoom {
   hostFlagged   String?  @db.Text
   guestFlagged  String?  @db.Text
 
+  hostMovesJson  String?  @db.Text // JSON: MoveEntry[]
+  guestMovesJson String?  @db.Text // JSON: MoveEntry[]
+
   hostHit    Boolean      @default(false)
   guestHit   Boolean      @default(false)
   winner     String?
   winReason  String?
+  hostHistoryHidden  Boolean @default(false)
+  guestHistoryHidden Boolean @default(false)
   chatJson   String?      @db.Text // JSON: ChatMsg[]
   spectatorsJson String?  @db.Text // JSON: { id: string; at: number }[]
 
@@ -531,6 +536,8 @@ model ChessRoom {
 
   winner       String?         // "white" | "black" | "draw"
   winReason    String?         // "checkmate" | "stalemate" | "timeout" | "resigned"
+  hostHistoryHidden  Boolean @default(false)
+  guestHistoryHidden Boolean @default(false)
   chatJson     String?         @db.Text // JSON: ChatMsg[]
   spectatorsJson String?       @db.Text // JSON: { id: string; at: number }[]
 

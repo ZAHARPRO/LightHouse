@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Search, Shield, Trash2, ChevronDown } from "lucide-react";
-import { getAdminUsers, changeUserRole, changeUserTier, deleteUser, toggleBanUser  } from "@/actions/admin";
+import { Search, Shield, Trash2, ChevronDown, History } from "lucide-react";
+import { getAdminUsers, changeUserRole, changeUserTier, deleteUser, toggleBanUser, clearUserMatchHistory } from "@/actions/admin";
 import ActivityPing from "@/components/ActivityPing";
 
 type User = {
@@ -55,8 +55,9 @@ export default function AdminUsersPage() {
   const [users, setUsers]   = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [pending, start]    = useTransition();
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [banning, setBanning] = useState<string | null>(null);
+  const [deleting, setDeleting]     = useState<string | null>(null);
+  const [banning, setBanning]       = useState<string | null>(null);
+  const [clearingHist, setClearingHist] = useState<string | null>(null);
 
   useEffect(() => {
     start(async () => {
@@ -85,6 +86,13 @@ export default function AdminUsersPage() {
     await deleteUser(userId);
     setUsers((p) => p.filter((u) => u.id !== userId));
     setDeleting(null);
+  }
+
+  async function handleClearHistory(userId: string, name: string | null) {
+    if (!confirm(`Clear all match history for "${name ?? userId}"?`)) return;
+    setClearingHist(userId);
+    await clearUserMatchHistory(userId);
+    setClearingHist(null);
   }
 
   async function handleBan(userId: string, isBanned: boolean) {
@@ -133,7 +141,7 @@ export default function AdminUsersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-                {["User", "Role", "Tier", "Points", "Videos", "Badges",  "Delete", "Ban"].map((h) => (
+                {["User", "Role", "Tier", "Points", "Videos", "Badges", "History", "Delete", "Ban"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-[0.75rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-[0.05em]">
                     {h}
                   </th>
@@ -166,6 +174,16 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 font-display font-bold text-[var(--text-primary)]">{u.points}</td>
                   <td className="px-4 py-3 text-[var(--text-muted)]">{u._count.videos}</td>
                   <td className="px-4 py-3 text-[var(--text-muted)]">{u._count.rewards}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleClearHistory(u.id, u.name)}
+                      disabled={clearingHist === u.id || pending}
+                      title="Clear match history"
+                      className="p-1.5 rounded-lg border-none bg-transparent text-[var(--text-muted)] hover:text-orange-400 hover:bg-orange-500/10 transition-colors cursor-pointer disabled:opacity-40"
+                    >
+                      <History size={14} />
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => handleDelete(u.id, u.name)}

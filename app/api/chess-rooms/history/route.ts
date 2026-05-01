@@ -17,7 +17,14 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rooms = await prisma.chessRoom.findMany({
-    where: { OR: [{ hostId: userId }, { guestId: userId }], status: "FINISHED", guestId: { not: null } },
+    where: {
+      OR: [
+        { hostId: userId, hostHistoryHidden: false },
+        { guestId: userId, guestHistoryHidden: false },
+      ],
+      status: "FINISHED",
+      guestId: { not: null },
+    },
     orderBy: { endedAt: "desc" },
     skip: page * PER_PAGE,
     take: PER_PAGE + 1,
@@ -58,4 +65,23 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({ items, hasMore });
+}
+
+export async function DELETE() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await prisma.$transaction([
+    prisma.chessRoom.updateMany({
+      where: { hostId: userId, status: "FINISHED", guestId: { not: null } },
+      data: { hostHistoryHidden: true },
+    }),
+    prisma.chessRoom.updateMany({
+      where: { guestId: userId, status: "FINISHED" },
+      data: { guestHistoryHidden: true },
+    }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

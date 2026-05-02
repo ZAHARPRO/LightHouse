@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, CheckCircle2, AlertCircle, Music2, Trash2, Play, RotateCcw } from "lucide-react";
 import { ALL_SOUND_KEYS, SOUND_META, type SoundKey } from "@/lib/gameSounds";
 
@@ -28,6 +28,7 @@ const DEFAULT_SLOTS = (): Record<SoundKey, SlotState> =>
 export default function AdminSoundsPage() {
   const [slots, setSlots] = useState<Record<SoundKey, SlotState>>(DEFAULT_SLOTS());
   const [loading, setLoading] = useState(true);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
 
   function setSlot(key: SoundKey, patch: Partial<SlotState>) {
     setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
@@ -102,7 +103,12 @@ export default function AdminSoundsPage() {
   function previewSound(key: SoundKey) {
     const url = slots[key].url;
     if (!url) return;
-    try { new Audio(url).play().catch(() => {}); } catch {}
+    try {
+      if (previewRef.current) { previewRef.current.pause(); previewRef.current.currentTime = 0; }
+      const audio = new Audio(url);
+      previewRef.current = audio;
+      audio.play().catch(() => {});
+    } catch {}
   }
 
   return (

@@ -10,6 +10,8 @@ import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import SpectatorBadge from "@/components/SpectatorBadge";
+import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
+import { preloadSounds, playSound } from "@/lib/gameSounds";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -314,6 +316,10 @@ export default function ChessOnlineRoom() {
   const [legalDots, setLegalDots] = useState<[number,number][]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const fetchAbortRef = useRef<AbortController|null>(null);
+  const connFailsRef = useRef(0);
+  const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
+  const prevRoomRef   = useRef<RoomData|null>(null);
+  const timeWarnedRef = useRef(false);
 
   const fetchRoom = useCallback(async () => {
     const ctrl = new AbortController();
@@ -321,11 +327,16 @@ export default function ChessOnlineRoom() {
     try {
       const res = await fetch(`/api/chess-rooms/${roomId}`, { signal: ctrl.signal });
       if (res.status === 404) { setError("Room not found"); return; }
-      if (!res.ok) return; // transient server error — skip this poll, don't kick
-      setRoom(await res.json());
+      if (!res.ok) { connFailsRef.current++; } else {
+        connFailsRef.current = 0;
+        setRoom(await res.json());
+      }
     } catch (e) {
-      if ((e as Error).name !== "AbortError") return; // network glitch — skip poll
+      if ((e as Error).name !== "AbortError") connFailsRef.current++;
+      else return;
     }
+    const f = connFailsRef.current;
+    setConnStatus(f === 0 ? "ok" : f <= 5 ? "slow" : "lost");
   }, [roomId]);
 
   useEffect(() => {
@@ -333,6 +344,50 @@ export default function ChessOnlineRoom() {
     pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
+
+  // Preload sounds once
+  useEffect(() => { preloadSounds(); }, []);
+
+  // Sound effects — detect state changes via previous room snapshot
+  useEffect(() => {
+    if (!room) return;
+    const prev = prevRoomRef.current;
+    if (prev) {
+      // Match started
+      if (prev.status === "WAITING" && room.status === "PLAYING")
+        playSound("match_start");
+
+      // Guest became ready in lobby
+      if (prev.status === "WAITING" && !prev.guestReady && room.guestReady)
+        playSound("player_ready");
+
+      // Opponent moved (movesSAN grew) — it's now my turn
+      if (room.status === "PLAYING" && room.fen &&
+          room.movesSAN.length > prev.movesSAN.length) {
+        const myColor = room.myRole === "host" ? room.hostColor : (room.hostColor === "w" ? "b" : "w");
+        const st = fromFEN(room.fen);
+        if (st.turn === myColor) {
+          playSound("opponent_move");
+          if (isInCheck(st, myColor as "w" | "b")) playSound("check");
+        }
+      }
+
+      // Game over by checkmate
+      if (prev.status !== "FINISHED" && room.status === "FINISHED" && room.winReason === "checkmate")
+        playSound("checkmate");
+
+      // Time warning — once when my clock drops ≤ 60 s
+      if (room.status === "PLAYING" && room.timeControl !== "none" && !timeWarnedRef.current) {
+        const myColor = room.myRole === "host" ? room.hostColor : (room.hostColor === "w" ? "b" : "w");
+        const myMs = myColor === "w" ? room.whiteTimeMs : room.blackTimeMs;
+        if (myMs !== null && myMs > 0 && myMs <= 60_000) {
+          playSound("time_warning");
+          timeWarnedRef.current = true;
+        }
+      }
+    }
+    prevRoomRef.current = room;
+  }, [room]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Spectator heartbeat
   useEffect(() => {
@@ -396,6 +451,7 @@ export default function ChessOnlineRoom() {
       if (move) {
         setSelected(null); setLegalDots([]);
         applyOptimistic([sr, sc], [r, c]);
+        playSound("piece_move");
         doAction("move", { from: [sr,sc], to: [r,c], promotion: "Q" });
         return;
       }
@@ -418,6 +474,7 @@ export default function ChessOnlineRoom() {
     if (!legal.find(m => m.to[0]===to[0] && m.to[1]===to[1])) return;
     setSelected(null); setLegalDots([]);
     applyOptimistic(from, to);
+    playSound("piece_move");
     doAction("move", { from, to, promotion: "Q" });
   }
 
@@ -639,6 +696,7 @@ export default function ChessOnlineRoom() {
               <CapturedRow color={oppColor as "w"|"b"} captured={oppCaptured} />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <ConnectionBadge status={connStatus} />
               <SpectatorBadge count={room.spectatorCount} />
               {!isSpectator && room.guestId && room.guestId !== room.hostId && (
                 <GameReportButton

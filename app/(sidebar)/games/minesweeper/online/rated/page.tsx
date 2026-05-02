@@ -8,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getRank } from "@/lib/elo";
 import MatchHistoryButton from "@/components/MatchHistory";
+import { preloadSounds, playSound } from "@/lib/gameSounds";
 
 type RoomItem = {
   id: string;
@@ -65,6 +66,7 @@ export default function RatedMinesweeperLobby() {
   }, []);
 
   useEffect(() => () => stopTimers(), []);
+  useEffect(() => { preloadSounds(); }, []);
 
   async function startSearch() {
     setStarting(true);
@@ -78,6 +80,7 @@ export default function RatedMinesweeperLobby() {
       const { roomId, matched } = await res.json() as { roomId: string; matched: boolean };
 
       if (matched) {
+        playSound("opponent_found");
         router.push(`/games/minesweeper/online/${roomId}`);
         return;
       }
@@ -93,6 +96,7 @@ export default function RatedMinesweeperLobby() {
         const room = await r.json();
         if (room.guestId) {
           stopTimers();
+          playSound("opponent_found");
           router.push(`/games/minesweeper/online/${roomId}`);
         }
       }, 1500);

@@ -27,10 +27,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { title, fen, solution, difficulty, rating } = await req.json() as {
-    title: string; fen: string; solution: string[]; difficulty: string; rating?: number;
+    title: string; fen: string; solution?: string[]; difficulty: string; rating?: number;
   };
 
-  if (!title?.trim() || !fen?.trim() || !solution?.length)
+  if (!title?.trim() || !fen?.trim())
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
   try {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       data: {
         title: title.trim(),
         fen: fen.trim(),
-        solution: JSON.stringify(solution),
+        solution: solution?.length ? JSON.stringify(solution) : null,
         difficulty,
         rating: typeof rating === "number" ? Math.max(800, Math.min(2200, rating)) : 1200,
       },
@@ -56,10 +56,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id, title, fen, solution, difficulty, rating } = await req.json() as {
-    id: string; title: string; fen: string; solution: string[]; difficulty: string; rating?: number;
+    id: string; title: string; fen: string; solution?: string[]; difficulty: string; rating?: number;
   };
 
-  if (!id || !title?.trim() || !fen?.trim() || !solution?.length)
+  if (!id || !title?.trim() || !fen?.trim())
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
   try {
@@ -68,7 +68,7 @@ export async function PATCH(req: Request) {
       data: {
         title: title.trim(),
         fen: fen.trim(),
-        solution: JSON.stringify(solution),
+        solution: solution?.length ? JSON.stringify(solution) : null,
         difficulty,
         rating: typeof rating === "number" ? Math.max(800, Math.min(2200, rating)) : 1200,
       },

@@ -78,15 +78,6 @@ const DIFF_COLOR: Record<string, string> = {
   mate2: "text-orange-400 bg-orange-500/10 border-orange-500/20",
 };
 
-// ── UCI helpers ───────────────────────────────────────────────────────────────
-function parseMovesInput(raw: string): string[] {
-  return raw.trim().split(/\s+/).filter(Boolean).map((m) => m.toLowerCase());
-}
-
-function isValidUCI(m: string): boolean {
-  return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m);
-}
-
 // ── Edit Modal ────────────────────────────────────────────────────────────────
 function EditModal({
   puzzle,
@@ -101,25 +92,20 @@ function EditModal({
   const [fen, setFen] = useState(puzzle.fen);
   const [difficulty, setDifficulty] = useState<"mate1" | "mate2">(puzzle.difficulty as "mate1" | "mate2");
   const [rating, setRating] = useState(String(puzzle.rating ?? 1200));
-  const [movesRaw, setMovesRaw] = useState(() => {
-    try { return (JSON.parse(puzzle.solution) as string[]).join(" "); } catch { return ""; }
-  });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const parsedMoves = movesRaw.trim().split(/\s+/).filter(Boolean).map(m => m.toLowerCase());
-  const movesValid = parsedMoves.length > 0 && parsedMoves.every(m => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m));
   const fenValid = (() => { try { fromFEN(fen); return true; } catch { return false; } })();
   const ratingNum = parseInt(rating);
   const ratingValid = !isNaN(ratingNum) && ratingNum >= 800 && ratingNum <= 2200;
 
   async function save() {
-    if (!title.trim() || !fenValid || !movesValid || !ratingValid) return;
+    if (!title.trim() || !fenValid || !ratingValid) return;
     setSaving(true); setMsg(null);
     const res = await fetch("/api/admin/puzzles", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: puzzle.id, title: title.trim(), fen: fen.trim(), solution: parsedMoves, difficulty, rating: ratingNum }),
+      body: JSON.stringify({ id: puzzle.id, title: title.trim(), fen: fen.trim(), difficulty, rating: ratingNum }),
     });
     setSaving(false);
     if (res.ok) { setMsg({ ok: true, text: "Saved!" }); setTimeout(() => { onSaved(); onClose(); }, 600); }
@@ -175,14 +161,6 @@ function EditModal({
 
         {fenValid && <div className="mb-4 mt-2"><MiniBoard fen={fen} /></div>}
 
-        {/* Solution */}
-        <label className="block text-xs font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
-          Solution (UCI, space-separated)
-          {movesRaw && <span className={`ml-2 text-[0.65rem] ${movesValid ? "text-green-400" : "text-red-400"}`}>{movesValid ? `✓ ${parsedMoves.length} move${parsedMoves.length !== 1 ? "s" : ""}` : "✗ Invalid"}</span>}
-        </label>
-        <input value={movesRaw} onChange={e => setMovesRaw(e.target.value)}
-          className="w-full mb-4 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm font-mono focus:outline-none focus:border-violet-500/50" />
-
         {msg && (
           <div className={`flex items-center gap-2 text-sm mb-4 ${msg.ok ? "text-green-400" : "text-red-400"}`}>
             {msg.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />} {msg.text}
@@ -190,7 +168,7 @@ function EditModal({
         )}
 
         <div className="flex gap-2">
-          <button onClick={save} disabled={saving || !title.trim() || !fenValid || !movesValid || !ratingValid}
+          <button onClick={save} disabled={saving || !title.trim() || !fenValid || !ratingValid}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-500 text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-40 transition-opacity">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save
           </button>
@@ -239,7 +217,6 @@ export default function AdminPuzzlesPage() {
   /* Create form */
   const [title, setTitle] = useState("");
   const [fen, setFen] = useState("");
-  const [movesRaw, setMovesRaw] = useState("");
   const [difficulty, setDifficulty] = useState<"mate1" | "mate2">("mate1");
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -355,23 +332,21 @@ VALIDATION:
 
   useEffect(() => { load(); }, [load]);
 
-  const parsedMoves = parseMovesInput(movesRaw);
-  const movesValid = parsedMoves.length > 0 && parsedMoves.every(isValidUCI);
   const fenValid = (() => { try { fromFEN(fen); return true; } catch { return false; } })();
 
   async function handleCreate() {
-    if (!title.trim() || !fenValid || !movesValid) return;
+    if (!title.trim() || !fenValid) return;
     setCreating(true);
     setCreateMsg(null);
     const res = await fetch("/api/admin/puzzles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim(), fen: fen.trim(), solution: parsedMoves, difficulty }),
+      body: JSON.stringify({ title: title.trim(), fen: fen.trim(), difficulty }),
     });
     setCreating(false);
     if (res.ok) {
       setCreateMsg({ ok: true, text: "Puzzle created!" });
-      setTitle(""); setFen(""); setMovesRaw("");
+      setTitle(""); setFen("");
       load();
     } else {
       const d = await res.json();
@@ -528,57 +503,9 @@ VALIDATION:
             </div>
           )}
 
-          {/* Solution moves */}
-          <label className="block text-xs font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
-            Solution moves (UCI, space-separated)
-            {movesRaw && (
-              <span className={`ml-2 text-[0.65rem] ${movesValid ? "text-green-400" : "text-red-400"}`}>
-                {movesValid ? `✓ ${parsedMoves.length} move${parsedMoves.length !== 1 ? "s" : ""}` : "✗ Invalid"}
-              </span>
-            )}
-          </label>
-          <input
-            value={movesRaw}
-            onChange={(e) => setMovesRaw(e.target.value)}
-            placeholder={difficulty === "mate1" ? "e.g.  d1h5" : "e.g.  d1h5 g8h8 h5f7"}
-            className="w-full mb-1 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm font-mono placeholder:text-[var(--text-muted)] focus:outline-none focus:border-violet-500/50"
-          />
-          <div className="mb-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg p-3 flex flex-col gap-1.5">
-            <p className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">UCI format</p>
-            <span className="text-[0.6rem] font-mono"><span className="text-violet-300">e2e4</span><span className="text-[var(--text-muted)]"> = from e2 to e4</span></span>
-            <span className="text-[0.6rem] font-mono"><span className="text-violet-300">e7e8q</span><span className="text-[var(--text-muted)]"> = pawn promotes to Queen</span></span>
-            <span className="text-[0.6rem] font-mono"><span className="text-violet-300">q r b n</span><span className="text-[var(--text-muted)]"> = promotion pieces (Queen/Rook/Bishop/Knight)</span></span>
-            <div className="border-t border-[var(--border-subtle)] pt-1.5 mt-0.5">
-              {difficulty === "mate1"
-                ? <span className="text-[0.6rem] text-amber-400 font-mono">mate1: <span className="text-[var(--text-muted)]">1 move — e.g. </span>d1h5</span>
-                : <span className="text-[0.6rem] text-amber-400 font-mono">mate2: <span className="text-[var(--text-muted)]">3 moves — e.g. </span>d1h5 g8h8 h5f7<span className="text-[var(--text-muted)]"> (you · opp · you)</span></span>
-              }
-            </div>
-          </div>
-
-          {/* Moves list */}
-          {parsedMoves.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-4">
-              {parsedMoves.map((m, i) => {
-                const isPlayer = i % 2 === 0;
-                const valid = isValidUCI(m);
-                return (
-                  <span
-                    key={i}
-                    className={[
-                      "px-2 py-0.5 rounded text-xs font-mono font-bold border",
-                      !valid ? "bg-red-500/15 border-red-500/30 text-red-400"
-                        : isPlayer ? "bg-violet-500/15 border-violet-500/30 text-violet-300"
-                        : "bg-slate-500/15 border-slate-500/30 text-slate-400",
-                    ].join(" ")}
-                  >
-                    {i + 1}. {m} {isPlayer ? "(you)" : "(opp)"}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
+          <p className="text-[0.7rem] text-green-400/80 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 mb-4">
+            ✓ No solution needed — the engine validates moves dynamically at play time.
+          </p>
           {/* Feedback */}
           {createMsg && (
             <div className={`flex items-center gap-2 text-sm mb-4 ${createMsg.ok ? "text-green-400" : "text-red-400"}`}>
@@ -589,7 +516,7 @@ VALIDATION:
 
           <button
             onClick={handleCreate}
-            disabled={creating || !title.trim() || !fenValid || !movesValid}
+            disabled={creating || !title.trim() || !fenValid}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-500 text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
             {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}

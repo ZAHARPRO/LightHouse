@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Lock, Loader2, Trophy, Puzzle } from "lucide-react";
+import { CheckCircle2, Lock, Loader2, Trophy, Puzzle, Lightbulb } from "lucide-react";
 
 type PuzzleItem = {
   id: string;
@@ -25,15 +25,20 @@ const DIFF_COLOR: Record<string, string> = {
 type Filter = "all" | "mate1" | "mate2";
 
 export default function PuzzleListPage() {
-  const [puzzles, setPuzzles] = useState<PuzzleItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [puzzles, setPuzzles]     = useState<PuzzleItem[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState<Filter>("all");
+  const [hintPoints, setHintPoints] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/puzzles")
       .then((r) => r.json())
       .then((data) => { setPuzzles(data); setLoading(false); })
       .catch(() => setLoading(false));
+    fetch("/api/puzzles/hint-points")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { hintPoints: number } | null) => { if (d) setHintPoints(d.hintPoints); })
+      .catch(() => {});
   }, []);
 
   const visible = filter === "all" ? puzzles : puzzles.filter((p) => p.difficulty === filter);
@@ -51,6 +56,11 @@ export default function PuzzleListPage() {
       <div className="flex items-center gap-3 mb-1">
         <Puzzle size={22} className="text-violet-400" />
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">Chess Puzzles</h1>
+        {hintPoints !== null && (
+          <span className="ml-auto flex items-center gap-1.5 text-xs font-display font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+            <Lightbulb size={12} /> {hintPoints} hints
+          </span>
+        )}
       </div>
       <p className="text-[var(--text-muted)] mb-2">Find checkmate in 1 or 2 moves</p>
 

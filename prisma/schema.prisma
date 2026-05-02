@@ -31,6 +31,8 @@ model User {
   isBanned        Boolean   @default(false)
   banReason       String?
   bannedAt        DateTime?
+  hintPoints      Int       @default(5)
+  lastAdWatchedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -380,6 +382,7 @@ enum RewardType {
   MINE_GOLD
   MINE_PLATINUM
   MINE_DIAMOND
+  PUZZLE_MASTER
 }
 
 enum ContactStatus {
@@ -597,13 +600,31 @@ model ChessPuzzle {
   id         String   @id @default(cuid())
   title      String
   fen        String   @db.Text
-  solution   String   @db.Text  // JSON: string[] of UCI moves (e.g. ["e2e4","e7e5","d1h5"])
+  solution   String?  @db.Text
   difficulty String   // "mate1" | "mate2"
   rating     Int      @default(1200)
   solveCount Int      @default(0)
   createdAt  DateTime @default(now())
 
   solves     UserPuzzleSolve[]
+}
+
+model AdVideo {
+  id        String   @id @default(cuid())
+  title     String
+  url       String   @db.Text
+  duration  Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model GameSound {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  url       String   @db.Text
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
 model UserPuzzleSolve {

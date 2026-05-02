@@ -8,6 +8,8 @@ import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import SpectatorBadge from "@/components/SpectatorBadge";
+import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
+import { preloadSounds, playSound } from "@/lib/gameSounds";
 
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
@@ -218,6 +220,10 @@ export default function GameRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fetchAbortRef = useRef<AbortController | null>(null);
+  const connFailsRef = useRef(0);
+  const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
+  const prevRoomRef    = useRef<RoomData | null>(null);
+  const soundFiredRef  = useRef(false);
 
   const fetchRoom = useCallback(async () => {
     const ctrl = new AbortController();
@@ -225,11 +231,16 @@ export default function GameRoomPage() {
     try {
       const res = await fetch(`/api/ms-rooms/${roomId}`, { signal: ctrl.signal });
       if (res.status === 404) { setError("Room not found"); return; }
-      if (!res.ok) return; // transient server error — skip this poll, don't kick
-      setRoom(await res.json());
+      if (!res.ok) { connFailsRef.current++; } else {
+        connFailsRef.current = 0;
+        setRoom(await res.json());
+      }
     } catch (e) {
-      if ((e as Error).name !== "AbortError") return; // network glitch — skip poll
+      if ((e as Error).name !== "AbortError") connFailsRef.current++;
+      else return;
     }
+    const f = connFailsRef.current;
+    setConnStatus(f === 0 ? "ok" : f <= 5 ? "slow" : "lost");
   }, [roomId]);
 
   useEffect(() => {
@@ -237,6 +248,33 @@ export default function GameRoomPage() {
     pollRef.current = setInterval(fetchRoom, 400);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
+
+  // Preload sounds once
+  useEffect(() => { preloadSounds(); }, []);
+
+  // Sound effects
+  useEffect(() => {
+    if (!room) return;
+    const prev = prevRoomRef.current;
+    if (prev) {
+      // Lobby: guest became ready
+      if (prev.status === "WAITING" && !prev.guestReady && room.guestReady)
+        playSound("player_ready");
+
+      // Match started
+      if (prev.status === "WAITING" && room.status === "PLAYING")
+        playSound("match_start");
+
+      // Game finished — play once
+      if (prev.status !== "FINISHED" && room.status === "FINISHED" && !soundFiredRef.current) {
+        soundFiredRef.current = true;
+        const iWon = room.winner === room.myRole;
+        if (iWon) playSound("mine_win");
+        else if (room.myHit) playSound("mine_explode");
+      }
+    }
+    prevRoomRef.current = room;
+  }, [room]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Spectator heartbeat
   useEffect(() => {
@@ -511,9 +549,7 @@ export default function GameRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <span className="flex items-center gap-1.5 text-xs text-green-400 font-display font-semibold">
-          <Wifi size={12} /> Online
-        </span>
+        <ConnectionBadge status={connStatus} />
         {room.rated && (
           <span className="flex items-center gap-1 text-xs text-yellow-400 font-display font-bold bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
             <Star size={10} /> Rated

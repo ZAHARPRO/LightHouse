@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       data: {
         title: title.trim(),
         fen: fen.trim(),
-        solution: solution?.length ? JSON.stringify(solution) : null,
+        solution: solution?.length ? JSON.stringify(solution) : undefined,
         difficulty,
         rating: typeof rating === "number" ? Math.max(800, Math.min(2200, rating)) : 1200,
       },
@@ -68,7 +68,7 @@ export async function PATCH(req: Request) {
       data: {
         title: title.trim(),
         fen: fen.trim(),
-        solution: solution?.length ? JSON.stringify(solution) : null,
+        solution: solution?.length ? JSON.stringify(solution) : undefined,
         difficulty,
         rating: typeof rating === "number" ? Math.max(800, Math.min(2200, rating)) : 1200,
       },

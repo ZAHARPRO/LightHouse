@@ -600,7 +600,7 @@ model ChessPuzzle {
   id         String   @id @default(cuid())
   title      String
   fen        String   @db.Text
-  solution   String  @db.Text
+  solution   String?  @db.Text
   difficulty String   // "mate1" | "mate2"
   rating     Int      @default(1200)
   solveCount Int      @default(0)

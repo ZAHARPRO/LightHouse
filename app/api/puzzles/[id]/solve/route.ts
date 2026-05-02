@@ -34,6 +34,7 @@ export async function POST(
   const puzzle = await prisma.chessPuzzle.findUnique({ where: { id } });
   if (!puzzle) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  if (!puzzle.solution) return NextResponse.json({ error: "No solution stored" }, { status: 400 });
   const solution: string[] = JSON.parse(puzzle.solution);
 
   if (solution[step] !== move) {

@@ -69,7 +69,7 @@ type PuzzleRow = {
   solveCount: number;
   createdAt: string;
   fen: string;
-  solution: string;
+  solution?: string | null;
 };
 
 const DIFF_LABEL: Record<string, string> = { mate1: "Mate in 1", mate2: "Mate in 2" };
@@ -231,16 +231,13 @@ export default function AdminPuzzlesPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   function copyPuzzle(p: PuzzleRow) {
-    const data = {
-      title: p.title, difficulty: p.difficulty, fen: p.fen,
-      solution: (() => { try { return JSON.parse(p.solution); } catch { return [p.solution]; } })(),
-    };
+    const data = { title: p.title, difficulty: p.difficulty, rating: p.rating, fen: p.fen };
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     setCopiedId(p.id);
     setTimeout(() => setCopiedId(null), 2000);
   }
 
-  const AI_PROMPT = `Generate high-quality chess puzzles in JSON format. Return ONLY the JSON array.
+  const AI_PROMPT = `Generate high-quality chess puzzles in JSON format. Return ONLY the JSON array, no extra text.
 
 Format:
 [
@@ -248,58 +245,47 @@ Format:
     "title": "descriptive human-like name",
     "difficulty": "mate1" | "mate2",
     "rating": number (800–2200),
-    "fen": "valid FEN string",
-    "solution": ["uci_move", ...]
+    "fen": "valid FEN string (White to move)"
   }
 ]
 
+NOTE: No "solution" field is needed — the server engine validates moves dynamically.
+
 STRICT RULES:
 - All positions must be LEGAL chess positions with White to move
-- Positions must look like realistic game situations (no random placements)
-- Material balance should be plausible (no absurd compositions)
+- Positions must look like realistic mid/endgame situations (no random placements)
+- Material balance must be plausible
+- The first winning move must be the ONLY winning move for White
 
-TACTICAL THEMES (REQUIRED):
-Each puzzle must include at least one:
-- checkmate pattern (back rank, smothered, etc.)
-- pin / fork / skewer
-- discovered attack
-- deflection / decoy
-- sacrifice leading to forced mate
+DIFFICULTY:
+- "mate1" → White checkmates in exactly 1 move
+- "mate2" → White checkmates in exactly 2 moves (White, Black best, White mate)
 
-DIFFICULTY & RATING:
-- rating must be between 800 and 2200
-- Lower rating (800–1200): simple tactics, direct mate1, obvious ideas
-- Mid rating (1200–1800): 1–2 key ideas, small combinations, mate2
-- High rating (1800–2200): non-obvious sacrifices, quiet moves, deception
+RATING GUIDE:
+- 800–1200: direct back-rank or simple piece checkmates, obvious ideas
+- 1200–1800: 1–2 tactical ideas, small combinations, fork/pin leading to mate
+- 1800–2200: quiet moves, sacrifices, non-obvious deflections or decoys
 
-ONLY MOVE REQUIREMENT:
-- The first move in the solution MUST be the ONLY winning move
-- All alternative white moves must fail or not lead to forced mate
+TACTICAL THEMES (use variety across puzzles):
+- Back-rank mate, smothered mate, Arabian mate
+- Pin / fork / skewer
+- Discovered attack / discovered check
+- Deflection / decoy / interference
+- Queen or piece sacrifice leading to forced mate
 
-MATE RULES:
-- "mate1": exactly 1 move → immediate checkmate
-- "mate2": exactly 3 moves:
-  ["white_move", "black_best_response", "white_checkmate"]
+QUALITY:
+- Avoid trivially artificial positions
+- Prefer positions that could arise from real games
+- Include at least one sacrifice per 5 puzzles (rating > 1400)
+- Black must have no better defense than played
 
-QUALITY REQUIREMENTS:
-- Avoid trivial or artificial puzzles
-- Prefer middlegame or realistic endgames
-- Include sacrifices in some puzzles (especially rating >1400)
-- The solution must be logical, not random checks
-
-MOVE FORMAT:
-- UCI only (e.g., "e2e4", "d1h5", "e7e8q")
-
-VALIDATION:
-- Ensure the solution leads to forced checkmate
-- Ensure black has no better defense than listed
-- Ensure "only move" condition is satisfied`;
+FEN REMINDER:
+- Must be a complete valid FEN string
+- Active color must be "w" (White to move)
+- Include castling rights, en passant, half/full move clocks`;
 
   function exportJson() {
-    const data = puzzles.map(({ title, difficulty, fen, solution }) => ({
-      title, difficulty, fen,
-      solution: (() => { try { return JSON.parse(solution); } catch { return [solution]; } })(),
-    }));
+    const data = puzzles.map(({ title, difficulty, rating, fen }) => ({ title, difficulty, rating, fen }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "puzzles.json"; a.click();
@@ -307,10 +293,7 @@ VALIDATION:
   }
 
   function copyJson() {
-    const data = puzzles.map(({ title, difficulty, fen, solution }) => ({
-      title, difficulty, fen,
-      solution: (() => { try { return JSON.parse(solution); } catch { return [solution]; } })(),
-    }));
+    const data = puzzles.map(({ title, difficulty, rating, fen }) => ({ title, difficulty, rating, fen }));
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     setExportCopied(true);
     setTimeout(() => setExportCopied(false), 2000);
@@ -540,17 +523,16 @@ VALIDATION:
     "title": "Back-rank Mate",
     "difficulty": "mate1",
     "rating": 950,
-    "fen": "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1",
-    "solution": ["a1a8"]
+    "fen": "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"
   },
   {
     "title": "Queen Sacrifice",
     "difficulty": "mate2",
     "rating": 1650,
-    "fen": "...",
-    "solution": ["d1h5", "g8h8", "h5f7"]
+    "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1"
   }
 ]`}</pre>
+          <p className="text-[0.6rem] text-green-400/80 mb-3">⚡ No &quot;solution&quot; field needed — engine validates moves dynamically</p>
 
           {/* Copy AI prompt */}
           <button
@@ -651,8 +633,6 @@ VALIDATION:
             ) : puzzles.length === 0 ? (
               <p className="text-[var(--text-muted)] text-sm text-center py-10">No puzzles yet.</p>
             ) : puzzles.map((p) => {
-              let solArr: string[] = [];
-              try { solArr = JSON.parse(p.solution); } catch { /**/ }
               return (
                 <div
                   key={p.id}
@@ -676,9 +656,7 @@ VALIDATION:
                       <span className="text-[0.6rem] font-mono text-amber-400">★ {p.rating}</span>
                       <span className="text-[0.6rem] text-[var(--text-muted)]">{p.solveCount} solves</span>
                     </div>
-                    <p className="text-[0.6rem] font-mono text-[var(--text-muted)] mt-1 truncate">
-                      {solArr.join(" → ")}
-                    </p>
+                    <p className="text-[0.6rem] text-green-400/70 mt-1">⚡ Engine-validated</p>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
                     <button

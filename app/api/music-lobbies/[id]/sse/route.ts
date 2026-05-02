@@ -11,21 +11,26 @@ export async function GET(
   const enc = new TextEncoder();
 
   let ctrl: ReadableStreamDefaultController<Uint8Array>;
+  let pingInterval: ReturnType<typeof setInterval>;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       ctrl = controller;
       sseSubscribe(id, ctrl);
-      // Initial heartbeat so the browser knows the connection is live
       controller.enqueue(enc.encode(": connected\n\n"));
+      // Send a comment ping every 30s to prevent Render's 55s idle timeout
+      pingInterval = setInterval(() => {
+        try { controller.enqueue(enc.encode(": ping\n\n")); } catch { clearInterval(pingInterval); }
+      }, 30_000);
     },
     cancel() {
+      clearInterval(pingInterval);
       sseUnsubscribe(id, ctrl);
     },
   });
 
-  // Also unsubscribe when the client disconnects via abort signal
   req.signal.addEventListener("abort", () => {
+    clearInterval(pingInterval);
     sseUnsubscribe(id, ctrl);
   });
 

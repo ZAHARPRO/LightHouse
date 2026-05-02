@@ -128,6 +128,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
 
+  // Apply saved volume as soon as the YouTube player becomes ready
+  useEffect(() => {
+    if (playerReady) setMusicVol(volume);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerReady]);
+
   function handleVol(v: number) { setVol(v); setMusicVol(v); localStorage.setItem("music_vol", String(v)); }
 
   // ── Restore lobby view on mount if already in a lobby ─────────────────────

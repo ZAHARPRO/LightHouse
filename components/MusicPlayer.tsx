@@ -192,6 +192,22 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
   function closeVideo() { setShowVideo(false); }
 
+  // ── Keep muted video in sync with audio (drift correction) ───────────────
+  const positionMsRef = useRef(positionMs);
+  positionMsRef.current = positionMs;
+
+  useEffect(() => {
+    if (!showVideo || !isPlaying) return;
+    const t = setInterval(() => {
+      const videoSec = ytVideoRef.current?.getCurrentTime() ?? 0;
+      const audioSec = positionMsRef.current / 1000;
+      if (Math.abs(videoSec - audioSec) > 1.5) {
+        ytVideoRef.current?.seekTo(audioSec);
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [showVideo, isPlaying]);
+
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
   const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
     // Ignore SSE echoes that arrive shortly after we triggered the action ourselves
@@ -659,6 +675,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
             <YouTubePlayer
               ref={ytVideoRef}
               videoId={track.videoId}
+              title={track.title}
               startSeconds={videoStartSec}
               muted
               externalPlaying={isPlaying}

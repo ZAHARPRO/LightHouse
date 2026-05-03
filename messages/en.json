@@ -534,6 +534,20 @@
     "banned": "BANNED",
     "muted": "Muted until {date}"
   },
+  "youtubePlayer": {
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "close": "Close",
+    "speed": "Playback speed",
+    "quality": "Quality",
+    "subtitles": "Subtitles",
+    "normal": "Normal",
+    "auto": "Auto"
+  },
   "puzzles": {
     "puzzles": "Puzzles",
     "backToPuzzles": "Back to puzzles",

@@ -534,6 +534,20 @@
     "banned": "ЗАБЛОКОВАНО",
     "muted": "Приглушено до {date}"
   },
+  "youtubePlayer": {
+    "play": "Відтворити",
+    "pause": "Пауза",
+    "mute": "Вимкнути звук",
+    "unmute": "Увімкнути звук",
+    "fullscreen": "Повний екран",
+    "exitFullscreen": "Вийти з повного екрану",
+    "close": "Закрити",
+    "speed": "Швидкість відтворення",
+    "quality": "Якість",
+    "subtitles": "Субтитри",
+    "normal": "Нормальна",
+    "auto": "Авто"
+  },
   "puzzles": {
     "puzzles": "Задачі",
     "backToPuzzles": "До задач",

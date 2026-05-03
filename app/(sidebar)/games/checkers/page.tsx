@@ -70,10 +70,11 @@ interface BoardProps {
   lastMove: Move | null;
   mustJumpFrom: [number, number] | null;
   onSquare: (r: number, c: number) => void;
+  onDrop: (from: [number, number], to: [number, number]) => void;
   disabled?: boolean;
 }
 
-function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpFrom, onSquare, disabled }: BoardProps) {
+function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpFrom, onSquare, onDrop, disabled }: BoardProps) {
   const [ghost, setGhost] = useState<{ cell: Cell; x: number; y: number } | null>(null);
   const dragSrc = useRef<[number, number] | null>(null);
 
@@ -94,7 +95,7 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
       const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
       if (sq) {
         const [tr, tc] = sq.split("-").map(Number);
-        if (tr !== src[0] || tc !== src[1]) onSquare(tr, tc);
+        if (tr !== src[0] || tc !== src[1]) onDrop(src, [tr, tc]);
       }
     };
     document.addEventListener("pointermove", onMove);
@@ -104,11 +105,11 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
   return (
     <>
       <div className="inline-block select-none" style={{ border: "2px solid #92400e" }}>
-        {[0,1,2,3,4,5,6,7].map(r => (
+        {[7,6,5,4,3,2,1,0].map(r => (
           <div key={r} className="flex">
             <div className="flex items-center justify-center font-mono shrink-0"
               style={{ width: 20, color: "#92400e", fontSize: Math.max(9, cellPx * 0.18) }}>
-              {8 - r}
+              {r + 1}
             </div>
             {[0,1,2,3,4,5,6,7].map(c => {
               const isDark = (r + c) % 2 === 1;
@@ -201,8 +202,8 @@ export default function CheckersVsBotPage() {
   const [selected, setSelected]     = useState<[number, number] | null>(null);
   const [legalDots, setLegalDots]   = useState<[number, number][]>([]);
   const [lastMove, setLastMove]     = useState<Move | null>(null);
-  const [mustJump, setMustJump]     = useState<[number, number] | null>(null);
   const [moveCount, setMoveCount]   = useState(0);
+  const [mustJump, setMustJump]     = useState<[number, number] | null>(null);
   const [result, setResult]         = useState("");
   const [botThinking, setBotThinking] = useState(false);
   const cellPx = useCellPx();
@@ -210,7 +211,7 @@ export default function CheckersVsBotPage() {
   function startGame() {
     const b = initialBoard();
     setBoard(b); setTurn("w"); setSelected(null); setLegalDots([]);
-    setLastMove(null); setMustJump(null); setMoveCount(0);
+    setLastMove(null); setMoveCount(0); setMustJump(null);
     setResult(""); setBotThinking(false); setStatus("playing");
   }
 
@@ -219,24 +220,19 @@ export default function CheckersVsBotPage() {
     move: Move,
     currentTurn: "w" | "b",
     currentMoveCount: number,
-    currentMustJump: [number, number] | null,
-  ): { nextBoard: Board; nextTurn: "w" | "b"; nextMust: [number, number] | null; nextCount: number } => {
+  ): { nextBoard: Board; nextTurn: "w" | "b"; nextCount: number } => {
     const { board: nb, promoted } = applyMove(b, move);
     setLastMove(move);
-
-    // Multi-jump: same player continues if piece can jump again
+    setBoard(nb); setSelected(null); setLegalDots([]);
+    // Multi-jump: same piece can capture again
     if (move.captured && !promoted && canContinueJump(nb, move.to[0], move.to[1])) {
-      const nextMust: [number, number] = [move.to[0], move.to[1]];
-      setBoard(nb); setMustJump(nextMust); setSelected(move.to); setTurn(currentTurn);
-      setLegalDots(getLegalMoves(nb, currentTurn, nextMust).map(m => m.to));
-      return { nextBoard: nb, nextTurn: currentTurn, nextMust, nextCount: currentMoveCount };
+      setMustJump(move.to);
+      return { nextBoard: nb, nextTurn: currentTurn, nextCount: currentMoveCount };
     }
-
+    setMustJump(null);
     const nextTurn: "w" | "b" = currentTurn === "w" ? "b" : "w";
     const nextCount = currentMoveCount + 1;
-    setBoard(nb); setMustJump(null); setSelected(null); setLegalDots([]);
     setTurn(nextTurn); setMoveCount(nextCount);
-
     const { over, winner } = isGameOver(nb, nextTurn);
     if (over) {
       if (!winner) { setResult("Draw!"); }
@@ -244,58 +240,72 @@ export default function CheckersVsBotPage() {
       else { setResult("Bot wins."); }
       setStatus("over");
     }
-    return { nextBoard: nb, nextTurn, nextMust: null, nextCount };
+    return { nextBoard: nb, nextTurn, nextCount };
   }, []);
 
-  const triggerBot = useCallback((
-    b: Board,
-    currentMoveCount: number,
-  ) => {
+  const triggerBot = useCallback((b: Board, currentMoveCount: number, mj: [number, number] | null = null) => {
     setBotThinking(true);
     setTimeout(() => {
-      const botMove = getBotMove(b, "b", difficulty);
-      if (botMove) {
-        const { nextBoard, nextTurn, nextMust, nextCount } = doMove(b, botMove, "b", currentMoveCount, null);
-        // If bot can multi-jump, continue automatically
-        if (nextMust && nextTurn === "b") {
-          triggerBot(nextBoard, nextCount);
-          return;
-        }
+      const botMove = getBotMove(b, "b", difficulty, mj);
+      if (!botMove) { setBotThinking(false); return; }
+      const { nextBoard, nextTurn, nextCount } = doMove(b, botMove, "b", currentMoveCount);
+      if (nextTurn === "b") {
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        triggerBot(nextBoard, nextCount, botMove.to);
+      } else {
+        setBotThinking(false);
       }
-      setBotThinking(false);
     }, 350);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [difficulty, doMove]);
+
+  function handleMove(from: [number, number], to: [number, number]) {
+    if (status !== "playing" || turn !== "w" || botThinking) return;
+    const move = getLegalMoves(board, "w", mustJump).find(m =>
+      m.from[0] === from[0] && m.from[1] === from[1] &&
+      m.to[0] === to[0]   && m.to[1] === to[1],
+    );
+    if (!move) return;
+    const { nextBoard, nextTurn, nextCount } = doMove(board, move, "w", moveCount);
+    if (nextTurn === "b") triggerBot(nextBoard, nextCount);
+  }
 
   function handleSquare(r: number, c: number) {
     if (status !== "playing" || turn !== "w" || botThinking) return;
 
-    // If we have a piece selected already, try to move
     if (selected) {
       const [sr, sc] = selected;
       if (sr === r && sc === c) { setSelected(null); setLegalDots([]); return; }
-      const moves = getLegalMoves(board, "w", mustJump);
-      const move = moves.find(m => m.to[0] === r && m.to[1] === c && m.from[0] === sr && m.from[1] === sc);
+      const move = getLegalMoves(board, "w", mustJump).find(m =>
+        m.to[0] === r && m.to[1] === c && m.from[0] === sr && m.from[1] === sc,
+      );
       if (move) {
-        const { nextBoard, nextTurn, nextMust, nextCount } = doMove(board, move, "w", moveCount, mustJump);
-        if (nextTurn === "b" && !nextMust) {
-          triggerBot(nextBoard, nextCount);
-        }
+        const { nextBoard, nextTurn, nextCount } = doMove(board, move, "w", moveCount);
+        if (nextTurn === "b") triggerBot(nextBoard, nextCount);
         return;
       }
     }
 
-    // Select a white piece (only if no mustJump or this is the mustJump piece)
-    const cell = board[r][c];
-    if ((cell === "w" || cell === "W") && (!mustJump || (mustJump[0] === r && mustJump[1] === c))) {
-      const moves = getLegalMoves(board, "w", mustJump);
-      const fromMoves = moves.filter(m => m.from[0] === r && m.from[1] === c);
-      if (fromMoves.length > 0) {
+    // During a multi-jump chain, only the jumping piece can be selected
+    if (mustJump) {
+      if (mustJump[0] === r && mustJump[1] === c) {
+        const fromMoves = getLegalMoves(board, "w", mustJump);
         setSelected([r, c]);
         setLegalDots(fromMoves.map(m => m.to));
       }
-    } else {
-      setSelected(null); setLegalDots([]);
+      return;
     }
+
+    const cell = board[r][c];
+    if (cell === "w" || cell === "W") {
+      const fromMoves = getLegalMoves(board, "w").filter(m => m.from[0] === r && m.from[1] === c);
+      if (fromMoves.length > 0) {
+        setSelected([r, c]);
+        setLegalDots(fromMoves.map(m => m.to));
+        return;
+      }
+    }
+    setSelected(null); setLegalDots([]);
   }
 
   const whitePieces = countPieces(board, "w");
@@ -312,7 +322,7 @@ export default function CheckersVsBotPage() {
           <div className="text-7xl leading-none select-none">🔴</div>
           <div>
             <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] text-center mb-1">Checkers vs Bot</h1>
-            <p className="text-[var(--text-muted)] text-sm text-center">Russian rules · Mandatory captures · You play White</p>
+            <p className="text-[var(--text-muted)] text-sm text-center">Russian rules · You play White</p>
           </div>
           <div className="flex gap-3">
             {(["easy", "normal", "hard"] as Difficulty[]).map(d => (
@@ -352,6 +362,7 @@ export default function CheckersVsBotPage() {
             lastMove={lastMove}
             mustJumpFrom={mustJump}
             onSquare={handleSquare}
+            onDrop={handleMove}
             disabled={status === "over" || turn !== "w" || botThinking}
           />
 

@@ -34,12 +34,15 @@ export function initialBoard(): Board {
   return b;
 }
 
+const ALL_DIAGS: [number, number][] = [[-1,-1],[-1,1],[1,-1],[1,1]];
+
+// All pieces (including regular) can capture in all 4 diagonal directions
 function capturesForPiece(board: Board, r: number, c: number): Move[] {
   const piece = board[r][c];
   if (!piece) return [];
   const color = colorOf(piece)!;
   const moves: Move[] = [];
-  for (const [dr, dc] of dirs(color, isKing(piece))) {
+  for (const [dr, dc] of ALL_DIAGS) {
     const mr = r + dr, mc = c + dc, tr = r + 2*dr, tc = c + 2*dc;
     if (!inBounds(tr, tc)) continue;
     const mid = board[mr][mc];
@@ -50,24 +53,26 @@ function capturesForPiece(board: Board, r: number, c: number): Move[] {
 }
 
 export function getLegalMoves(board: Board, color: Color, mustJumpFrom?: [number,number] | null): Move[] {
-  const captures: Move[] = [];
-  const regular:  Move[] = [];
+  const moves: Move[] = [];
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (colorOf(board[r][c]) !== color) continue;
-      if (mustJumpFrom && (mustJumpFrom[0] !== r || mustJumpFrom[1] !== c)) continue;
-      captures.push(...capturesForPiece(board, r, c));
-      if (!mustJumpFrom) {
+      // Mid-chain: only the jumping piece can move, and only captures
+      if (mustJumpFrom) {
+        if (mustJumpFrom[0] !== r || mustJumpFrom[1] !== c) continue;
+        moves.push(...capturesForPiece(board, r, c));
+      } else {
+        moves.push(...capturesForPiece(board, r, c));
         const piece = board[r][c]!;
         for (const [dr, dc] of dirs(color, isKing(piece))) {
           const tr = r+dr, tc = c+dc;
           if (inBounds(tr, tc) && board[tr][tc] === null)
-            regular.push({ from: [r,c], to: [tr,tc], captured: null });
+            moves.push({ from: [r,c], to: [tr,tc], captured: null });
         }
       }
     }
   }
-  return captures.length > 0 ? captures : regular;
+  return moves;
 }
 
 export function applyMove(board: Board, move: Move): { board: Board; promoted: boolean } {

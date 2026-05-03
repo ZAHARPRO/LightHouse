@@ -24,13 +24,41 @@ import { getRank } from "@/lib/elo";
 import { useTranslations } from "next-intl";
 
 function CheckersIcon({ size = 22 }: { size?: number }) {
+  // 4×4 checkerboard with black and white pieces on dark squares
+  const sq = 16; // cell size in a 64×64 viewBox
+  const board = [
+    [0,1,0,1],
+    [1,0,1,0],
+    [0,1,0,1],
+    [1,0,1,0],
+  ];
+  // dark squares: (r+c)%2===1; pieces placed on specific dark squares
+  const blackPieces: [number,number][] = [[0,1],[0,3],[1,0],[1,2]];
+  const whitePieces: [number,number][] = [[2,1],[2,3],[3,0],[3,2]];
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="10" opacity="0.9"/>
-      <circle cx="48" cy="16" r="10" opacity="0.9"/>
-      <circle cx="16" cy="48" r="10" opacity="0.5"/>
-      <circle cx="48" cy="48" r="10" opacity="0.5"/>
-      <circle cx="32" cy="32" r="8" opacity="0.7"/>
+    <svg width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      {/* Board squares */}
+      {board.map((row, r) => row.map((_, c) => (
+        <rect
+          key={`${r}-${c}`}
+          x={c * sq} y={r * sq} width={sq} height={sq}
+          fill={(r + c) % 2 === 0 ? "#f0d9b5" : "#b58863"}
+        />
+      )))}
+      {/* Black pieces */}
+      {blackPieces.map(([r, c]) => (
+        <g key={`b-${r}-${c}`}>
+          <circle cx={c * sq + sq / 2} cy={r * sq + sq / 2} r={sq * 0.38} fill="#1a1a1a" />
+          <circle cx={c * sq + sq / 2} cy={r * sq + sq / 2} r={sq * 0.26} fill="none" stroke="#555" strokeWidth="1.2" />
+        </g>
+      ))}
+      {/* White pieces */}
+      {whitePieces.map(([r, c]) => (
+        <g key={`w-${r}-${c}`}>
+          <circle cx={c * sq + sq / 2} cy={r * sq + sq / 2} r={sq * 0.38} fill="#f0f0f0" />
+          <circle cx={c * sq + sq / 2} cy={r * sq + sq / 2} r={sq * 0.26} fill="none" stroke="#bbb" strokeWidth="1.2" />
+        </g>
+      ))}
     </svg>
   );
 }

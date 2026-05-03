@@ -232,41 +232,37 @@ export default function CheckersRoomPage() {
   // Clear selection when it's no longer our turn
   useEffect(() => { if (!isMyTurn) { setSelected(null); setLegalMoves([]); } }, [isMyTurn]);
 
+  // Auto-select the jumping piece during a multi-jump chain
+  useEffect(() => {
+    if (!room?.mustJumpFrom || !isMyTurn || !room.board) return;
+    const [r, c] = room.mustJumpFrom;
+    const myMoves = getLegalMoves(room.board, myColor, room.mustJumpFrom);
+    setSelected([r, c]);
+    setLegalMoves(myMoves);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.mustJumpFrom, isMyTurn]);
+
   // ── Cell click handler ─────────────────────────────────────────────────────
   function handleCellClick(r: number, c: number) {
     if (!room?.board || !isMyTurn || moving) return;
 
+    const mjFrom = room.mustJumpFrom;
     const cell = room.board[r][c];
-    const mustFrom = room.mustJumpFrom;
 
-    // If there's a mandatory jump from, only that piece can move
-    if (mustFrom) {
-      if (mustFrom[0] === r && mustFrom[1] === c) {
-        // Select the mandatory piece
-        const moves = getLegalMoves(room.board, myColor, mustFrom);
-        setSelected([r, c]); setLegalMoves(moves);
-        return;
-      }
-      // Check if clicking a target
-      if (selected) {
-        const move = legalMoves.find(m => m.to[0] === r && m.to[1] === c);
-        if (move) { makeMove(move); return; }
-      }
-      return;
-    }
-
-    // Select own piece
-    if (cell && (cell.toLowerCase() as Color) === myColor) {
-      const moves = getLegalMoves(room.board, myColor);
-      const myMoves = moves.filter(m => m.from[0] === r && m.from[1] === c);
-      setSelected([r, c]); setLegalMoves(myMoves);
-      return;
-    }
-
-    // Click a target square
+    // Click a target square while a piece is selected
     if (selected) {
       const move = legalMoves.find(m => m.to[0] === r && m.to[1] === c);
       if (move) { makeMove(move); return; }
+    }
+
+    // During a chain, only the jumping piece can be selected
+    if (mjFrom && (mjFrom[0] !== r || mjFrom[1] !== c)) return;
+
+    // Select own piece
+    if (cell && (cell.toLowerCase() as Color) === myColor) {
+      const myMoves = getLegalMoves(room.board, myColor, mjFrom ?? undefined).filter(m => m.from[0] === r && m.from[1] === c);
+      setSelected([r, c]); setLegalMoves(myMoves);
+      return;
     }
 
     setSelected(null); setLegalMoves([]);
@@ -526,7 +522,7 @@ export default function CheckersRoomPage() {
           {room.status === "PLAYING" && (
             <p className="text-center text-xs text-[var(--text-muted)] mt-1">
               {isMyTurn
-                ? <span className="text-orange-400 font-bold">Your turn{room.mustJumpFrom ? " — must jump!" : ""}</span>
+                ? <span className="text-orange-400 font-bold">Your turn</span>
                 : "Opponent's turn"}
             </p>
           )}

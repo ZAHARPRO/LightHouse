@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { boardFromJson, boardToJson, getLegalMoves, applyMove, isGameOver, canContinueJump } from "@/lib/checkers";
+import { boardFromJson, boardToJson, getLegalMoves, applyMove, canContinueJump, isGameOver } from "@/lib/checkers";
 import { awardBadge, awardCheckersEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 
@@ -30,31 +30,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (myIsWhite !== isWhiteTurn) return NextResponse.json({ error: "Not your turn" }, { status: 400 });
 
   const board = boardFromJson(room.boardJson);
-  const mustJumpFrom: [number, number] | null = room.mustJumpFrom ? JSON.parse(room.mustJumpFrom) : null;
+  const mjFrom = room.mustJumpFrom as [number, number] | null;
 
-  const legal = getLegalMoves(board, myColor, mustJumpFrom);
+  const legal = getLegalMoves(board, myColor, mjFrom);
   const matched = legal.find(m => m.from[0] === from[0] && m.from[1] === from[1] && m.to[0] === to[0] && m.to[1] === to[1]);
   if (!matched) return NextResponse.json({ error: "Illegal move" }, { status: 400 });
 
   const { board: newBoard, promoted } = applyMove(board, matched);
-
-  // Multi-jump: if capture and not promoted and more captures available, keep same player's turn
-  let nextMustJump: [number, number] | null = null;
-  let nextMoveCount = room.moveCount + 1;
-  if (matched.captured && !promoted && canContinueJump(newBoard, to[0], to[1])) {
-    nextMustJump = [to[0], to[1]];
-    nextMoveCount = room.moveCount; // same player's turn
-  }
+  const canChain = !!matched.captured && !promoted && canContinueJump(newBoard, matched.to[0], matched.to[1]);
+  const nextMoveCount = canChain ? room.moveCount : room.moveCount + 1;
 
   const update: Record<string, unknown> = {
     boardJson: boardToJson(newBoard),
     moveCount: nextMoveCount,
-    mustJumpFrom: nextMustJump ? JSON.stringify(nextMustJump) : null,
+    mustJumpFrom: canChain ? [matched.to[0], matched.to[1]] : null,
     lastMoveAt: new Date(),
   };
 
   // Time control
-  if (room.timeControl !== "none" && room.lastMoveAt && !nextMustJump) {
+  if (room.timeControl !== "none" && room.lastMoveAt) {
     const elapsed = Date.now() - new Date(room.lastMoveAt).getTime();
     let remaining = (myIsWhite ? room.whiteTimeMs : room.blackTimeMs) ?? 0;
     remaining = Math.max(0, remaining - elapsed);
@@ -76,18 +70,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     update[myIsWhite ? "whiteTimeMs" : "blackTimeMs"] = remaining;
   }
 
-  // Determine next turn color (after possible turn-pass)
-  const nextTurnIsWhite = nextMustJump ? myIsWhite : !myIsWhite;
-  const nextColor = nextTurnIsWhite ? "w" : "b";
-
-  // Check game over (only when turn actually changes)
-  if (!nextMustJump) {
+  if (!canChain) {
+    const nextColor = myIsWhite ? "b" : "w";
     const { over, winner } = isGameOver(newBoard, nextColor);
     if (over) {
-      update.status   = "FINISHED";
-      update.winner   = winner === "w" ? "white" : "black";
+      update.status    = "FINISHED";
+      update.winner    = winner === "w" ? "white" : "black";
       update.winReason = "no_moves";
-      update.endedAt  = new Date();
+      update.endedAt   = new Date();
       update.chatJson  = null;
     }
   }
@@ -104,7 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (room.rated && room.guestId) await applyElo(prisma, id, room, winnerId);
   }
 
-  return NextResponse.json({ ok: true, mustJumpFrom: nextMustJump });
+  return NextResponse.json({ ok: true });
 }
 
 async function applyElo(

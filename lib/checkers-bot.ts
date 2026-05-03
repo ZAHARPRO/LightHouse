@@ -27,16 +27,13 @@ function evaluate(board: Board, color: Color): number {
   return color === "w" ? score : -score;
 }
 
-// Expand multi-jump chains: if a capture continues a jump, extend all paths
 function expandMoves(board: Board, moves: Move[], color: Color): { board: Board; move: Move }[] {
   const result: { board: Board; move: Move }[] = [];
   for (const move of moves) {
     const { board: nb, promoted } = applyMove(board, move);
     if (move.captured && !promoted && canContinueJump(nb, move.to[0], move.to[1])) {
-      // Continue the jump chain
       const continuations = getLegalMoves(nb, color, move.to);
-      const expanded = expandMoves(nb, continuations, color);
-      for (const e of expanded) result.push(e);
+      for (const e of expandMoves(nb, continuations, color)) result.push(e);
     } else {
       result.push({ board: nb, move });
     }
@@ -90,8 +87,9 @@ export function getBotMove(
   board: Board,
   botColor: Color,
   difficulty: Difficulty,
+  mustJumpFrom?: [number, number] | null,
 ): Move | null {
-  const moves = getLegalMoves(board, botColor);
+  const moves = getLegalMoves(board, botColor, mustJumpFrom);
   if (moves.length === 0) return null;
 
   if (difficulty === "easy") {

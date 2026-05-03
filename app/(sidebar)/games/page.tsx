@@ -51,6 +51,7 @@ const GAMES = [
   { href: "/games/chess/online",             title: "Chess Online",       description: "1 vs 1 with timer",             icon: ChessIcon,    color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
   { href: "/games/chess/online/rated",       title: "Chess Rated",        description: "Earn ELO",                      icon: ChessIcon,    color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
   { href: "/games/chess/puzzles",            title: "Chess Puzzles",      description: "Mate in 1 or 2 moves",          icon: PuzzleIcon,   color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20"  },
+  { href: "/games/checkers",                 title: "Checkers vs Bot",    description: "3 difficulty levels",           icon: CheckersIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
   { href: "/games/checkers/online",          title: "Checkers Online",    description: "1 vs 1 in real-time",           icon: CheckersIcon, color: "text-amber-400",  bg: "bg-amber-500/10 border-amber-500/20"    },
   { href: "/games/checkers/online/rated",    title: "Checkers Rated",     description: "Earn ELO",                      icon: CheckersIcon, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20"  },
 ];

@@ -6,8 +6,9 @@ import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
   History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
-  Shuffle, Sparkles, MonitorPlay, Maximize2, Minimize2,
+  Shuffle, Sparkles, MonitorPlay,
 } from "lucide-react";
+import YouTubePlayer, { type YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import Image from "next/image";
 import Link from "next/link";
 import { useMusicContext } from "@/contexts/MusicContext";
@@ -68,9 +69,9 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [size, setSize]       = useState({ w: 350 });
   const [minimized, setMin]   = useState(false);
   const [view, setView]       = useState<"player" | "lobbies" | "create" | "lobby">("player");
-  const [showVideo, setShowVideo]     = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const [showVideo, setShowVideo]   = useState(false);
+  const [videoStartSec, setVideoStartSec] = useState(0);
+  const ytVideoRef = useRef<YouTubePlayerHandle>(null);
   const [volume, setVol]    = useState(() =>
     typeof window !== "undefined" ? Number(localStorage.getItem("music_vol") ?? 70) : 70
   );
@@ -180,28 +181,16 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       }).catch(() => {});
   }, [session?.user?.id]);
 
-  // ── Video mode: reset when track changes, sync fullscreen state ──────────
+  // ── Video mode: reset when track changes ─────────────────────────────────
   useEffect(() => { setShowVideo(false); }, [track?.videoId]);
 
-  useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
-
-  // Mute audio player while video iframe is visible (avoids double audio)
-  useEffect(() => {
-    if (showVideo) setMusicVol(0);
-    else setMusicVol(volume);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo]);
-
-  function toggleFullscreen() {
-    const el = videoContainerRef.current;
-    if (!el) return;
-    if (!document.fullscreenElement) el.requestFullscreen?.();
-    else document.exitFullscreen?.();
+  function openVideo() {
+    if (!track) return;
+    setVideoStartSec(Math.floor(positionMs / 1000));
+    setShowVideo(true);
   }
+
+  function closeVideo() { setShowVideo(false); }
 
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
   const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
@@ -667,33 +656,33 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         <>
           {/* ── Video panel ── */}
           {showVideo && (
-            <div ref={videoContainerRef} className="relative rounded-xl overflow-hidden bg-black w-full" style={{ aspectRatio: "16/9" }}>
-              <iframe
-                src={`https://www.youtube.com/embed/${track.videoId}?autoplay=1&rel=0&modestbranding=1`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowFullScreen
-                className="absolute inset-0 w-full h-full"
-              />
-              <button
-                onClick={toggleFullscreen}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                className="absolute top-1.5 right-1.5 z-10 p-1 rounded bg-black/60 text-white hover:bg-black/85 transition-colors"
-              >
-                {isFullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
-              </button>
-              <button
-                onClick={() => setShowVideo(false)}
-                title="Close video"
-                className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/60 text-white hover:bg-black/85 transition-colors"
-              >
-                <X size={11} />
-              </button>
-            </div>
+            <YouTubePlayer
+              ref={ytVideoRef}
+              videoId={track.videoId}
+              startSeconds={videoStartSec}
+              muted
+              externalPlaying={isPlaying}
+              onSeek={sec => {
+                seek(sec * 1000);
+                if (activeLobby) {
+                  lastLocalActionRef.current = Date.now();
+                  if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
+                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, sec * 1000), 120);
+                }
+              }}
+              onPlayPause={playing => {
+                lastLocalActionRef.current = Date.now();
+                if (playing) { resume(); if (activeLobby) pushSync(true); }
+                else          { pause();  if (activeLobby) pushSync(false); }
+              }}
+              onClose={closeVideo}
+              className="rounded-xl"
+            />
           )}
 
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setShowVideo(v => !v)}
+              onClick={() => showVideo ? closeVideo() : openVideo()}
               title={showVideo ? "Hide video" : "Watch video"}
               className="relative shrink-0 group rounded-lg overflow-hidden shadow"
             >
@@ -744,6 +733,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
                 seek(ms);
+                ytVideoRef.current?.seekTo(ms / 1000);
                 if (activeLobby) {
                   lastLocalActionRef.current = Date.now();
                   if (seekSyncRef.current) clearTimeout(seekSyncRef.current);

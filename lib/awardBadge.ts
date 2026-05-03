@@ -53,3 +53,16 @@ export async function awardMineEloBadges(prisma: PrismaClient, userId: string, n
     if (newElo >= threshold) await awardBadge(prisma, userId, type);
   }
 }
+
+const CHECKERS_ELO_BADGES: [number, string][] = [
+  [700,  "CHECKERS_SILVER"],
+  [1300, "CHECKERS_GOLD"],
+  [2200, "CHECKERS_PLATINUM"],
+  [3400, "CHECKERS_DIAMOND"],
+];
+
+export async function awardCheckersEloBadges(prisma: PrismaClient, userId: string, newElo: number) {
+  for (const [threshold, type] of CHECKERS_ELO_BADGES) {
+    if (newElo >= threshold) await awardBadge(prisma, userId, type);
+  }
+}

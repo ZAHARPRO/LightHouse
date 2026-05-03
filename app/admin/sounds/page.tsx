@@ -1,23 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, CheckCircle2, AlertCircle, Music2, Trash2, Play, RotateCcw } from "lucide-react";
+import {
+  Loader2, CheckCircle2, AlertCircle, Music2, Trash2, Play, RotateCcw,
+  Upload, Youtube, X, ArrowRight,
+} from "lucide-react";
 import { ALL_SOUND_KEYS, SOUND_META, type SoundKey } from "@/lib/gameSounds";
 
-type SoundRow = {
-  id: string;
-  key: string;
-  label: string;
-  url: string;
-  active: boolean;
-};
+type SoundRow = { id: string; key: string; label: string; url: string; active: boolean };
 
 type SlotState = {
-  url: string;
-  active: boolean;
-  saving: boolean;
-  msg: { ok: boolean; text: string } | null;
-  dbId: string | null;
+  url: string; active: boolean; saving: boolean;
+  msg: { ok: boolean; text: string } | null; dbId: string | null;
 };
 
 const DEFAULT_SLOTS = (): Record<SoundKey, SlotState> =>
@@ -26,9 +20,15 @@ const DEFAULT_SLOTS = (): Record<SoundKey, SlotState> =>
   ) as Record<SoundKey, SlotState>;
 
 export default function AdminSoundsPage() {
-  const [slots, setSlots] = useState<Record<SoundKey, SlotState>>(DEFAULT_SLOTS());
-  const [loading, setLoading] = useState(true);
-  const previewRef = useRef<HTMLAudioElement | null>(null);
+  const [slots, setSlots]           = useState<Record<SoundKey, SlotState>>(DEFAULT_SLOTS());
+  const [loading, setLoading]       = useState(true);
+  const [uploadingKey, setUpKey]    = useState<SoundKey | null>(null);
+  const [uploadErr, setUpErr]       = useState<Partial<Record<SoundKey, string>>>({});
+  const [showYt, setShowYt]         = useState<Partial<Record<SoundKey, boolean>>>({});
+  const [ytUrls, setYtUrls]         = useState<Partial<Record<SoundKey, string>>>({});
+  const previewRef                  = useRef<HTMLAudioElement | null>(null);
+  const fileInputRef                = useRef<HTMLInputElement>(null);
+  const uploadKeyRef                = useRef<SoundKey | null>(null);
 
   function setSlot(key: SoundKey, patch: Partial<SlotState>) {
     setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
@@ -42,12 +42,7 @@ export default function AdminSoundsPage() {
       const next = { ...prev };
       for (const row of data) {
         if (next[row.key as SoundKey]) {
-          next[row.key as SoundKey] = {
-            ...next[row.key as SoundKey],
-            url: row.url,
-            active: row.active,
-            dbId: row.id,
-          };
+          next[row.key as SoundKey] = { ...next[row.key as SoundKey], url: row.url, active: row.active, dbId: row.id };
         }
       }
       return next;
@@ -111,6 +106,70 @@ export default function AdminSoundsPage() {
     } catch {}
   }
 
+  // ── File upload ────────────────────────────────────────────────────────────
+  function openFilePicker(key: SoundKey) {
+    uploadKeyRef.current = key;
+    if (fileInputRef.current) { fileInputRef.current.value = ""; fileInputRef.current.click(); }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const key = uploadKeyRef.current;
+    if (!key) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX = 2 * 1024 * 1024;
+    if (file.size > MAX) {
+      setUpErr((p) => ({ ...p, [key]: "File too large — max 2 MB" }));
+      setTimeout(() => setUpErr((p) => ({ ...p, [key]: "" })), 3000);
+      return;
+    }
+
+    setUpKey(key);
+    setUpErr((p) => ({ ...p, [key]: "" }));
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/admin/game-sounds/upload", { method: "POST", body: form });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setSlot(key, { url: data.url!, msg: { ok: true, text: "Uploaded — click Save" } });
+      setTimeout(() => setSlot(key, { msg: null }), 3000);
+    } catch (err) {
+      setUpErr((p) => ({ ...p, [key]: err instanceof Error ? err.message : "Upload failed" }));
+      setTimeout(() => setUpErr((p) => ({ ...p, [key]: "" })), 5000);
+    } finally {
+      setUpKey(null);
+    }
+  }
+
+  // ── YouTube extraction ─────────────────────────────────────────────────────
+  async function handleYouTubeExtract(key: SoundKey) {
+    const url = ytUrls[key]?.trim();
+    if (!url) return;
+
+    setUpKey(key);
+    setUpErr((p) => ({ ...p, [key]: "" }));
+    try {
+      const res = await fetch("/api/admin/game-sounds/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json() as { url?: string; title?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Extraction failed");
+      setSlot(key, { url: data.url!, msg: { ok: true, text: `Extracted — click Save` } });
+      setYtUrls((p) => ({ ...p, [key]: "" }));
+      setShowYt((p) => ({ ...p, [key]: false }));
+      setTimeout(() => setSlot(key, { msg: null }), 3000);
+    } catch (err) {
+      setUpErr((p) => ({ ...p, [key]: err instanceof Error ? err.message : "Extraction failed" }));
+      setTimeout(() => setUpErr((p) => ({ ...p, [key]: "" })), 6000);
+    } finally {
+      setUpKey(null);
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="flex items-center gap-3 mb-2">
@@ -118,8 +177,11 @@ export default function AdminSoundsPage() {
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)]">Game Sounds</h1>
       </div>
       <p className="text-[var(--text-muted)] text-sm mb-8">
-        Manage sound effects for online games. Paste a direct audio URL (mp3, ogg, wav) for each slot.
+        Manage sound effects for online games. Paste a URL, upload an audio file (max 2 MB), or extract audio from a YouTube link.
       </p>
+
+      {/* Hidden shared file input */}
+      <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChange} />
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]" /></div>
@@ -127,9 +189,14 @@ export default function AdminSoundsPage() {
         <div className="flex flex-col gap-4">
           {ALL_SOUND_KEYS.map((key) => {
             const slot = slots[key];
+            const isUploading = uploadingKey === key;
+            const err = uploadErr[key];
+
             return (
               <div key={key}
                 className={`bg-[var(--bg-elevated)] border rounded-xl px-4 py-3 transition-colors ${slot.dbId && slot.active ? "border-violet-500/25" : "border-[var(--border-subtle)]"}`}>
+
+                {/* Header */}
                 <div className="flex items-center gap-3 mb-2">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${slot.dbId && slot.active ? "bg-green-400" : "bg-[var(--border-subtle)]"}`} />
                   <div>
@@ -144,12 +211,13 @@ export default function AdminSoundsPage() {
                   )}
                   {slot.msg && (
                     <span className={`text-xs font-display font-semibold flex items-center gap-1 ${slot.msg.ok ? "text-green-400" : "text-red-400"} ${slot.dbId ? "" : "ml-auto"}`}>
-                      {slot.msg.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />} {slot.msg.text}
+                      {slot.msg.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}{slot.msg.text}
                     </span>
                   )}
                 </div>
 
-                <div className="flex gap-2">
+                {/* URL input row */}
+                <div className="flex gap-2 mb-2">
                   <input
                     value={slot.url}
                     onChange={(e) => setSlot(key, { url: e.target.value })}
@@ -179,6 +247,65 @@ export default function AdminSoundsPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Upload / YouTube buttons */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => openFilePicker(key)}
+                    disabled={uploadingKey !== null}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[0.62rem] font-display font-semibold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-violet-400 hover:border-violet-500/30 disabled:opacity-40 transition-colors"
+                  >
+                    {isUploading && !showYt[key]
+                      ? <Loader2 size={10} className="animate-spin" />
+                      : <Upload size={10} />}
+                    Upload file
+                  </button>
+                  <button
+                    onClick={() => setShowYt((p) => ({ ...p, [key]: !p[key] }))}
+                    disabled={uploadingKey !== null}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[0.62rem] font-display font-semibold border transition-colors disabled:opacity-40 ${showYt[key] ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/30"}`}
+                  >
+                    <Youtube size={10} />
+                    From YouTube
+                  </button>
+                  {err && (
+                    <span className="text-[0.6rem] text-red-400 flex items-center gap-0.5 ml-1">
+                      <AlertCircle size={10} />{err}
+                    </span>
+                  )}
+                </div>
+
+                {/* YouTube URL inline input */}
+                {showYt[key] && (
+                  <div className="mt-2 flex gap-2">
+                    <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-red-500/30">
+                      <Youtube size={11} className="text-red-500 shrink-0" />
+                      <input
+                        value={ytUrls[key] ?? ""}
+                        onChange={(e) => setYtUrls((p) => ({ ...p, [key]: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && handleYouTubeExtract(key)}
+                        placeholder="https://youtube.com/watch?v=..."
+                        className="flex-1 bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] font-mono"
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleYouTubeExtract(key)}
+                      disabled={isUploading || !ytUrls[key]?.trim()}
+                      title="Extract & upload audio"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-xs font-display font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                    >
+                      {isUploading
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <ArrowRight size={11} />}
+                    </button>
+                    <button
+                      onClick={() => { setShowYt((p) => ({ ...p, [key]: false })); setYtUrls((p) => ({ ...p, [key]: "" })); }}
+                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

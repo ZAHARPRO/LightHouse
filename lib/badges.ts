@@ -141,4 +141,48 @@ export const BADGE_DEFS: Record<string, BadgeDef> = {
     howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online minesweeper.",
     category: "games", rare: true,
   },
+
+  // Checkers
+  CHECKERS_WIN: {
+    icon: "🔴", label: "Checkers Victor", color: "#f87171", points: 50,
+    description: "Won an online checkers match",
+    how: "Win a real-time online checkers game",
+    howToEarn: "Beat your opponent in a 1v1 online checkers match.",
+    category: "games",
+  },
+  CHECKERS_ONLINE_WIN: {
+    icon: "🏅", label: "Checkers Champion", color: "#fb923c", points: 100,
+    description: "Won a rated online checkers match",
+    how: "Win a rated checkers game",
+    howToEarn: "Win a rated 1v1 online checkers match to earn this badge.",
+    category: "games",
+  },
+  CHECKERS_SILVER: {
+    icon: "🥈", label: "Checkers Silver", color: "#c0c0c0", points: 75,
+    description: "Reached Silver rank in rated checkers (700+ ELO)",
+    how: "Reach 700 ELO in rated checkers",
+    howToEarn: "Climb to Silver rank by reaching 700 ELO in rated online checkers.",
+    category: "games",
+  },
+  CHECKERS_GOLD: {
+    icon: "🥇", label: "Checkers Gold", color: "#ffd700", points: 150,
+    description: "Reached Gold rank in rated checkers (1300+ ELO)",
+    how: "Reach 1300 ELO in rated checkers",
+    howToEarn: "Prove your skill — reach 1300 ELO in rated online checkers.",
+    category: "games", rare: true,
+  },
+  CHECKERS_PLATINUM: {
+    icon: "💠", label: "Checkers Platinum", color: "#e2e8f0", points: 300,
+    description: "Reached Platinum rank in rated checkers (2200+ ELO)",
+    how: "Reach 2200 ELO in rated checkers",
+    howToEarn: "Elite territory — reach 2200 ELO in rated online checkers.",
+    category: "games", rare: true,
+  },
+  CHECKERS_DIAMOND: {
+    icon: "💎", label: "Checkers Diamond", color: "#67e8f9", points: 500,
+    description: "Reached Diamond rank in rated checkers (3400+ ELO)",
+    how: "Reach 3400 ELO in rated checkers",
+    howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online checkers.",
+    category: "games", rare: true,
+  },
 };

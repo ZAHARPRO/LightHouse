@@ -69,6 +69,9 @@ model User {
   playlists            Playlist[]           @relation("UserPlaylists")
   chessElo             Int                  @default(400)
   minesweeperElo       Int                  @default(400)
+  checkersElo          Int                  @default(400)
+  checkersRoomsAsHost  CheckersRoom[]       @relation("CheckersHost")
+  checkersRoomsAsGuest CheckersRoom[]       @relation("CheckersGuest")
   muteExpiresAt        DateTime?
   mutes                Mute[]               @relation("MuteTarget")
   mutesMade            Mute[]               @relation("MutedBy")
@@ -383,6 +386,12 @@ enum RewardType {
   MINE_PLATINUM
   MINE_DIAMOND
   PUZZLE_MASTER
+  CHECKERS_WIN
+  CHECKERS_ONLINE_WIN
+  CHECKERS_SILVER
+  CHECKERS_GOLD
+  CHECKERS_PLATINUM
+  CHECKERS_DIAMOND
 }
 
 enum ContactStatus {
@@ -557,6 +566,55 @@ model ChessRoom {
 }
 
 enum ChessRoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
+}
+
+model CheckersRoom {
+  id           String               @id @default(cuid())
+  hostId       String
+  guestId      String?
+  status       CheckersRoomStatus   @default(WAITING)
+  timeControl  String               @default("none")
+  hostReady    Boolean              @default(true)
+  guestReady   Boolean              @default(false)
+  hostColor    String               @default("w")   // "w" | "b" — assigned at start
+  rated        Boolean              @default(false)
+  hostEloSnapshot  Int?
+  guestEloSnapshot Int?
+  hostEloDelta     Int?
+  guestEloDelta    Int?
+  resultReverted   Boolean          @default(false)
+
+  boardJson      String?  @db.Text  // JSON: Cell[][]
+  moveCount      Int      @default(0)
+  mustJumpFrom   String?            // JSON: [row, col] | null (multi-jump continuations)
+
+  whiteTimeMs  Int?
+  blackTimeMs  Int?
+  lastMoveAt   DateTime?
+
+  winner       String?              // "white" | "black" | "draw"
+  winReason    String?              // "no_pieces" | "no_moves" | "timeout" | "resigned"
+  hostHistoryHidden  Boolean        @default(false)
+  guestHistoryHidden Boolean        @default(false)
+  chatJson       String?  @db.Text
+  spectatorsJson String?  @db.Text
+
+  hostLastSeen  DateTime?
+  guestLastSeen DateTime?
+
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  host  User  @relation("CheckersHost",  fields: [hostId],  references: [id], onDelete: Cascade)
+  guest User? @relation("CheckersGuest", fields: [guestId], references: [id], onDelete: Cascade)
+}
+
+enum CheckersRoomStatus {
   WAITING
   PLAYING
   FINISHED

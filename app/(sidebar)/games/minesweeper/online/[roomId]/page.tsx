@@ -224,6 +224,7 @@ export default function GameRoomPage() {
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
   const prevRoomRef    = useRef<RoomData | null>(null);
   const soundFiredRef  = useRef(false);
+  const hitIdxRef      = useRef<number | undefined>(undefined);
 
   const fetchRoom = useCallback(async () => {
     const ctrl = new AbortController();
@@ -319,6 +320,7 @@ export default function GameRoomPage() {
         const revealed  = new Set(r.myRevealed);
         if (mineSet.has(idx)) {
           // Hit a mine — reveal all mines immediately
+          hitIdxRef.current = idx;
           const exploded = new Set(revealed);
           for (const m of mineSet) exploded.add(m);
           return { ...r, myRevealed: [...exploded], myHit: true };
@@ -492,7 +494,7 @@ export default function GameRoomPage() {
             </div>
             <MineBoard rows={rows} cols={cols} mines={room.myMines} revealed={room.myRevealed} flagged={room.myFlagged}
               isHit={room.myHit}
-              hitIdx={room.myHit && room.myMines ? room.myRevealed.find(i => room.myMines!.includes(i)) : undefined}
+              hitIdx={room.myHit ? hitIdxRef.current : undefined}
               interactive={false} cellPx={fPx} />
           </div>
 
@@ -604,7 +606,7 @@ export default function GameRoomPage() {
           </div>
           <MineBoard rows={rows} cols={cols} mines={room.myMines} revealed={room.myRevealed} flagged={room.myFlagged}
             isHit={room.myHit}
-            hitIdx={room.myHit && room.myMines ? room.myRevealed.find(i => room.myMines!.includes(i)) : undefined}
+            hitIdx={room.myHit ? hitIdxRef.current : undefined}
             interactive={!isSpectator && !room.myHit} cellPx={mPx}
             onReveal={handleReveal} onFlag={handleFlag} />
         </div>

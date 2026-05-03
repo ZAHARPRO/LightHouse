@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Loader2, RotateCcw, Trophy, CheckCircle2, XCircle, ChevronLeft,
   Puzzle, ChevronRight, Lightbulb, Play, X, Zap,
@@ -93,6 +93,19 @@ function PromotionPicker({ color, onPick }: { color:"w"|"b"; onPick:(p:PieceType
 // ── Video recharge modal ──────────────────────────────────────────────────────
 type AdVideoData = { id: string; title: string; url: string; duration: number };
 
+function getYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0];
+    if (u.hostname.includes("youtube.com")) {
+      if (u.pathname === "/watch") return u.searchParams.get("v");
+      const embedMatch = u.pathname.match(/\/embed\/([^/?]+)/);
+      if (embedMatch) return embedMatch[1];
+    }
+  } catch { /* invalid url */ }
+  return null;
+}
+
 function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(pts:number)=>void }) {
   const t = useTranslations("puzzles");
   const [video, setVideo]     = useState<AdVideoData|null>(null);
@@ -101,8 +114,10 @@ function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(p
   const [claiming, setClaiming] = useState(false);
   const [error, setError]     = useState<string|null>(null);
   const [cooldownMin, setCooldownMin] = useState<number|null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [ytElapsed, setYtElapsed] = useState(0);
+  const videoRef  = useRef<HTMLVideoElement>(null);
   const watchedRef = useRef(false);
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/hints/ad-video")
@@ -110,6 +125,26 @@ function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(p
       .then((d: AdVideoData) => { setVideo(d); setLoading(false); })
       .catch(() => { setError(t("noVideo")); setLoading(false); });
   }, [t]);
+
+  // Start countdown timer for YouTube embeds
+  useEffect(() => {
+    if (!video || watchedRef.current) return;
+    const ytId = getYouTubeId(video.url);
+    if (!ytId) return;
+    const target = Math.floor(video.duration * 0.9);
+    timerRef.current = setInterval(() => {
+      setYtElapsed(prev => {
+        const next = prev + 1;
+        if (next >= target && !watchedRef.current) {
+          watchedRef.current = true;
+          setWatched(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+        }
+        return next;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [video]);
 
   function handleTimeUpdate() {
     if (!video || watchedRef.current) return;
@@ -140,6 +175,43 @@ function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(p
     }
   }
 
+  const renderVideo = (v: AdVideoData) => {
+    const ytId = getYouTubeId(v.url);
+    const target = Math.floor(v.duration * 0.9);
+    if (ytId) {
+      return (
+        <div className="mb-4">
+          <iframe
+            src={`https://www.youtube.com/embed/${ytId}?rel=0`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="w-full rounded-xl bg-black"
+            style={{ height: 220 }}
+          />
+          {!watched && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${Math.min(100, (ytElapsed / target) * 100)}%` }} />
+              </div>
+              <span className="text-[0.65rem] text-[var(--text-muted)] shrink-0">{Math.max(0, target - ytElapsed)}s</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <video
+        ref={videoRef}
+        src={v.url}
+        controls
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={() => { watchedRef.current = true; setWatched(true); }}
+        className="w-full rounded-xl mb-4 bg-black"
+        style={{ maxHeight: 240 }}
+      />
+    );
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[960] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-6 w-full max-w-md relative">
@@ -159,15 +231,7 @@ function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(p
         ) : video ? (
           <>
             <p className="text-[var(--text-secondary)] text-xs font-display font-semibold mb-2">{video.title}</p>
-            <video
-              ref={videoRef}
-              src={video.url}
-              controls
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={() => { watchedRef.current = true; setWatched(true); }}
-              className="w-full rounded-xl mb-4 bg-black"
-              style={{ maxHeight: 240 }}
-            />
+            {renderVideo(video)}
             <button
               onClick={claimPoints}
               disabled={!watched || claiming}
@@ -193,7 +257,6 @@ const DIFF_LABEL: Record<string,string> = { mate1:"Mate in 1", mate2:"Mate in 2"
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PuzzleSolverPage() {
   const { id } = useParams<{ id:string }>();
-  const router = useRouter();
   const t = useTranslations("puzzles");
 
   const [puzzle, setPuzzle]   = useState<PuzzleData|null>(null);

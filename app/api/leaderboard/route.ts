@@ -7,7 +7,8 @@ export async function GET(req: Request) {
   const limit = Math.min(100, Number(searchParams.get("limit") ?? "10"));
 
   const isChess = game === "chess";
-  const field = isChess ? "chessElo" : "minesweeperElo";
+  const isCheckers = game === "checkers";
+  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : "minesweeperElo";
   const search = searchParams.get("search")?.trim() ?? "";
 
   const users = await prisma.user.findMany({
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
     },
     orderBy: { [field]: "desc" },
     take: limit,
-    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true },
+    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true },
   });
 
   // Compute wins + max win streak per user
@@ -25,7 +26,31 @@ export async function GET(req: Request) {
 
   let winStreaks: Record<string, { wins: number; maxStreak: number }> = {};
 
-  if (isChess) {
+  if (isCheckers) {
+    const rooms = await prisma.checkersRoom.findMany({
+      where: {
+        status: "FINISHED",
+        rated: true,
+        OR: [{ hostId: { in: userIds } }, { guestId: { in: userIds } }],
+      },
+      select: { hostId: true, guestId: true, hostColor: true, winner: true, endedAt: true },
+      orderBy: { endedAt: "asc" },
+    });
+
+    for (const uid of userIds) {
+      const userRooms = rooms.filter(r => r.hostId === uid || r.guestId === uid);
+      let wins = 0, streak = 0, maxStreak = 0;
+      for (const r of userRooms) {
+        const hc = r.hostColor ?? "w";
+        const myColor = r.hostId === uid ? hc : (hc === "w" ? "b" : "w");
+        const myColorName = myColor === "w" ? "white" : "black";
+        const won = r.winner === myColorName;
+        if (won) { wins++; streak++; maxStreak = Math.max(maxStreak, streak); }
+        else streak = 0;
+      }
+      winStreaks[uid] = { wins, maxStreak };
+    }
+  } else if (isChess) {
     const rooms = await prisma.chessRoom.findMany({
       where: {
         status: "FINISHED",

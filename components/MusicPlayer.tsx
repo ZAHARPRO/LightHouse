@@ -6,7 +6,7 @@ import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
   History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
-  Shuffle, Sparkles,
+  Shuffle, Sparkles, MonitorPlay, Maximize2, Minimize2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,6 +37,18 @@ function fmtMs(ms: number) {
   const s = Math.floor(Math.max(0, ms) / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
+function getYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0] || null;
+    if (u.hostname.includes("youtube.com")) {
+      if (u.pathname === "/watch") return u.searchParams.get("v");
+      const m = u.pathname.match(/\/(?:embed|shorts|v)\/([^/?]+)/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return null;
+}
 function timeAgo(at: number) {
   const d = Math.floor((Date.now() - at) / 1000);
   if (d < 60) return `${d}s ago`; if (d < 3600) return `${Math.floor(d / 60)}m ago`;
@@ -53,9 +65,12 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     if (typeof window === "undefined") return { x: 16, y: 16 };
     return { x: window.innerWidth - 376, y: window.innerHeight - 420 };
   });
-  const [size, setSize]     = useState({ w: 350 });
-  const [minimized, setMin] = useState(false);
-  const [view, setView]     = useState<"player" | "lobbies" | "create" | "lobby">("player");
+  const [size, setSize]       = useState({ w: 350 });
+  const [minimized, setMin]   = useState(false);
+  const [view, setView]       = useState<"player" | "lobbies" | "create" | "lobby">("player");
+  const [showVideo, setShowVideo]     = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const [volume, setVol]    = useState(() =>
     typeof window !== "undefined" ? Number(localStorage.getItem("music_vol") ?? 70) : 70
   );
@@ -164,6 +179,29 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
         setFavTracks(d.tracks);
       }).catch(() => {});
   }, [session?.user?.id]);
+
+  // ── Video mode: reset when track changes, sync fullscreen state ──────────
+  useEffect(() => { setShowVideo(false); }, [track?.videoId]);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // Mute audio player while video iframe is visible (avoids double audio)
+  useEffect(() => {
+    if (showVideo) setMusicVol(0);
+    else setMusicVol(volume);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVideo]);
+
+  function toggleFullscreen() {
+    const el = videoContainerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) el.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
 
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
   const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
@@ -309,6 +347,21 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     setSearching(true); setSearchErr(null);
     debounceRef.current = setTimeout(async () => {
       try {
+        const ytId = getYouTubeId(searchQ.trim());
+        if (ytId) {
+          const fallback: YTItem = { videoId: ytId, title: "YouTube Video", channel: "", thumbnail: `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` };
+          try {
+            const oRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${ytId}`)}&format=json`);
+            if (oRes.ok) {
+              const o = await oRes.json() as { title: string; author_name: string; thumbnail_url: string };
+              setResults([{ videoId: ytId, title: o.title, channel: o.author_name, thumbnail: o.thumbnail_url }]);
+            } else {
+              setResults([fallback]);
+            }
+          } catch { setResults([fallback]); }
+          setSearchOpen(true);
+          return;
+        }
         const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(searchQ.trim())}`);
         if (res.ok) {
           const d = await res.json() as { items: YTItem[] };
@@ -612,8 +665,43 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col gap-2">
       {track ? (
         <>
+          {/* ── Video panel ── */}
+          {showVideo && (
+            <div ref={videoContainerRef} className="relative rounded-xl overflow-hidden bg-black w-full" style={{ aspectRatio: "16/9" }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${track.videoId}?autoplay=1&rel=0&modestbranding=1`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+                className="absolute inset-0 w-full h-full"
+              />
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                className="absolute top-1.5 right-1.5 z-10 p-1 rounded bg-black/60 text-white hover:bg-black/85 transition-colors"
+              >
+                {isFullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+              </button>
+              <button
+                onClick={() => setShowVideo(false)}
+                title="Close video"
+                className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/60 text-white hover:bg-black/85 transition-colors"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2.5">
-            <Image src={track.thumbnail} alt="" width={44} height={44} className="rounded-lg shrink-0 shadow object-cover" />
+            <button
+              onClick={() => setShowVideo(v => !v)}
+              title={showVideo ? "Hide video" : "Watch video"}
+              className="relative shrink-0 group rounded-lg overflow-hidden shadow"
+            >
+              <Image src={track.thumbnail} alt="" width={44} height={44} className="rounded-lg object-cover block" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                <MonitorPlay size={14} className="text-white" />
+              </div>
+            </button>
             <div className="min-w-0 flex-1">
               <p className="font-display font-bold text-[var(--text-primary)] text-xs truncate leading-tight">{track.title}</p>
               <p className="text-[var(--text-muted)] text-[0.6rem] truncate">{track.channel}</p>

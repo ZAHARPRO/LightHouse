@@ -65,7 +65,7 @@ export default function CheckersOnlineLobby() {
         <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
       </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">Online Checkers</h1>
-      <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time · <Link href="/games/checkers/online/rated" className="text-orange-400 hover:opacity-80">Rated queue →</Link></p>
+      <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time · <Link href="/games/checkers/online/rated" className="text-pink-400 hover:opacity-80">Rated queue →</Link></p>
 
       {/* Create room */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5 mb-6">

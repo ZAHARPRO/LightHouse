@@ -27,15 +27,17 @@ function evaluate(board: Board, color: Color): number {
   return color === "w" ? score : -score;
 }
 
-function expandMoves(board: Board, moves: Move[], color: Color): { board: Board; move: Move }[] {
+// rootMove tracks the first move of a chain so getBotMove applies it to the original board
+function expandMoves(board: Board, moves: Move[], color: Color, rootMove?: Move): { board: Board; move: Move }[] {
   const result: { board: Board; move: Move }[] = [];
   for (const move of moves) {
+    const root = rootMove ?? move;
     const { board: nb, promoted } = applyMove(board, move);
     if (move.captured && !promoted && canContinueJump(nb, move.to[0], move.to[1])) {
       const continuations = getLegalMoves(nb, color, move.to);
-      for (const e of expandMoves(nb, continuations, color)) result.push(e);
+      for (const e of expandMoves(nb, continuations, color, root)) result.push(e);
     } else {
-      result.push({ board: nb, move });
+      result.push({ board: nb, move: root });
     }
   }
   return result;

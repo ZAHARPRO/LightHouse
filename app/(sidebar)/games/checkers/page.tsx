@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { RotateCcw, Flag, Crown } from "lucide-react";
+import { RotateCcw, Flag, Crown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   initialBoard, getLegalMoves, applyMove, canContinueJump, isGameOver, countPieces,
   type Board, type Cell, type Move,
@@ -10,6 +10,19 @@ import { getBotMove, type Difficulty } from "@/lib/checkers-bot";
 import { awardGameBadge } from "@/actions/badges";
 
 type Status = "idle" | "playing" | "over";
+
+type HistoryEntry = {
+  board: Board;
+  turn: "w" | "b";
+  moveNum: number;
+  from: [number, number];
+  to: [number, number];
+  captured: boolean;
+};
+
+function toAlg(r: number, c: number) {
+  return `${String.fromCharCode(97 + c)}${r + 1}`;
+}
 
 const LIGHT_SQ = "#fef3c7"; // amber-100
 const DARK_SQ  = "#78350f"; // amber-900
@@ -206,13 +219,17 @@ export default function CheckersVsBotPage() {
   const [mustJump, setMustJump]     = useState<[number, number] | null>(null);
   const [result, setResult]         = useState("");
   const [botThinking, setBotThinking] = useState(false);
+  const [history, setHistory]       = useState<HistoryEntry[]>([]);
+  const [replayIdx, setReplayIdx]   = useState<number | null>(null);
+  const historyListRef              = useRef<HTMLDivElement>(null);
   const cellPx = useCellPx();
 
   function startGame() {
     const b = initialBoard();
     setBoard(b); setTurn("w"); setSelected(null); setLegalDots([]);
     setLastMove(null); setMoveCount(0); setMustJump(null);
-    setResult(""); setBotThinking(false); setStatus("playing");
+    setResult(""); setBotThinking(false); setHistory([]); setReplayIdx(null);
+    setStatus("playing");
   }
 
   const doMove = useCallback((
@@ -233,6 +250,10 @@ export default function CheckersVsBotPage() {
     const nextTurn: "w" | "b" = currentTurn === "w" ? "b" : "w";
     const nextCount = currentMoveCount + 1;
     setTurn(nextTurn); setMoveCount(nextCount);
+    setHistory(h => [...h, {
+      board: nb, turn: currentTurn, moveNum: nextCount,
+      from: move.from, to: move.to, captured: !!move.captured,
+    }]);
     const { over, winner } = isGameOver(nb, nextTurn);
     if (over) {
       if (!winner) { setResult("Draw!"); }
@@ -308,10 +329,22 @@ export default function CheckersVsBotPage() {
     setSelected(null); setLegalDots([]);
   }
 
-  const whitePieces = countPieces(board, "w");
-  const blackPieces = countPieces(board, "b");
-  const isMyTurn  = status === "playing" && turn === "w" && !botThinking;
-  const isBotTurn = status === "playing" && (turn === "b" || botThinking);
+  // Auto-scroll history list to bottom when a new move is added (not in replay)
+  useEffect(() => {
+    if (replayIdx === null && historyListRef.current) {
+      historyListRef.current.scrollTop = historyListRef.current.scrollHeight;
+    }
+  }, [history.length, replayIdx]);
+
+  const displayBoard  = replayIdx !== null ? history[replayIdx]?.board ?? board : board;
+  const displayLastMove: Move | null = replayIdx !== null
+    ? (history[replayIdx] ? { from: history[replayIdx].from, to: history[replayIdx].to } as Move : null)
+    : lastMove;
+
+  const whitePieces = countPieces(displayBoard, "w");
+  const blackPieces = countPieces(displayBoard, "b");
+  const isMyTurn  = status === "playing" && turn === "w" && !botThinking && replayIdx === null;
+  const isBotTurn = status === "playing" && (turn === "b" || botThinking) && replayIdx === null;
   const diffLabel = difficulty === "easy" ? "Easy" : difficulty === "normal" ? "Normal" : "Hard";
 
   // ── IDLE ──────────────────────────────────────────────────────────────────
@@ -355,15 +388,15 @@ export default function CheckersVsBotPage() {
           <PlayerRow label={`Bot · ${diffLabel}`} color="b" active={isBotTurn} pieces={blackPieces} />
 
           <CheckersBoard
-            board={board}
+            board={displayBoard}
             cellPx={cellPx}
-            selected={selected}
-            legalDots={legalDots}
-            lastMove={lastMove}
-            mustJumpFrom={mustJump}
+            selected={replayIdx !== null ? null : selected}
+            legalDots={replayIdx !== null ? [] : legalDots}
+            lastMove={displayLastMove}
+            mustJumpFrom={replayIdx !== null ? null : mustJump}
             onSquare={handleSquare}
             onDrop={handleMove}
-            disabled={status === "over" || turn !== "w" || botThinking}
+            disabled={status === "over" || turn !== "w" || botThinking || replayIdx !== null}
           />
 
           <PlayerRow label="You (White)" color="w" active={isMyTurn} pieces={whitePieces} />
@@ -372,18 +405,25 @@ export default function CheckersVsBotPage() {
         {/* Side panel */}
         <div className="flex flex-col gap-3 w-full max-w-xs lg:w-60 lg:self-stretch py-1">
           {/* Controls */}
-          <div className="flex gap-2">
-            <button onClick={startGame}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-display font-semibold hover:text-[var(--text-primary)] transition-colors">
-              <RotateCcw size={12} /> New Game
+          {replayIdx !== null ? (
+            <button onClick={() => setReplayIdx(null)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/15 border border-orange-500/40 text-[var(--accent-orange)] text-xs font-display font-semibold hover:bg-orange-500/25 transition-colors">
+              <ChevronRight size={12} /> Exit Replay
             </button>
-            {status === "playing" && (
-              <button onClick={() => { setResult("You surrendered."); setStatus("over"); }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
-                <Flag size={12} /> Surrender
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={startGame}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-display font-semibold hover:text-[var(--text-primary)] transition-colors">
+                <RotateCcw size={12} /> New Game
               </button>
-            )}
-          </div>
+              {status === "playing" && (
+                <button onClick={() => { setResult("You surrendered."); setStatus("over"); }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-xs font-display font-semibold hover:text-red-400 transition-colors">
+                  <Flag size={12} /> Surrender
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Result banner */}
           {status === "over" && result && (
@@ -430,17 +470,61 @@ export default function CheckersVsBotPage() {
             )}
           </div>
 
-          {/* Rules reminder */}
-          <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-4 gap-1.5">
-            <p className="text-xs font-display font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Rules</p>
-            {[
-              "Captures are mandatory",
-              "Multi-jump if possible",
-              "Reach last row → King",
-              "No moves = you lose",
-            ].map(r => (
-              <p key={r} className="text-[0.68rem] text-[var(--text-muted)]">· {r}</p>
-            ))}
+          {/* Move history + replay */}
+          <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3 gap-2 min-h-0">
+            <p className="text-xs font-display font-bold text-[var(--text-secondary)] uppercase tracking-wider">History</p>
+
+            <div ref={historyListRef} className="flex flex-col gap-px overflow-y-auto max-h-36 lg:max-h-48">
+              {history.length === 0 && (
+                <p className="text-[0.68rem] text-[var(--text-muted)] py-0.5">No moves yet</p>
+              )}
+              {history.map((entry, i) => {
+                const note = `${toAlg(entry.from[0], entry.from[1])}${entry.captured ? "×" : "→"}${toAlg(entry.to[0], entry.to[1])}`;
+                const isActive = replayIdx === i;
+                return (
+                  <button key={i} onClick={() => setReplayIdx(i)}
+                    className={["flex items-center gap-1.5 px-1.5 py-0.5 rounded text-left font-mono text-[0.65rem] transition-colors",
+                      isActive
+                        ? "bg-orange-500/20 text-[var(--accent-orange)]"
+                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]",
+                    ].join(" ")}>
+                    <span className="w-5 shrink-0 text-right text-[var(--text-muted)]">{entry.moveNum}.</span>
+                    <span className={entry.turn === "w" ? "text-amber-300" : "text-slate-400"}>
+                      {entry.turn === "w" ? "W" : "B"}
+                    </span>
+                    <span>{note}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Replay controls */}
+            <div className="flex items-center gap-0.5 pt-1 border-t border-[var(--border-subtle)]">
+              <button onClick={() => setReplayIdx(0)}
+                disabled={history.length === 0 || replayIdx === 0}
+                className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors font-mono">
+                «
+              </button>
+              <button onClick={() => setReplayIdx(i => i !== null ? Math.max(0, i - 1) : history.length - 1)}
+                disabled={history.length === 0 || replayIdx === 0}
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="flex-1 text-center text-[0.65rem] font-mono text-[var(--text-muted)]">
+                {replayIdx !== null ? `${replayIdx + 1}/${history.length}` : `${history.length}/${history.length}`}
+              </span>
+              <button onClick={() => setReplayIdx(i => i !== null ? Math.min(history.length - 1, i + 1) : null)}
+                disabled={history.length === 0 || replayIdx === history.length - 1}
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
+                <ChevronRight size={14} />
+              </button>
+              <button onClick={() => setReplayIdx(null)}
+                disabled={replayIdx === null}
+                className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--accent-orange)] disabled:opacity-30 transition-colors font-mono"
+                title="Return to live">
+                »
+              </button>
+            </div>
           </div>
         </div>
 

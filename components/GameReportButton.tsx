@@ -20,7 +20,7 @@ export default function GameReportButton({
 }: {
   targetId: string;
   targetName: string;
-  game: "chess" | "minesweeper";
+  game: "chess" | "minesweeper" | "checkers";
   roomId: string;
 }) {
   const [open, setOpen]       = useState(false);
@@ -80,7 +80,7 @@ export default function GameReportButton({
                 </div>
 
                 <p className="text-[0.72rem] text-[var(--text-muted)] mb-2 uppercase font-semibold tracking-wide">
-                  {game === "chess" ? "♟ Chess" : "💣 Minesweeper"} · in-game report
+                  {game === "chess" ? "♟ Chess" : game === "checkers" ? "🔴 Checkers" : "💣 Minesweeper"} · in-game report
                 </p>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-2">

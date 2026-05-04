@@ -36,42 +36,78 @@ export function initialBoard(): Board {
 
 const ALL_DIAGS: [number, number][] = [[-1,-1],[-1,1],[1,-1],[1,1]];
 
-// All pieces (including regular) can capture in all 4 diagonal directions
+// Regular pieces capture one step in all 4 directions.
+// Kings (flying) scan the full diagonal: jump over the first enemy, land anywhere beyond it.
 function capturesForPiece(board: Board, r: number, c: number): Move[] {
   const piece = board[r][c];
   if (!piece) return [];
   const color = colorOf(piece)!;
   const moves: Move[] = [];
-  for (const [dr, dc] of ALL_DIAGS) {
-    const mr = r + dr, mc = c + dc, tr = r + 2*dr, tc = c + 2*dc;
-    if (!inBounds(tr, tc)) continue;
-    const mid = board[mr][mc];
-    if (mid && colorOf(mid) === opp(color) && board[tr][tc] === null)
-      moves.push({ from: [r,c], to: [tr,tc], captured: [mr,mc] });
+
+  if (isKing(piece)) {
+    for (const [dr, dc] of ALL_DIAGS) {
+      let nr = r + dr, nc = c + dc;
+      let enemy: [number, number] | null = null;
+      while (inBounds(nr, nc)) {
+        const cell = board[nr][nc];
+        if (enemy !== null) {
+          if (cell !== null) break;                          // blocked after jump
+          moves.push({ from: [r, c], to: [nr, nc], captured: enemy });
+        } else if (cell === null) {
+          /* empty — keep scanning */
+        } else if (colorOf(cell) === opp(color)) {
+          enemy = [nr, nc];                                  // found target; next squares are landings
+        } else {
+          break;                                             // own piece — stop
+        }
+        nr += dr; nc += dc;
+      }
+    }
+  } else {
+    for (const [dr, dc] of ALL_DIAGS) {
+      const mr = r + dr, mc = c + dc, tr = r + 2*dr, tc = c + 2*dc;
+      if (!inBounds(tr, tc)) continue;
+      const mid = board[mr][mc];
+      if (mid && colorOf(mid) === opp(color) && board[tr][tc] === null)
+        moves.push({ from: [r, c], to: [tr, tc], captured: [mr, mc] });
+    }
   }
+
   return moves;
 }
 
 export function getLegalMoves(board: Board, color: Color, mustJumpFrom?: [number,number] | null): Move[] {
   const moves: Move[] = [];
+
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (colorOf(board[r][c]) !== color) continue;
-      // Mid-chain: only the jumping piece can move, and only captures
       if (mustJumpFrom) {
         if (mustJumpFrom[0] !== r || mustJumpFrom[1] !== c) continue;
         moves.push(...capturesForPiece(board, r, c));
       } else {
         moves.push(...capturesForPiece(board, r, c));
         const piece = board[r][c]!;
-        for (const [dr, dc] of dirs(color, isKing(piece))) {
-          const tr = r+dr, tc = c+dc;
-          if (inBounds(tr, tc) && board[tr][tc] === null)
-            moves.push({ from: [r,c], to: [tr,tc], captured: null });
+        if (isKing(piece)) {
+          // Flying king: slide any number of squares along each diagonal
+          for (const [dr, dc] of ALL_DIAGS) {
+            let nr = r + dr, nc = c + dc;
+            while (inBounds(nr, nc) && board[nr][nc] === null) {
+              moves.push({ from: [r, c], to: [nr, nc], captured: null });
+              nr += dr; nc += dc;
+            }
+          }
+        } else {
+          for (const [dr, dc] of dirs(color, false)) {
+            const tr = r + dr, tc = c + dc;
+            if (inBounds(tr, tc) && board[tr][tc] === null)
+              moves.push({ from: [r, c], to: [tr, tc], captured: null });
+          }
         }
       }
     }
   }
+
   return moves;
 }
 

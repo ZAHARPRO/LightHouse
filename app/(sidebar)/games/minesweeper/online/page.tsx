@@ -92,7 +92,7 @@ export default function OnlineLobbyPage() {
         Online Minesweeper
       </h1>
       <p className="text-[var(--text-muted)] mb-8">Play against another player in real-time</p>
-
+ <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time · <Link href="/games/minesweeper/online/rated" className="text-pink-400 hover:opacity-80">Rated queue →</Link></p>
       {/* Create room */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5 mb-6">
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Create Room</p>

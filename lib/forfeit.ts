@@ -3,7 +3,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { calculateEloDelta } from "@/lib/elo";
-import { awardBadge, awardMineEloBadges, awardChessEloBadges } from "@/lib/awardBadge";
+import { awardBadge, awardMineEloBadges, awardChessEloBadges, awardCheckersEloBadges } from "@/lib/awardBadge";
 
 type PrismaT = PrismaClient;
 
@@ -47,6 +47,52 @@ export async function forfeitMinesweeper(
         }}),
       ]);
       await awardMineEloBadges(prisma, winnerId, winnerNew);
+    }
+  }
+}
+
+export async function forfeitCheckers(
+  prisma: PrismaT,
+  roomId: string,
+  winnerId: string,
+  loserId: string,
+  winnerColor: "white" | "black",
+  winReason: "resigned" | "disconnected",
+  isHostWinner: boolean,
+  rated: boolean,
+  guestId: string | null,
+) {
+  await prisma.checkersRoom.update({
+    where: { id: roomId },
+    data: {
+      status:   "FINISHED",
+      winner:   winnerColor,
+      winReason,
+      endedAt:  new Date(),
+      chatJson: null,
+    },
+  });
+
+  await awardBadge(prisma, winnerId, "CHECKERS_WIN");
+  await awardBadge(prisma, winnerId, "CHECKERS_ONLINE_WIN");
+
+  if (rated && guestId) {
+    const [winner, loser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: winnerId }, select: { checkersElo: true } }),
+      prisma.user.findUnique({ where: { id: loserId  }, select: { checkersElo: true } }),
+    ]);
+    if (winner && loser) {
+      const [delta] = calculateEloDelta(winner.checkersElo, loser.checkersElo);
+      const winnerNew = Math.max(100, winner.checkersElo + delta);
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: winnerId }, data: { checkersElo: winnerNew } }),
+        prisma.user.update({ where: { id: loserId  }, data: { checkersElo: Math.max(100, loser.checkersElo - delta) } }),
+        prisma.checkersRoom.update({ where: { id: roomId }, data: {
+          hostEloDelta:  isHostWinner ?  delta : -delta,
+          guestEloDelta: isHostWinner ? -delta :  delta,
+        }}),
+      ]);
+      await awardCheckersEloBadges(prisma, winnerId, winnerNew);
     }
   }
 }

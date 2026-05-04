@@ -18,7 +18,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!isHost && !isGuest) return NextResponse.json({ error: "Not a player" }, { status: 403 });
 
   if (room.status === "WAITING") {
-    if (isHost) await prisma.checkersRoom.update({ where: { id }, data: { status: "FINISHED" } });
+    if (isHost) await prisma.checkersRoom.delete({ where: { id } });
     else await prisma.checkersRoom.update({ where: { id }, data: { guestId: null, guestReady: false } });
     return NextResponse.json({ ok: true });
   }

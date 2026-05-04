@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { forfeitChess } from "@/lib/forfeit";
 
-const DISCONNECT_MS = 30_000; // 30s without ping = disconnected
+const DISCONNECT_MS_UNTIMED = 30_000;          // 30s for infinite games
+const DISCONNECT_MS_TIMED  = 5 * 60 * 1000;   // 5 min for timed games
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,11 +26,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     data: isHost ? { hostLastSeen: now } : { guestLastSeen: now },
   });
 
-  // For games with time control, timeout is already handled by the clock.
-  // Only detect disconnect for untimed games.
-  if (room.timeControl !== "none") return NextResponse.json({ ok: true });
-
-  const cutoff      = new Date(Date.now() - DISCONNECT_MS);
+  const disconnectMs = room.timeControl === "none" ? DISCONNECT_MS_UNTIMED : DISCONNECT_MS_TIMED;
+  const cutoff       = new Date(Date.now() - disconnectMs);
   const oppLastSeen = isHost ? room.guestLastSeen : room.hostLastSeen;
 
   if (oppLastSeen && oppLastSeen < cutoff && room.guestId) {

@@ -95,7 +95,7 @@ export default function ChessOnlineLobby() {
         </Link>
       </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">Online Chess</h1>
-      <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time</p>
+       <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time · <Link href="/games/chess/online/rated" className="text-pink-400 hover:opacity-80">Rated queue →</Link></p>
 
       {/* Create room */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5 mb-6">

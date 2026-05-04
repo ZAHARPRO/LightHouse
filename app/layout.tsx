@@ -66,7 +66,7 @@ export default async function RootLayout({
     <html lang={intlLocale} data-theme="pink">
       <body>
         <SessionProvider session={session}>
-          <NextIntlClientProvider locale={locale} messages={messages}>
+          <NextIntlClientProvider locale={intlLocale} messages={messages}>
             <MusicProvider>
               <div className="min-h-screen flex flex-col">
                 <PwaInit />

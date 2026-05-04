@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Loader2, Send, Crown, Flag, RotateCcw } from "lucide-react";
+import { Loader2, Crown, Flag, RotateCcw, CheckCircle2, Clock, Eye, ArrowBigLeft, ArrowDownLeft, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { getLegalMoves, type Board, type Cell, type Move, type Color } from "@/lib/checkers";
 import { getRank } from "@/lib/elo";
+import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
+import SpectatorBadge from "@/components/SpectatorBadge";
+import GameReportButton from "@/components/GameReportButton";
+import GameChat from "@/components/GameChat";
+import { preloadSounds, playSound } from "@/lib/gameSounds";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ChatMsg  = { userId: string; name: string; text: string; at: number };
@@ -128,10 +133,10 @@ function PlayerCard({ name, image, elo, color, timeMs, active, isMe, eloDelta, p
   const low  = timeMs !== null && timeMs < 30_000;
   return (
     <div className={["flex items-center gap-3 px-3 py-2 rounded-xl border transition-colors",
-      active ? "border-orange-500/50 bg-orange-500/5" : "border-[var(--border-subtle)] bg-[var(--bg-elevated)]"].join(" ")}>
+      active ? "border-pink-500/50 bg-pink-500/5" : "border-[var(--border-subtle)] bg-[var(--bg-elevated)]"].join(" ")}>
       {image
         ? <Image src={image} alt="" width={32} height={32} className="rounded-full shrink-0" />
-        : <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs shrink-0">{name?.[0] ?? "?"}</div>}
+        : <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-pink)] font-bold text-xs shrink-0">{name?.[0] ?? "?"}</div>}
       <div className="flex-1 min-w-0">
         <p className="font-display font-bold text-sm text-[var(--text-primary)] truncate">
           {name ?? "Anonymous"}{isMe && <span className="text-[0.6rem] text-[var(--accent-orange)] ml-1">(you)</span>}
@@ -177,9 +182,9 @@ export default function CheckersRoomPage() {
   const [readying, setReadying] = useState(false);
   const [starting, setStarting] = useState(false);
   const [resigning, setResigning] = useState(false);
-  const [chatText, setChatText] = useState("");
-  const [sendingChat, setSending] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
+  const connFailsRef = useRef(0);
+  const prevRoomRef  = useRef<RoomData | null>(null);
 
   // Timers
   const myRole    = room?.myRole ?? "spectator";
@@ -197,6 +202,15 @@ export default function CheckersRoomPage() {
   const whiteMs = useCountdown(room?.whiteTimeMs ?? null, whiteActive);
   const blackMs = useCountdown(room?.blackTimeMs ?? null, blackActive);
 
+  // Player heartbeat — keeps lastSeen fresh and detects opponent disconnect
+  useEffect(() => {
+    if (!room || myRole === "spectator") return;
+    const ping = () => fetch(`/api/checkers-rooms/${roomId}/ping`, { method: "POST" }).catch(() => {});
+    ping();
+    const t = setInterval(ping, 10_000);
+    return () => clearInterval(t);
+  }, [roomId, room?.status, myRole]);
+
   // Spectator heartbeat
   useEffect(() => {
     if (!room || room.status !== "PLAYING" || myRole !== "spectator") return;
@@ -206,16 +220,25 @@ export default function CheckersRoomPage() {
   }, [roomId, room?.status, myRole]);
 
   const fetchRoom = useCallback(async () => {
-    const res = await fetch(`/api/checkers-rooms/${roomId}`);
-    if (!res.ok) { setLoading(false); return; }
-    const data: RoomData = await res.json();
-    setRoom(data);
-    setLoading(false);
-    // Set flip for black player
-    if (data.myRole !== "spectator") {
-      const mc: Color = data.myRole === "host" ? data.hostColor as Color : (data.hostColor === "w" ? "b" : "w");
-      setFlipped(mc === "b");
-    }
+    try {
+      const res = await fetch(`/api/checkers-rooms/${roomId}`);
+      if (!res.ok) { connFailsRef.current++; }
+      else {
+        connFailsRef.current = 0;
+        const data: RoomData = await res.json();
+        setRoom(prev => {
+          prevRoomRef.current = prev;
+          return data;
+        });
+        setLoading(false);
+        if (data.myRole !== "spectator") {
+          const mc: Color = data.myRole === "host" ? data.hostColor as Color : (data.hostColor === "w" ? "b" : "w");
+          setFlipped(mc === "b");
+        }
+      }
+    } catch { connFailsRef.current++; }
+    const f = connFailsRef.current;
+    setConnStatus(f === 0 ? "ok" : f <= 4 ? "slow" : "lost");
   }, [roomId]);
 
   useEffect(() => {
@@ -226,8 +249,19 @@ export default function CheckersRoomPage() {
     return () => clearInterval(t);
   }, [fetchRoom]);
 
-  // Scroll chat
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [room?.chat]);
+  // Preload sounds once
+  useEffect(() => { preloadSounds(); }, []);
+
+  // Sound effects on state transitions
+  useEffect(() => {
+    if (!room) return;
+    const prev = prevRoomRef.current;
+    if (prev) {
+      if (prev.status === "WAITING" && room.status === "PLAYING") playSound("match_start");
+      if (prev.status === "WAITING" && !prev.guestReady && room.guestReady) playSound("player_ready");
+      if (room.status === "PLAYING" && room.moveCount > prev.moveCount) playSound("opponent_move");
+    }
+  }, [room]);
 
   // Clear selection when it's no longer our turn
   useEffect(() => { if (!isMyTurn) { setSelected(null); setLegalMoves([]); } }, [isMyTurn]);
@@ -302,15 +336,6 @@ export default function CheckersRoomPage() {
     await fetchRoom(); setResigning(false);
   }
 
-  async function sendChat(e: React.FormEvent) {
-    e.preventDefault();
-    if (!chatText.trim() || sendingChat) return;
-    setSending(true);
-    await fetch(`/api/checkers-rooms/${roomId}/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: chatText }),
-    }).catch(() => {});
-    setChatText(""); await fetchRoom(); setSending(false);
-  }
 
   // ── Derived board state ────────────────────────────────────────────────────
   const board = room?.board ?? null;
@@ -358,65 +383,86 @@ export default function CheckersRoomPage() {
 
   // ── WAITING LOBBY ──────────────────────────────────────────────────────────
   if (room.status === "WAITING") {
+    const TC_LABELS: Record<string, string> = {
+      none: "∞ No time limit", "60": "⚡ 1 min", "300": "🔥 5 min",
+      "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1 hour",
+    };
+    const hostRank  = getRank(room.hostElo);
+    const guestRank = room.guestElo ? getRank(room.guestElo) : null;
     return (
-      <main className="max-w-md mx-auto px-4 py-12">
-        <Link href="/games/checkers/online" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm mb-8 block transition-colors">← Lobby</Link>
+      <main className="max-w-lg mx-auto px-4 py-12">
+        <div className="flex items-center gap-3 mb-6">
+          <Link href="/games/checkers/online" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm">
+            <ArrowLeft size={16} className="inline -rotate-45" /> Leave lobby
+          </Link>
+        </div>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Checkers Room</h1>
-        {room.rated && <span className="text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
-        <p className="text-[var(--text-muted)] text-sm mt-2 mb-8">
-          {room.timeControl === "none" ? "∞ Infinite" : `${room.timeControl}s per side`}
+        <p className="text-[var(--text-muted)] text-sm mb-8">
+          {TC_LABELS[room.timeControl] ?? room.timeControl}
+          {room.rated && <span className="ml-2 text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
         </p>
 
         <div className="flex flex-col gap-3 mb-8">
           {/* Host */}
-          <div className="flex items-center gap-3 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-            {room.hostImage ? <Image src={room.hostImage} alt="" width={40} height={40} className="rounded-full" />
-              : <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold">{room.hostName?.[0] ?? "?"}</div>}
-            <div>
-              <p className="font-display font-bold text-[var(--text-primary)]">{room.hostName ?? "Anonymous"}</p>
-              <p className="text-[0.65rem] text-green-400">Host · Ready</p>
+          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
+            {room.hostImage
+              ? <Image src={room.hostImage} alt="" width={36} height={36} className="rounded-full shrink-0" />
+              : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Anonymous"}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[0.6rem] text-green-400">Host</span>
+                {hostRank && <span className="text-[0.6rem] font-bold" style={{ color: hostRank.color }}>{hostRank.emoji} {hostRank.label}</span>}
+                <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.hostElo}</span>
+              </div>
             </div>
-            <span className="ml-auto text-xs text-[var(--text-muted)]">ELO {room.hostElo}</span>
+            <CheckCircle2 size={18} className="text-green-400 shrink-0" />
           </div>
 
           {/* Guest */}
           {room.guestId ? (
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-              {room.guestImage ? <Image src={room.guestImage} alt="" width={40} height={40} className="rounded-full" />
-                : <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold">{room.guestName?.[0] ?? "?"}</div>}
-              <div>
-                <p className="font-display font-bold text-[var(--text-primary)]">{room.guestName ?? "Anonymous"}</p>
-                <p className={`text-[0.65rem] ${room.guestReady ? "text-green-400" : "text-[var(--text-muted)]"}`}>
-                  {room.guestReady ? "Ready ✓" : "Not ready"}
-                </p>
+            <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
+              {room.guestImage
+                ? <Image src={room.guestImage} alt="" width={36} height={36} className="rounded-full shrink-0" />
+                : <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold shrink-0">{room.guestName?.[0] ?? "?"}</div>}
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Anonymous"}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[0.6rem] text-[var(--text-muted)]">Guest</span>
+                  {guestRank && <span className="text-[0.6rem] font-bold" style={{ color: guestRank.color }}>{guestRank.emoji} {guestRank.label}</span>}
+                  {room.guestElo && <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.guestElo}</span>}
+                </div>
               </div>
-              <span className="ml-auto text-xs text-[var(--text-muted)]">ELO {room.guestElo ?? "?"}</span>
+              {room.guestReady
+                ? <CheckCircle2 size={18} className="text-green-400 shrink-0" />
+                : <Clock size={18} className="text-[var(--text-muted)] shrink-0" />}
             </div>
           ) : (
-            <div className="flex items-center justify-center p-6 rounded-xl border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-sm">
-              <Loader2 size={14} className="animate-spin mr-2" /> Waiting for opponent…
+            <div className="flex items-center gap-2 justify-center p-6 rounded-xl border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-sm">
+              <div className="w-8 h-8 rounded-full border-2 border-dashed border-[var(--border-subtle)]" />
+              <p className="italic">Waiting for player…</p>
             </div>
           )}
         </div>
 
         {/* Actions */}
         <div className="flex gap-3">
-          {myRole === "guest" && !room.guestReady && (
+          {myRole === "guest" && (
             <button onClick={toggleReady} disabled={readying}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500 text-white font-display font-bold hover:opacity-90 disabled:opacity-50">
-              {readying ? <Loader2 size={14} className="animate-spin" /> : "✓"} Ready
+              className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
+                room.guestReady
+                  ? "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  : "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25"
+              ].join(" ")}>
+              {readying ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
+              {room.guestReady ? "Cancel Ready" : "Ready!"}
             </button>
           )}
-          {myRole === "host" && room.guestId && room.guestReady && (
-            <button onClick={startGame} disabled={starting}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold hover:opacity-90 disabled:opacity-50">
-              {starting ? <Loader2 size={14} className="animate-spin" /> : "▶"} Start Game
-            </button>
-          )}
-          {(myRole === "host" || myRole === "guest") && (
-            <button onClick={resign}
-              className="px-4 py-3 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors font-display font-semibold text-sm">
-              Leave
+          {myRole === "host" && (
+            <button onClick={startGame} disabled={!room.guestId || !room.guestReady || starting}
+              className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity">
+              {starting ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
+              {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
             </button>
           )}
         </div>
@@ -435,31 +481,46 @@ export default function CheckersRoomPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <Link href="/games/checkers/online" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Lobby</Link>
         {room.rated && <span className="text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
-        {room.spectatorCount > 0 && <span className="text-xs text-[var(--text-muted)]">👁 {room.spectatorCount}</span>}
-        <button onClick={() => setFlipped(f => !f)}
-          className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] text-[0.65rem] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-          <RotateCcw size={10} /> Flip
-        </button>
+        <SpectatorBadge count={room.spectatorCount} />
+        <div className="ml-auto flex items-center gap-2">
+          <ConnectionBadge status={connStatus} />
+          <button onClick={() => setFlipped(f => !f)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] text-[0.65rem] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <RotateCcw size={10} /> Flip
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 items-start justify-center">
         {/* Board + players column */}
         <div className="flex flex-col gap-2 w-full lg:w-auto">
           {/* Top player (opposite side when not flipped) */}
-          <PlayerCard
-            name={flipped ? (room.hostName ?? "?") : (room.guestName ?? "?")}
-            image={flipped ? room.hostImage : room.guestImage}
-            elo={flipped ? room.hostElo : (room.guestElo ?? 0)}
-            color={flipped ? hostColor : guestColor}
-            timeMs={flipped ? hostTimeMs : guestTimeMs}
-            active={flipped ? hostActive : guestActive}
-            isMe={flipped ? myUserId === room.hostId : myUserId === room.guestId}
-            eloDelta={isFinished ? (flipped ? room.hostEloDelta : room.guestEloDelta) : undefined}
-            pieces={flipped ? hostPieces : guestPieces}
-          />
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <PlayerCard
+                name={flipped ? (room.hostName ?? "?") : (room.guestName ?? "?")}
+                image={flipped ? room.hostImage : room.guestImage}
+                elo={flipped ? room.hostElo : (room.guestElo ?? 0)}
+                color={flipped ? hostColor : guestColor}
+                timeMs={flipped ? hostTimeMs : guestTimeMs}
+                active={flipped ? hostActive : guestActive}
+                isMe={flipped ? myUserId === room.hostId : myUserId === room.guestId}
+                eloDelta={isFinished ? (flipped ? room.hostEloDelta : room.guestEloDelta) : undefined}
+                pieces={flipped ? hostPieces : guestPieces}
+              />
+            </div>
+            {myRole !== "spectator" && room.guestId && (
+              <GameReportButton
+                targetId={myRole === "host" ? (room.guestId ?? "") : room.hostId}
+                targetName={flipped ? (room.hostName ?? "Opponent") : (room.guestName ?? "Opponent")}
+                game="checkers"
+                roomId={room.id}
+              />
+            )}
+          </div>
 
           {/* Board */}
           <div className="relative">
@@ -538,26 +599,12 @@ export default function CheckersRoomPage() {
 
         {/* Chat */}
         {room.status === "PLAYING" && myRole !== "spectator" && (
-          <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden w-full lg:w-64 lg:self-stretch" style={{ minHeight: 200, maxHeight: 520 }}>
-            <p className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider px-3 pt-3 pb-2 border-b border-[var(--border-subtle)]">Chat</p>
-            <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-1" style={{ minHeight: 0 }}>
-              {room.chat.map((msg, i) => (
-                <div key={i} className={`text-xs ${msg.userId === myUserId ? "text-right" : ""}`}>
-                  <span className="text-[0.6rem] text-[var(--text-muted)]">{msg.name}: </span>
-                  <span className="text-[var(--text-primary)]">{msg.text}</span>
-                </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
-            <form onSubmit={sendChat} className="flex gap-1 p-2 border-t border-[var(--border-subtle)]">
-              <input value={chatText} onChange={e => setChatText(e.target.value)} maxLength={200}
-                placeholder="Message…" className="flex-1 px-2 py-1 rounded-lg text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-orange-500/50" />
-              <button type="submit" disabled={sendingChat || !chatText.trim()}
-                className="p-1.5 rounded-lg bg-[var(--accent-orange)] text-white disabled:opacity-40">
-                <Send size={11} />
-              </button>
-            </form>
-          </div>
+          <GameChat
+            msgs={room.chat}
+            myUserId={myUserId ?? ""}
+            roomId={roomId}
+            apiBase="/api/checkers-rooms"
+          />
         )}
       </div>
     </main>

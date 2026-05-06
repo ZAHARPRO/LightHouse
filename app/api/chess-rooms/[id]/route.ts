@@ -49,7 +49,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           winner: timeoutWinner,
           winReason: "timeout",
           endedAt: now,
-          chatJson: null,
           ...(whiteTurn ? { whiteTimeMs: 0 } : { blackTimeMs: 0 }),
         },
       });

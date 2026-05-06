@@ -9,6 +9,9 @@ export async function POST(req: Request) {
 
   const { timeControl = "600" } = await req.json() as { timeControl?: string };
 
+  // Fetch user ELO upfront (needed for both paths)
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { battleshipElo: true } });
+
   // Cancel any WAITING rated rooms this user already has open
   await prisma.battleshipRoom.updateMany({
     where: { hostId: userId, status: "WAITING", rated: true },
@@ -25,7 +28,7 @@ export async function POST(req: Request) {
     // Atomically claim the slot — guard against another instance doing the same
     const updated = await prisma.battleshipRoom.updateMany({
       where: { id: available.id, guestId: null, status: "WAITING" },
-      data: { guestId: userId },
+      data: { guestId: userId, guestEloSnapshot: user?.battleshipElo ?? null, status: "PLACEMENT" },
     });
     if (updated.count > 0) {
       return NextResponse.json({ roomId: available.id, matched: true });
@@ -33,7 +36,6 @@ export async function POST(req: Request) {
   }
 
   // No match — create a new waiting room
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { battleshipElo: true } });
   const room = await prisma.battleshipRoom.create({
     data: { hostId: userId, timeControl, rated: true, hostEloSnapshot: user?.battleshipElo ?? null },
   });

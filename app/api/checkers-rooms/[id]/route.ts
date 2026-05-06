@@ -51,7 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       await prisma.checkersRoom.updateMany({
         where: { id, status: "PLAYING" },
         data: { status: "FINISHED", winner: timeoutWinner, winReason: "timeout", endedAt: now,
-          chatJson: null, ...(isWhiteTurn ? { whiteTimeMs: 0 } : { blackTimeMs: 0 }) },
+          ...(isWhiteTurn ? { whiteTimeMs: 0 } : { blackTimeMs: 0 }) },
       });
       liveStatus = "FINISHED"; liveWinner = timeoutWinner; liveWinReason = "timeout"; liveEndedAt = now;
 

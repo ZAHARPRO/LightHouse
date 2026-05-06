@@ -5,13 +5,6 @@ import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { BADGE_DEFS } from "@/lib/badges";
 import { getTranslations } from "next-intl/server";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  special: "⭐ Special",
-  community: "💬 Community",
-  activity: "🔥 Activity",
-  games: "🎮 Games",
-};
-
 const CATEGORY_ORDER = ["special", "community", "activity", "games"];
 
 export default async function BadgesPage() {
@@ -56,7 +49,7 @@ export default async function BadgesPage() {
   // Group by category
   const grouped = CATEGORY_ORDER.map((cat) => ({
     cat,
-    label: CATEGORY_LABELS[cat] ?? cat,
+    label: t(`categories.${cat}`),
     badges: allBuiltin.filter((b) => b.category === cat),
   })).filter((g) => g.badges.length > 0);
 
@@ -144,7 +137,7 @@ export default async function BadgesPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-display font-bold text-[0.9375rem]" style={{ color: earned ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                        {badge.label}
+                        {t(`defs.${badge.type}.label`)}
                       </p>
                       <span className="text-[0.6875rem] font-bold font-display" style={{ color: badge.color }}>
                         +{badge.points} pts
@@ -152,7 +145,7 @@ export default async function BadgesPage() {
                     </div>
 
                     <p className="text-[0.8125rem] text-[var(--text-secondary)] leading-[1.5] mb-3">
-                      {badge.description}
+                      {t(`defs.${badge.type}.description`)}
                     </p>
 
                     <div
@@ -160,7 +153,7 @@ export default async function BadgesPage() {
                       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
                     >
                       <span className="font-display font-semibold text-[var(--text-secondary)]">{t("howToEarn")}: </span>
-                      {badge.howToEarn}
+                      {t(`defs.${badge.type}.howToEarn`)}
                     </div>
                   </div>
                 </div>

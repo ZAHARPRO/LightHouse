@@ -159,8 +159,7 @@ export async function forfeitBattleship(
       status:   "FINISHED",
       winner:   isHostWinner ? "host" : "guest",
       winReason,
-      endedAt:  new Date(),
-      chatJson: null,
+      endedAt: new Date(),
     },
   });
 

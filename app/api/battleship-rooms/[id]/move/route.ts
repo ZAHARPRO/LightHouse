@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Board, Ship, applyShot, GameState, serializeState } from "@/lib/battleship";
 import { calculateEloDelta } from "@/lib/elo";
-import { awardBadge } from "@/lib/awardBadge";
+import { awardBadge, awardBattleshipEloBadges } from "@/lib/awardBadge";
 import { auth } from "@/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -155,7 +155,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       // Бейджи за победу
       const winnerId = winner === "host" ? room.hostId : room.guestId!;
+      const winnerNewElo = winnerElo + winDelta;
       await awardBadge(prisma, winnerId, "BATTLESHIP_ONLINE_WIN");
+      await awardBattleshipEloBadges(prisma, winnerId, winnerNewElo);
     }
   }
 

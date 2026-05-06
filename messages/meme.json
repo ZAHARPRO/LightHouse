@@ -297,6 +297,57 @@
     "moveHistory": "що відбувалось",
     "noMoves": "ходів ще не було"
   },
+  "battleship": {
+    "title": "Морський бій 🚢",
+    "description": "Топи кораблі ворога! Стратегія на воді 💥",
+    "placement": {
+      "title": "Розстав кораблі",
+      "subtitle": "Тягни кораблі на поле",
+      "rotate": "повернути",
+      "random": "навмання",
+      "ready": "Готово!",
+      "waitingOpponent": "чекаємо суперника...",
+      "shipsRemaining": "кораблів залишилось: {count}"
+    },
+    "battle": {
+      "yourBoard": "твоє поле",
+      "enemyBoard": "поле ворога",
+      "yourTurn": "твій хід",
+      "opponentTurn": "хід суперника",
+      "hit": "Попав! 🔥",
+      "miss": "Мимо 💦",
+      "sunk": "Потопив! ☠️",
+      "shipSizes": "флот"
+    },
+    "result": {
+      "victory": "Перемога! 🏆",
+      "defeat": "Програв 💀",
+      "allSunk": "всі кораблі потоплені",
+      "resigned": "суперник здався",
+      "timeout": "час вийшов"
+    },
+    "replay": {
+      "title": "повтор матчу",
+      "shot": "постріл {n}",
+      "by": "від {player}"
+    },
+    "bot": {
+      "easy": "легко",
+      "medium": "нормально",
+      "hard": "важко",
+      "thinking": "бот думає..."
+    },
+    "fleet": {
+      "carrier": "авіаносець (4)",
+      "battleship": "лінкор (3)",
+      "cruiser": "крейсер (2)",
+      "destroyer": "есмінець (1)"
+    },
+    "UI":{
+      "Back": "Повернутися к нинешньому",
+      "Again": "Грать снова"
+      }
+  },
   "forms": {
     "title": "заголовок",
     "titleRequired": "заголовок *",

@@ -297,6 +297,58 @@
     "moveHistory": "Move History",
     "noMoves": "No moves yet"
   },
+  "battleship": {
+      "title": "Battleship",
+      "description": "Naval strategy game. Sink all enemy ships!",
+      "placement": {
+        "title": "Place Your Ships",
+        "subtitle": "Drag ships to place them on the board",
+        "rotate": "Rotate",
+        "random": "Random",
+        "ready": "Ready!",
+        "waitingOpponent": "Waiting for opponent to place ships...",
+        "shipsRemaining": "Ships remaining: {count}"
+      },
+      "battle": {
+        "yourBoard": "Your Board",
+        "enemyBoard": "Enemy Board",
+        "yourTurn": "Your Turn",
+        "opponentTurn": "Opponent's Turn",
+        "hit": "Hit!",
+        "miss": "Miss!",
+        "sunk": "Ship sunk!",
+        "shipSizes": "Fleet"
+      },
+      "result": {
+        "victory": "Victory!",
+        "defeat": "Defeat",
+        "allSunk": "All ships sunk",
+        "resigned": "Opponent resigned",
+        "timeout": "Time out"
+      },
+      "replay": {
+        "title": "Match Replay",
+        "shot": "Shot {n}",
+        "by": "by {player}"
+      },
+      "bot": {
+        "easy": "Easy",
+        "medium": "Medium", 
+        "hard": "Hard",
+        "thinking": "Bot is thinking..."
+      },
+      "fleet": {
+        "carrier": "Carrier (4)",
+        "battleship": "Battleship (3)",
+        "cruiser": "Cruiser (2)",
+        "destroyer": "Destroyer (1)"
+      },
+    
+    "UI":{
+      "Back": "Back to live view",
+      "Again": "Play Again"
+      }
+    },
   "forms": {
     "title": "Title",
     "titleRequired": "Title *",

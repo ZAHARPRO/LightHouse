@@ -185,4 +185,47 @@ export const BADGE_DEFS: Record<string, BadgeDef> = {
     howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online checkers.",
     category: "games", rare: true,
   },
+  BATTLESHIP_WIN: {
+    icon: "⚓", label: "Naval Victor", color: "#38bdf8", points: 50,
+    description: "Won a game of battleship against the bot",
+    how: "Beat the bot in Battleship (any difficulty)",
+    howToEarn: "Beat the AI opponent in Battleship — any difficulty counts.",
+    category: "games",
+  },
+  BATTLESHIP_ONLINE_WIN: {
+    icon: "🚢", label: "Admiral", color: "#0ea5e9", points: 100,
+    description: "Won an online 1v1 battleship match",
+    how: "Win a real-time online battleship game",
+    howToEarn: "Win a real-time 1v1 online battleship match against another player.",
+    category: "games",
+  },
+  BATTLESHIP_SILVER: {
+    icon: "🥈", label: "Battleship Silver", color: "#c0c0c0", points: 75,
+    description: "Reached Silver rank in rated battleship (700+ ELO)",
+    how: "Reach 700 ELO in rated battleship",
+    howToEarn: "Climb to Silver rank by reaching 700 ELO in rated online battleship.",
+    category: "games",
+  },
+  BATTLESHIP_GOLD: {
+    icon: "🥇", label: "Battleship Gold", color: "#ffd700", points: 150,
+    description: "Reached Gold rank in rated battleship (1300+ ELO)",
+    how: "Reach 1300 ELO in rated battleship",
+    howToEarn: "Prove your skill — reach 1300 ELO in rated online battleship.",
+    category: "games", rare: true,
+  },
+  BATTLESHIP_PLATINUM: {
+    icon: "💠", label: "Battleship Platinum", color: "#e2e8f0", points: 300,
+    description: "Reached Platinum rank in rated battleship (2200+ ELO)",
+    how: "Reach 2200 ELO in rated battleship",
+    howToEarn: "Elite territory — reach 2200 ELO in rated online battleship.",
+    category: "games", rare: true,
+  },
+  BATTLESHIP_DIAMOND: {
+    icon: "💎", label: "Battleship Diamond", color: "#67e8f9", points: 500,
+    description: "Reached Diamond rank in rated battleship (3400+ ELO)",
+    how: "Reach 3400 ELO in rated battleship",
+    howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship.",
+    category: "games", rare: true,
+  },
+  
 };

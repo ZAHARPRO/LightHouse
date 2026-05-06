@@ -8,7 +8,9 @@ export async function GET(req: Request) {
 
   const isChess = game === "chess";
   const isCheckers = game === "checkers";
-  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : "minesweeperElo";
+  const isBattleship = game === "battleship";
+  const isMinesweeper = game === "minesweeper";
+  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : isBattleship ? "battleshipElo" : "minesweeperElo";
   const search = searchParams.get("search")?.trim() ?? "";
 
   const users = await prisma.user.findMany({
@@ -18,7 +20,7 @@ export async function GET(req: Request) {
     },
     orderBy: { [field]: "desc" },
     take: limit,
-    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true },
+    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true, battleshipElo: true },
   });
 
   // Compute wins + max win streak per user
@@ -74,8 +76,8 @@ export async function GET(req: Request) {
       }
       winStreaks[uid] = { wins, maxStreak };
     }
-  } else {
-    const rooms = await prisma.minesweeperRoom.findMany({
+  } else if (isBattleship) {
+    const rooms = await prisma.battleshipRoom.findMany({
       where: {
         status: "FINISHED",
         rated: true,

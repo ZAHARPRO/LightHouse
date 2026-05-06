@@ -10,7 +10,22 @@ import Image from "next/image";
 import { fromFEN, getLegalMoves, applyMove, toSAN, type GameState } from "@/lib/chess";
 import { computeNeighbors } from "@/lib/minesweeper";
 
+
 // ─────────────────────────────────────────────────────────── types
+
+type BattleShot = { shooter: "host" | "guest"; row: number; col: number; hit: boolean; sunk: boolean };
+type BattleShip = { id: number; size: number; cells: [number, number][]; hits: number };
+
+type BattleshipGame = {
+  id: string; rated: boolean; timeControl: string;
+  startedAt: string | null; endedAt: string | null;
+  winner: string | null; winReason: string | null; iWon: boolean;
+  myEloDelta: number | null; myEloSnapshot: number | null;
+  myRole: "host" | "guest";
+  oppName: string | null; oppImage: string | null;
+  myShips: BattleShip[]; oppShips: BattleShip[];
+  moves: BattleShot[];
+};
 
 type ChessGame = {
   id: string; rated: boolean; timeControl: string; myColor: string;
@@ -565,6 +580,219 @@ function MineReplayModal({ game, onClose }: { game: MineGame; onClose: () => voi
   );
 }
 
+// ─────────────────────────────────────────────────────────── battleship board view
+
+function BattleBoardView({ ships, shots, showShips, label, stepIdx }: {
+  ships: BattleShip[];
+  shots: BattleShot[];  // shots directed AT this board
+  showShips: boolean;
+  label: string;
+  stepIdx: number;
+}) {
+  const [cellPx, setCellPx] = useState(20);
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      const maxW = w < 640 ? (w - 48) / 2 : Math.min((w - 120) / 2, 220);
+      setCellPx(Math.max(13, Math.min(22, Math.floor(maxW / 10))));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const { hitCells, missCells, sunkCells, shipCells } = useMemo(() => {
+    const hitCells  = new Set<string>();
+    const missCells = new Set<string>();
+    for (let i = 0; i <= stepIdx && i < shots.length; i++) {
+      const s = shots[i];
+      const key = `${s.row},${s.col}`;
+      if (s.hit) hitCells.add(key); else missCells.add(key);
+    }
+    const sunkCells = new Set<string>();
+    for (const ship of ships) {
+      if (ship.cells.every(([r, c]) => hitCells.has(`${r},${c}`)))
+        ship.cells.forEach(([r, c]) => sunkCells.add(`${r},${c}`));
+    }
+    const shipCells = new Set<string>();
+    ships.forEach(ship => ship.cells.forEach(([r, c]) => shipCells.add(`${r},${c}`)));
+    return { hitCells, missCells, sunkCells, shipCells };
+  }, [shots, stepIdx, ships]);
+
+  return (
+    <div>
+      <p className="text-[0.65rem] font-display font-semibold text-[var(--text-muted)] mb-1">{label}</p>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(10,${cellPx}px)`, gap: 1 }}>
+        {Array.from({ length: 100 }, (_, i) => {
+          const r = Math.floor(i / 10), c = i % 10;
+          const key = `${r},${c}`;
+          const isSunk = sunkCells.has(key);
+          const isHit  = hitCells.has(key) && !isSunk;
+          const isMiss = missCells.has(key);
+          const isShip = shipCells.has(key) && (showShips || isSunk);
+          const bg = isSunk ? "#374151" : isHit ? "#7f1d1d" : isShip ? "#374151" : "#1e3a5f";
+          return (
+            <div key={i} style={{
+              width: cellPx, height: cellPx, background: bg, borderRadius: 2,
+              border: `1px solid ${isShip || isSunk ? "#4b5563" : "#1e4a7f"}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {(isHit || isSunk) && (
+                <span style={{ fontSize: Math.round(cellPx * 0.5), lineHeight: 1, color: "#ef4444", fontWeight: 700 }}>✕</span>
+              )}
+              {isMiss && (
+                <span style={{ fontSize: Math.round(cellPx * 0.55), lineHeight: 1, color: "#60a5fa" }}>•</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────── battleship replay modal
+
+function BattleshipReplayModal({ game, onClose }: { game: BattleshipGame; onClose: () => void }) {
+  const oppRole = game.myRole === "host" ? "guest" : "host";
+  const myShots  = useMemo(() => game.moves.filter(m => m.shooter === game.myRole),  [game.moves, game.myRole]);
+  const oppShots = useMemo(() => game.moves.filter(m => m.shooter === oppRole), [game.moves, oppRole]);
+
+  const totalSteps = game.moves.length;
+  const [stepIdx, setStepIdx] = useState(totalSteps - 1);
+  const [autoplay, setAutoplay] = useState(false);
+
+  const go = useCallback((n: number) => {
+    setAutoplay(false);
+    setStepIdx(Math.max(-1, Math.min(totalSteps - 1, n)));
+  }, [totalSteps]);
+
+  useEffect(() => {
+    if (!autoplay) return;
+    const t = setInterval(() => {
+      setStepIdx(i => {
+        if (i >= totalSteps - 1) { setAutoplay(false); return i; }
+        return i + 1;
+      });
+    }, 400);
+    return () => clearInterval(t);
+  }, [autoplay, totalSteps]);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  go(stepIdx - 1);
+      if (e.key === "ArrowRight") go(stepIdx + 1);
+      if (e.key === " ")          { e.preventDefault(); setAutoplay(a => !a); }
+      if (e.key === "Escape")     onClose();
+    };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [stepIdx, go, onClose]);
+
+  // Map global stepIdx → per-board step count
+  const myBoardStepIdx = useMemo(() => {
+    let cnt = -1;
+    for (let i = 0; i <= stepIdx && i < game.moves.length; i++)
+      if (game.moves[i].shooter === oppRole) cnt++;
+    return cnt;
+  }, [stepIdx, game.moves, oppRole]);
+
+  const oppBoardStepIdx = useMemo(() => {
+    let cnt = -1;
+    for (let i = 0; i <= stepIdx && i < game.moves.length; i++)
+      if (game.moves[i].shooter === game.myRole) cnt++;
+    return cnt;
+  }, [stepIdx, game.moves, game.myRole]);
+
+  const WIN_REASON: Record<string, string> = { all_sunk: "All sunk", timeout: "Timeout", resigned: "Resigned" };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[960] flex flex-col sm:items-center sm:justify-center sm:p-4"
+      style={{ background: "rgba(0,0,0,0.9)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-[var(--bg-card)] sm:rounded-2xl sm:border border-[var(--border-subtle)]
+        w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden shadow-2xl">
+
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {game.iWon
+              ? <span className="flex items-center gap-1.5 text-sm font-display font-bold text-yellow-400"><Trophy size={13}/> Victory</span>
+              : <span className="flex items-center gap-1.5 text-sm font-display font-bold text-red-400"><Skull size={13}/> Defeat</span>}
+            <span className="text-[0.65rem] text-[var(--text-muted)]">
+              vs {game.oppName ?? "Opponent"} · {WIN_REASON[game.winReason ?? ""] ?? game.winReason} · {fmtDuration(game.startedAt, game.endedAt)}
+            </span>
+            {game.myEloDelta != null && (
+              <span className={`text-[0.65rem] font-bold ${game.myEloDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {game.myEloDelta >= 0 ? "+" : ""}{game.myEloDelta} ELO
+              </span>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="p-2 rounded-xl hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+            <X size={18}/>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {/* Boards */}
+          <div className="flex gap-4 sm:gap-8 justify-center flex-wrap">
+            <BattleBoardView
+              ships={game.myShips} shots={oppShots}
+              showShips stepIdx={myBoardStepIdx} label="Your board" />
+            <BattleBoardView
+              ships={game.oppShips} shots={myShots}
+              showShips={false} stepIdx={oppBoardStepIdx}
+              label={`${game.oppName ?? "Opponent"}'s board`} />
+          </div>
+
+          {/* Controls */}
+          {totalSteps > 0 && (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-[0.65rem] text-[var(--text-muted)]">
+                {stepIdx < 0 ? "Start" : `Shot ${stepIdx + 1} / ${totalSteps}`}
+                {stepIdx >= 0 && (() => {
+                  const shot = game.moves[stepIdx];
+                  const shooter = shot.shooter === game.myRole ? "You" : (game.oppName ?? "Opp");
+                  return ` · ${shooter} → ${"ABCDEFGHIJ"[shot.col]}${shot.row + 1} ${shot.hit ? (shot.sunk ? "💥 Sunk!" : "✓ Hit") : "✗ Miss"}`;
+                })()}
+              </p>
+              <input type="range" min={-1} max={totalSteps - 1} value={stepIdx}
+                onChange={e => go(+e.target.value)}
+                className="w-full max-w-xs accent-blue-500" />
+              <div className="flex items-center gap-1">
+                <button onClick={() => go(-1)}
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronsLeft size={15}/>
+                </button>
+                <button onClick={() => go(stepIdx - 1)} disabled={stepIdx <= -1}
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+                  <ChevronLeft size={15}/>
+                </button>
+                <button onClick={() => { if (stepIdx >= totalSteps - 1) go(-1); setAutoplay(a => !a); }}
+                  className="p-2 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25 transition-colors touch-manipulation">
+                  {autoplay ? <Pause size={15}/> : <Play size={15}/>}
+                </button>
+                <button onClick={() => go(stepIdx + 1)} disabled={stepIdx >= totalSteps - 1}
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+                  <ChevronRight size={15}/>
+                </button>
+                <button onClick={() => go(totalSteps - 1)}
+                  className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors touch-manipulation">
+                  <ChevronsRight size={15}/>
+                </button>
+              </div>
+            </div>
+          )}
+          {totalSteps === 0 && (
+            <p className="text-center text-sm text-[var(--text-muted)]">No shot data available for this game.</p>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─────────────────────────────────────────────────────────── game cards
 
 function AvatarImg({ name, image, size = 28 }: { name: string | null; image: string | null; size?: number }) {
@@ -617,6 +845,43 @@ function ChessGameCard({ game, onReplay }: { game: ChessGame; onReplay: () => vo
         <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
         <button onClick={onReplay}
           className="px-2.5 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/25 text-yellow-400 text-[0.62rem] font-bold hover:bg-yellow-500/20 active:bg-yellow-500/25 transition-colors touch-manipulation whitespace-nowrap">
+          Replay
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BattleshipGameCard({ game, onView }: { game: BattleshipGame; onView: () => void }) {
+  const WIN_REASON: Record<string, string> = { all_sunk: "All sunk", timeout: "Timeout", resigned: "Resigned" };
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] hover:border-[var(--border-default)] transition-colors">
+      <AvatarImg name={game.oppName} image={game.oppImage} size={30} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`font-display font-bold text-xs ${game.iWon ? "text-yellow-400" : "text-red-400"}`}>
+            {game.iWon ? "Win" : "Loss"}
+          </span>
+          <span className="text-[0.6rem] text-[var(--text-muted)]">{WIN_REASON[game.winReason ?? ""] ?? game.winReason}</span>
+          {game.rated && <Star size={8} className="text-yellow-400 shrink-0" />}
+        </div>
+        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+          <span className="text-[0.6rem] text-[var(--text-muted)] truncate max-w-[90px]">{game.oppName ?? "Opp"}</span>
+          <span className="text-[0.55rem] text-[var(--border-default)]">·</span>
+          <span className="text-[0.6rem] text-[var(--text-muted)] whitespace-nowrap">{game.moves.length} shots</span>
+          <span className="text-[0.55rem] text-[var(--border-default)]">·</span>
+          <span className="text-[0.6rem] text-[var(--text-muted)] whitespace-nowrap">{fmtDuration(game.startedAt, game.endedAt)}</span>
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {game.myEloDelta != null && (
+          <span className={`text-xs font-bold ${game.myEloDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+            {game.myEloDelta >= 0 ? "+" : ""}{game.myEloDelta}
+          </span>
+        )}
+        <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
+        <button onClick={onView}
+          className="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/25 text-blue-400 text-[0.62rem] font-bold hover:bg-blue-500/20 transition-colors touch-manipulation whitespace-nowrap">
           Replay
         </button>
       </div>
@@ -747,10 +1012,51 @@ function MineHistoryPanel({ userId }: { userId: string }) {
   );
 }
 
+function BattleshipHistoryPanel({ userId }: { userId: string }) {
+  const [games, setGames]     = useState<BattleshipGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [view, setView]       = useState<BattleshipGame | null>(null);
+
+  function load(p: number) {
+    setLoading(true);
+    fetch(`/api/battleship-rooms/history?userId=${userId}&page=${p}`)
+      .then(r => r.ok ? r.json() : { items: [], hasMore: false })
+      .then(d => { setGames(prev => p === 0 ? d.items : [...prev, ...d.items]); setHasMore(d.hasMore); })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(0); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (page > 0) load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading && page === 0) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
+  if (!loading && games.length === 0) return (
+    <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-muted)]">
+      <span className="text-3xl">⚓</span><p className="text-sm">No battleship games yet</p>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {games.map(g => <BattleshipGameCard key={g.id} game={g} onView={() => setView(g)} />)}
+      </div>
+      {hasMore && (
+        <button onClick={() => setPage(p => p + 1)} disabled={loading}
+          className="mt-3 w-full py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors touch-manipulation">
+          {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
+        </button>
+      )}
+      {view && <BattleshipReplayModal game={view} onClose={() => setView(null)} />}
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────── main modal + button
 
 function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<"chess"|"mine">("chess");
+  const [tab, setTab] = useState<"chess"|"mine"|"battleship">("chess");
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -777,9 +1083,9 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
         </div>
 
         <div className="flex border-b border-[var(--border-subtle)] shrink-0">
-          {([["chess","♟️ Chess"],["mine","💣 Minesweeper"]] as const).map(([key,label]) => (
+          {([["chess","♟️ Chess"],["mine","💣 Mine"],["battleship","⚓ Battleship"]] as const).map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)}
-              className={["flex-1 py-3 text-sm font-display font-semibold border-b-2 transition-colors touch-manipulation",
+              className={["flex-1 py-3 text-xs sm:text-sm font-display font-semibold border-b-2 transition-colors touch-manipulation",
                 tab === key
                   ? "border-[var(--accent-orange)] text-[var(--text-primary)]"
                   : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -790,9 +1096,9 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-          {tab === "chess"
-            ? <ChessHistoryPanel userId={userId} />
-            : <MineHistoryPanel  userId={userId} />}
+          {tab === "chess"      && <ChessHistoryPanel     userId={userId} />}
+          {tab === "mine"       && <MineHistoryPanel      userId={userId} />}
+          {tab === "battleship" && <BattleshipHistoryPanel userId={userId} />}
         </div>
       </div>
     </div>,

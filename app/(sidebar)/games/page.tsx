@@ -18,6 +18,7 @@ function ChessIcon({ size = 22 }: { size?: number }) {
     </svg>
   );
 }
+
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { getRank } from "@/lib/elo";
@@ -71,7 +72,16 @@ function PuzzleIcon({ size = 22 }: { size?: number }) {
   );
 }
 
+function BattleshipIcon({ size = 22 }: { size?: number }) {
+  return (
+<svg width="800px" height="800px" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<path fill="currentColor" d="M247 32v23h-23v18h23v22h-39v18h39v22h-46.027l-2.54 10.154-18.408-9.205-8.05 16.102 21.988 10.994-10.578 42.312-25.592 13.96 23.691 110.564c-49.074 3.341-98.15 8.946-145.6 16.453l2.813 17.777a1639.075 1639.075 0 0 1 121.096-14.529l-.078.31c112.547 28.156 190.551 43.088 306.816-8.958l-7.355-16.43a485.085 485.085 0 0 1-26.844 11.092c-32.405-4.352-66.372-7.09-101.246-8.381l23.121-107.899-25.592-13.959-10.578-42.312 21.988-10.994-8.05-16.102-18.409 9.205L311.027 135H265v-22h39V95h-39V73h23V55h-23V32h-18zm-31.973 121h81.946l10.16 40.639L256 165.748l-51.133 27.89L215.027 153zM256 186.252v140.346c-5.41.103-10.833.238-16.262.402h-40.46l-21.071-98.316L256 186.252zM224 208a16 16 0 0 0-16 16 16 16 0 0 0 16 16 16 16 0 0 0 16-16 16 16 0 0 0-16-16zm68.17 0a16 16 0 0 1 16 16 16 16 0 0 1-16 16 16 16 0 0 1-16-16 16 16 0 0 1 16-16zm-50.92 137h82.404c22.502.709 44.618 2.01 66.149 3.96-58.924 14.561-109.381 9.793-169.532-3.194A1523.33 1523.33 0 0 1 241.25 345zm-132.865 29.363c-7.943-.023-15.667.234-23.084.842l1.469 17.941c54.39-4.455 133.014 12.49 189.199 17.202 55.64 4.665 109.966-1.684 168.654-13.512l-3.557-17.645c-57.8 11.65-110.279 17.692-163.591 13.221-47.153-3.954-113.49-17.885-169.09-18.049zm20.22 35.285c-12.198-.079-25.387.615-38.517 1.873-26.26 2.518-51.6 7.157-67.865 14.26l7.203 16.496c12.302-5.372 37.244-10.427 62.38-12.838 25.138-2.41 51.157-2.311 65.846.625 32.956 6.589 91.409 16.938 138.62 15.444l-.569-17.99c-44.053 1.394-102.073-8.619-134.523-15.106-9.17-1.833-20.376-2.684-32.575-2.764z"/></svg>
+  );
+}
+
 const GAMES = [
+  { href: "/games/battleship",              title: "Battleship vs Bot",  description: "3 difficulty levels",           icon: BattleshipIcon, color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/battleship/online",       title: "Battleship Online",  description: "1 vs 1 in real-time",           icon: BattleshipIcon, color: "text-indigo-400",  bg: "bg-indigo-500/10 border-indigo-500/20"   },
   { href: "/games/minesweeper",              title: "Minesweeper",        description: "Click cells, avoid mines",      icon: MineIcon,     color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
   { href: "/games/minesweeper/online",       title: "MS Online",          description: "1 vs 1",                        icon: MineIcon,     color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
   { href: "/games/minesweeper/online/rated", title: "MS Rated",           description: "Earn ELO",                      icon: MineIcon,     color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
@@ -82,6 +92,8 @@ const GAMES = [
   { href: "/games/checkers",                 title: "Checkers vs Bot",    description: "3 difficulty levels",           icon: CheckersIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
   { href: "/games/checkers/online",          title: "Checkers Online",    description: "1 vs 1 in real-time",           icon: CheckersIcon, color: "text-amber-400",  bg: "bg-indigo-500/10 border-indigo-500/20"    },
   { href: "/games/checkers/online/rated",    title: "Checkers Rated",     description: "Earn ELO",                      icon: CheckersIcon, color: "text-orange-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/battleship/online/rated",   title: "Battleship Rated",   description: "Earn ELO",                      icon: BattleshipIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  
 ];
 
 type LeaderEntry = {
@@ -91,6 +103,7 @@ type LeaderEntry = {
   chessElo: number;
   minesweeperElo: number;
   checkersElo: number;
+  battleshipElo: number;
   wins: number;
   maxStreak: number;
 };
@@ -99,6 +112,7 @@ const LEADERBOARDS = [
   { key: "chess",       label: "♟ Chess",        eloField: "chessElo"       as const },
   { key: "minesweeper", label: "💣 Minesweeper",  eloField: "minesweeperElo" as const },
   { key: "checkers",    label: "🔴 Checkers",     eloField: "checkersElo"    as const },
+  { key: "battleship",   label: "🚢 Battleship",   eloField: "battleshipElo"  as const },
 ];
 
 const PLACE_COLOR = ["#ffd700", "#c0c0c0", "#cd7f32"];
@@ -238,9 +252,10 @@ export default function GamesPage() {
 
       {/* ── Game cards ─────────────────────────────────────────────────── */}
       {[
-        { label: "💣 Minesweeper", games: GAMES.filter(g => g.href.includes("minesweeper")) },
-        { label: "♟ Chess",        games: GAMES.filter(g => g.href.includes("chess"))       },
-        { label: "⛂ Checkers",    games: GAMES.filter(g => g.href.includes("checkers"))    },
+        { label: "💣 Minesweeper", games: GAMES.filter(g => g.href.includes("minesweeper"))  },
+        { label: "♟ Chess",        games: GAMES.filter(g => g.href.includes("chess"))        },
+        { label: "⛂ Checkers",    games: GAMES.filter(g => g.href.includes("checkers"))     },
+        { label: "🚢 Battleship",  games: GAMES.filter(g => g.href.includes("battleship"))  },
       ].map(({ label, games }) => (
         <div key={label} className="mb-6">
           <p className="text-xs font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">{label}</p>

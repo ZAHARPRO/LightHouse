@@ -19,6 +19,8 @@ type LeaderEntry = {
 const GAMES = [
   { key: "chess",       label: "♟ Chess" },
   { key: "minesweeper", label: "💣 Minesweeper" },
+  { key: "checkers",    label: "⛳ Checkers" },
+  { key: "battleship", label: "⚓ Battleship" }
 ] as const;
 
 type GameKey = typeof GAMES[number]["key"];
@@ -65,7 +67,7 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-10">
+    <main className="max-w-2xl mx-auto px-4">
       {/* Back */}
       <Link href="/games" className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors mb-6 no-underline">
         <ArrowLeft size={14} /> Games
@@ -89,10 +91,11 @@ export default function LeaderboardPage() {
             </button>
           ))}
         </div>
-
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-5">
         {/* Search */}
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/4 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
+          <Search size={14} className="absolute left-3 top-4 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
           <input
             ref={inputRef}
             value={query}

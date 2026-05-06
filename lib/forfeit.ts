@@ -3,7 +3,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { calculateEloDelta } from "@/lib/elo";
-import { awardBadge, awardMineEloBadges, awardChessEloBadges, awardCheckersEloBadges } from "@/lib/awardBadge";
+import { awardBadge, awardMineEloBadges, awardChessEloBadges, awardCheckersEloBadges, awardBattleshipEloBadges } from "@/lib/awardBadge";
 
 type PrismaT = PrismaClient;
 
@@ -139,6 +139,51 @@ export async function forfeitChess(
         }}),
       ]);
       await awardChessEloBadges(prisma, winnerId, winnerNew);
+    }
+  }
+}
+
+export async function forfeitBattleship(
+  prisma: PrismaT,
+  roomId: string,
+  winnerId: string,
+  loserId: string,
+  winReason: "resigned" | "disconnected",
+  isHostWinner: boolean,
+  rated: boolean,
+  guestId: string | null,
+) {
+  await prisma.battleshipRoom.update({
+    where: { id: roomId },
+    data: {
+      status:   "FINISHED",
+      winner:   isHostWinner ? "host" : "guest",
+      winReason,
+      endedAt:  new Date(),
+      chatJson: null,
+    },
+  });
+
+  await awardBadge(prisma, winnerId, "BATTLESHIP_WIN");
+  await awardBadge(prisma, winnerId, "BATTLESHIP_ONLINE_WIN");
+
+  if (rated && guestId) {
+    const [winner, loser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: winnerId }, select: { battleshipElo: true } }),
+      prisma.user.findUnique({ where: { id: loserId  }, select: { battleshipElo: true } }),
+    ]);
+    if (winner && loser) {
+      const [delta] = calculateEloDelta(winner.battleshipElo, loser.battleshipElo);
+      const winnerNew = Math.max(100, winner.battleshipElo + delta);
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: winnerId }, data: { battleshipElo: winnerNew } }),
+        prisma.user.update({ where: { id: loserId  }, data: { battleshipElo: Math.max(100, loser.battleshipElo - delta) } }),
+        prisma.battleshipRoom.update({ where: { id: roomId }, data: {
+          hostEloDelta:  isHostWinner ?  delta : -delta,
+          guestEloDelta: isHostWinner ? -delta :  delta,
+        }}),
+      ]);
+      await awardBattleshipEloBadges(prisma, winnerId, winnerNew);
     }
   }
 }

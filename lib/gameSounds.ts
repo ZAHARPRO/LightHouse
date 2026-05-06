@@ -25,6 +25,28 @@ export const SOUND_META: Record<SoundKey, string> = {
   time_warning:   "1 Minute Warning (timed games)",
 };
 
+export type BattleshipSoundKey = "bs_splash" | "bs_explosion" | "bs_sunk" | "bs_place" | "bs_victory" | "bs_defeat";
+
+export const BATTLESHIP_SOUNDS: Record<BattleshipSoundKey, string> = {
+  bs_splash:    "/sounds/battleship/splash.mp3",
+  bs_explosion: "/sounds/battleship/boom.mp3",
+  bs_sunk:      "/sounds/battleship/sunk.mp3",
+  bs_place:     "/sounds/battleship/place.mp3",
+  bs_victory:   "/sounds/battleship/victory.mp3",
+  bs_defeat:    "/sounds/battleship/defeat.mp3",
+};
+
+export function playBattleshipSound(key: BattleshipSoundKey): void {
+  if (typeof window === "undefined") return;
+  const url = BATTLESHIP_SOUNDS[key];
+  if (!url) return;
+  try {
+    const audio = new Audio(url);
+    audio.volume = 0.7;
+    audio.play().catch(() => {});
+  } catch {}
+}
+
 export const ALL_SOUND_KEYS = Object.keys(SOUND_META) as SoundKey[];
 
 // ── Module-level singleton cache ──────────────────────────────────────────────

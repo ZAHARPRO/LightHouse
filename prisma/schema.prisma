@@ -75,7 +75,79 @@ model User {
   muteExpiresAt        DateTime?
   mutes                Mute[]               @relation("MuteTarget")
   mutesMade            Mute[]               @relation("MutedBy")
+  battleshipElo     Int     @default(400)
+  battleshipRooms1  BattleshipRoom[] @relation("BattleshipHost")
+  battleshipRooms2  BattleshipRoom[] @relation("BattleshipGuest")
 }
+
+model BattleshipRoom {
+  id              String   @id @default(cuid())
+  
+  // Игроки
+  hostId          String
+  guestId         String?
+  host            User     @relation("BattleshipHost", fields: [hostId], references: [id])
+  guest           User?    @relation("BattleshipGuest", fields: [guestId], references: [id])
+  
+  // Состояние
+  status          String   @default("WAITING") // WAITING | PLACEMENT | PLAYING | FINISHED
+  
+  // Расстановка кораблей (JSON строки Board + Ship[])
+  hostBoardJson       String?   // расстановка хоста (Board)
+  guestBoardJson      String?   // расстановка гостя
+  hostShipsJson       String?   // Ship[] хоста
+  guestShipsJson      String?   // Ship[] гостя
+  
+  // Поля видимые сопернику (только hit/miss/sunk)
+  hostVisibleJson     String?   // то что видит гость про поле хоста
+  guestVisibleJson    String?   // то что видит хост про поле гостя
+  
+  // Ход игры
+  currentTurn     String   @default("host") // "host" | "guest"
+  
+  // Рейтинг
+  rated               Boolean  @default(false)
+  hostEloSnapshot     Int?
+  guestEloSnapshot    Int?
+  hostEloDelta        Int?
+  guestEloDelta       Int?
+  
+  // Итог
+  winner          String?  // "host" | "guest" | "draw"
+  winReason       String?  // "all_sunk" | "timeout" | "resigned"
+  
+  // Таймер (если есть контроль времени)
+  timeControl         String   @default("none") // "none"|"60"|"300"|"600"
+  hostTimeMs          Int?
+  guestTimeMs         Int?
+  lastMoveAt          DateTime?
+  
+  // История ходов для реплея (JSON массив выстрелов)
+  // Формат: [{shooter:"host",row:3,col:5,hit:true,sunk:false}, ...]
+  movesJson           String   @default("[]")
+  
+  // Готовность
+  hostReady           Boolean  @default(false)
+  guestReady          Boolean  @default(false)
+  
+  // Чат и зрители
+  chatJson            String   @default("[]")
+  spectatorsJson      String   @default("[]")
+  
+  // Скрытие в истории
+  hostHistoryHidden   Boolean  @default(false)
+  guestHistoryHidden  Boolean  @default(false)
+  
+  // Онлайн-присутствие
+  hostLastSeen        DateTime?
+  guestLastSeen       DateTime?
+  
+  startedAt           DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
 
 model Account {
   id                String  @id @default(cuid())
@@ -392,6 +464,12 @@ enum RewardType {
   CHECKERS_GOLD
   CHECKERS_PLATINUM
   CHECKERS_DIAMOND
+  BATTLESHIP_WIN
+  BATTLESHIP_ONLINE_WIN
+  BATTLESHIP_SILVER
+  BATTLESHIP_GOLD
+  BATTLESHIP_PLATINUM
+  BATTLESHIP_DIAMOND
 }
 
 enum ContactStatus {

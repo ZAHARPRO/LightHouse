@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const [chess, ms] = await Promise.all([
+    const [chess, ms, checkers, battleship] = await Promise.all([
       prisma.chessRoom.findMany({
         where: { rated: true },
         orderBy: { createdAt: "desc" },
@@ -25,7 +25,7 @@ export async function GET() {
           resultReverted: true,
           winner: true, winReason: true,
           startedAt: true, endedAt: true, createdAt: true,
-          host:  { select: { id: true, name: true, image: true, chessElo: true } },
+          host: { select: { id: true, name: true, image: true, chessElo: true } },
           guest: { select: { id: true, name: true, image: true, chessElo: true } },
         },
       }),
@@ -40,8 +40,37 @@ export async function GET() {
           resultReverted: true,
           winner: true, winReason: true,
           startedAt: true, endedAt: true, createdAt: true,
-          host:  { select: { id: true, name: true, image: true, minesweeperElo: true } },
+          host: { select: { id: true, name: true, image: true, minesweeperElo: true } },
           guest: { select: { id: true, name: true, image: true, minesweeperElo: true } },
+        },
+      }),
+      prisma.checkersRoom.findMany({
+        where: { rated: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true, status: true,
+          hostEloSnapshot: true, guestEloSnapshot: true,
+          hostEloDelta: true, guestEloDelta: true,
+          resultReverted: true,
+          winner: true, winReason: true,
+          startedAt: true, endedAt: true, createdAt: true,
+          host: { select: { id: true, name: true, image: true, checkersElo: true } },
+          guest: { select: { id: true, name: true, image: true, checkersElo: true } },
+        },
+      }),
+      prisma.battleshipRoom.findMany({
+        where: { rated: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true, status: true,
+          hostEloSnapshot: true, guestEloSnapshot: true,
+          hostEloDelta: true, guestEloDelta: true,
+          winner: true, winReason: true,
+          startedAt: true, endedAt: true, createdAt: true,
+          host: { select: { id: true, name: true, image: true, battleshipElo: true } },
+          guest: { select: { id: true, name: true, image: true, battleshipElo: true } },
         },
       }),
     ]);
@@ -50,14 +79,27 @@ export async function GET() {
       ...chess.map(r => ({
         ...r,
         game: "chess" as const,
-        hostCurrentElo:  r.host.chessElo,
+        hostCurrentElo: r.host.chessElo,
         guestCurrentElo: r.guest?.chessElo ?? null,
       })),
       ...ms.map(r => ({
         ...r,
         game: "minesweeper" as const,
-        hostCurrentElo:  r.host.minesweeperElo,
+        hostCurrentElo: r.host.minesweeperElo,
         guestCurrentElo: r.guest?.minesweeperElo ?? null,
+      })),
+      ...checkers.map(r => ({
+        ...r,
+        game: "checkers" as const,
+        hostCurrentElo: r.host.checkersElo,
+        guestCurrentElo: r.guest?.checkersElo ?? null,
+      })),
+      ...battleship.map(r => ({
+        ...r,
+        game: "battleship" as const,
+        resultReverted: false, // BattleshipRoom has no resultReverted field yet
+        hostCurrentElo: r.host.battleshipElo,
+        guestCurrentElo: r.guest?.battleshipElo ?? null,
       })),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -76,7 +118,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json() as {
       action: "close" | "revert";
-      game: "chess" | "minesweeper";
+      game: "chess" | "minesweeper" | "checkers" | "battleship";
       id: string;
     };
 
@@ -93,7 +135,7 @@ export async function POST(req: Request) {
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
         });
-      } else {
+      } else if (body.game === "minesweeper") {
         const room = await prisma.minesweeperRoom.findUnique({ where: { id: body.id } });
         if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
         if (room.status === "FINISHED")
@@ -102,11 +144,33 @@ export async function POST(req: Request) {
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
         });
+      } else if (body.game === "checkers") {
+        const room = await prisma.checkersRoom.findUnique({ where: { id: body.id } });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status === "FINISHED")
+          return NextResponse.json({ error: "Already finished" }, { status: 400 });
+        await prisma.checkersRoom.update({
+          where: { id: body.id },
+          data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
+        });
+      } else {
+        const room = await prisma.battleshipRoom.findUnique({ where: { id: body.id } });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status === "FINISHED")
+          return NextResponse.json({ error: "Already finished" }, { status: 400 });
+        await prisma.battleshipRoom.update({
+          where: { id: body.id },
+          data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
+        });
       }
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "revert") {
+      if (body.game === "battleship") {
+        return NextResponse.json({ error: "ELO revert not supported for battleship yet" }, { status: 400 });
+      }
+
       if (body.game === "chess") {
         const room = await prisma.chessRoom.findUnique({
           where: { id: body.id },
@@ -127,7 +191,7 @@ export async function POST(req: Request) {
             ? [prisma.user.update({ where: { id: room.guestId }, data: { chessElo: { decrement: room.guestEloDelta } } })]
             : []),
         ]);
-      } else {
+      } else if (body.game === "minesweeper") {
         const room = await prisma.minesweeperRoom.findUnique({
           where: { id: body.id },
           include: { host: true, guest: true },
@@ -145,6 +209,26 @@ export async function POST(req: Request) {
           prisma.user.update({ where: { id: room.hostId }, data: { minesweeperElo: { decrement: room.hostEloDelta } } }),
           ...(room.guestId && room.guestEloDelta != null
             ? [prisma.user.update({ where: { id: room.guestId }, data: { minesweeperElo: { decrement: room.guestEloDelta } } })]
+            : []),
+        ]);
+      } else {
+        const room = await prisma.checkersRoom.findUnique({
+          where: { id: body.id },
+          include: { host: true, guest: true },
+        });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status !== "FINISHED")
+          return NextResponse.json({ error: "Room not finished" }, { status: 400 });
+        if (room.resultReverted)
+          return NextResponse.json({ error: "Already reverted" }, { status: 400 });
+        if (room.hostEloDelta == null)
+          return NextResponse.json({ error: "No ELO to revert" }, { status: 400 });
+
+        await prisma.$transaction([
+          prisma.checkersRoom.update({ where: { id: body.id }, data: { resultReverted: true } }),
+          prisma.user.update({ where: { id: room.hostId }, data: { checkersElo: { decrement: room.hostEloDelta } } }),
+          ...(room.guestId && room.guestEloDelta != null
+            ? [prisma.user.update({ where: { id: room.guestId }, data: { checkersElo: { decrement: room.guestEloDelta } } })]
             : []),
         ]);
       }

@@ -3,13 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import {
-  Swords, Bomb, RefreshCw, XCircle, RotateCcw, Clock,
-  ChevronUp, ChevronDown, Minus, AlertTriangle, Loader2, CheckCircle2, Search,
+  Swords, Bomb, Table2, Anchor, RefreshCw, XCircle, RotateCcw, Clock,
+  ChevronUp, ChevronDown, Minus, AlertTriangle, Loader2, CheckCircle2, Search
 } from "lucide-react";
 
 type Room = {
   id: string;
-  game: "chess" | "minesweeper";
+  game: "chess" | "minesweeper" | "checkers" | "battleship";
   status: string;
   hostEloSnapshot: number | null;
   guestEloSnapshot: number | null;
@@ -58,7 +58,7 @@ export default function AdminRoomsPage() {
   const [loading, setLoading]     = useState(true);
   const [apiError, setApiError]   = useState<string | null>(null);
   const [statusF, setStatusF]     = useState<"all" | "active" | "finished">("all");
-  const [gameF,   setGameF]       = useState<"all" | "chess" | "minesweeper">("all");
+  const [gameF,   setGameF]       = useState<"all" | "chess" | "minesweeper" | "checkers" | "battleship">("all");
   const [search, setSearch]       = useState("");
   const [busy, setBusy]           = useState<Record<string, boolean>>({});
   const [rowErr, setRowErr]       = useState<Record<string, string>>({});
@@ -179,15 +179,19 @@ export default function AdminRoomsPage() {
         ))}
         <span className="text-[var(--border-default)]">|</span>
         <span className="text-xs text-[var(--text-muted)]">Game:</span>
-        {(["all", "chess", "minesweeper"] as const).map(g => (
+        {(["all", "chess", "minesweeper", "checkers", "battleship"] as const).map(g => (
           <button key={g} onClick={() => setGameF(g)}
             className={["px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors capitalize",
               gameF === g
                 ? g === "chess"
                   ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
                   : g === "minesweeper"
-                  ? "bg-red-500/15 border-red-500/40 text-red-400"
-                  : "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
+                    ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : g === "checkers"
+                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                      : g === "battleship"
+                        ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+                        : "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
                 : "bg-[var(--bg-card)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]",
             ].join(" ")}>{g}</button>
         ))}
@@ -201,14 +205,16 @@ export default function AdminRoomsPage() {
           {rooms.length === 0 ? "No rated rooms found in the database" : "No rooms match the current filter"}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="overflow-y-auto max-h-[calc(100vh-24rem)] pr-1 flex flex-col gap-3">
           {list.map(room => {
-            const isChess   = room.game === "chess";
+            const isChess      = room.game === "chess";
+            const isCheckers   = room.game === "checkers";
+            const isBattleship = room.game === "battleship";
             const cancelled = room.winReason === "cancelled";
             const hostWins  = !cancelled && room.hostEloDelta != null && room.hostEloDelta > 0;
             const guestWins = !cancelled && room.guestEloDelta != null && room.guestEloDelta > 0;
             const canClose  = room.status !== "FINISHED";
-            const canRevert = room.status === "FINISHED" && !room.resultReverted
+            const canRevert = !isBattleship && room.status === "FINISHED" && !room.resultReverted
               && room.hostEloDelta != null && !cancelled;
 
             return (
@@ -220,11 +226,14 @@ export default function AdminRoomsPage() {
                   <span className={["flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border",
                     isChess
                       ? "bg-violet-500/10 border-violet-500/20 text-violet-400"
-                      : "bg-red-500/10 border-red-500/20 text-red-400"].join(" ")}>
-                    {isChess ? <Swords size={11} /> : <Bomb size={11} />}
-                    {isChess ? "Chess" : "Minesweeper"}
+                      : isCheckers
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : isBattleship
+                          ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                          : "bg-red-500/10 border-red-500/20 text-red-400"].join(" ")}>
+                    {isChess ? <Swords size={11} /> : isCheckers ? <Table2 size={11} /> : isBattleship ? <Anchor size={11} /> : <Bomb size={11} />}
+                    {isChess ? "Chess" : isCheckers ? "Checkers" : isBattleship ? "Battleship" : "Minesweeper"}
                   </span>
-
                   {room.status === "WAITING" && <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">Waiting</span>}
                   {room.status === "PLAYING" && <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400 animate-pulse">Playing</span>}
                   {room.status === "FINISHED" && !cancelled && <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">Finished</span>}

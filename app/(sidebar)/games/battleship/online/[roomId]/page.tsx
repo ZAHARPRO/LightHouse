@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { Loader2, Flag, ArrowLeft } from "lucide-react";
+import { Loader2, Flag, ArrowLeft, Users, Copy, Check } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { Board, Ship, emptyBoard } from "@/lib/battleship";
 import { BattleshipPlacement, type ShipRot } from "@/components/BattleshipPlacement";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
@@ -168,6 +169,8 @@ export default function BattleshipOnlineRoom() {
   const { data: session } = useSession();
   const t = useTranslations("battleship");
 
+  const router = useRouter();
+
   const [room, setRoom]             = useState<any>(null);
   const [loading, setLoading]       = useState(true);
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
@@ -184,6 +187,10 @@ export default function BattleshipOnlineRoom() {
   const [shooting, setShooting]   = useState(false);
   const [resigning, setResigning] = useState(false);
   const [replayIndex, setReplayIndex] = useState<number | null>(null);
+
+  // Waiting lobby
+  const [leaving, setLeaving]   = useState(false);
+  const [copied, setCopied]     = useState(false);
 
   // ─── Fetch room ────────────────────────────────────────────────────────────
   const fetchRoom = useCallback(async () => {
@@ -336,9 +343,94 @@ export default function BattleshipOnlineRoom() {
   if (!room) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
       <p className="text-[var(--text-muted)]">Room not found.</p>
-      <Link href="/games/battleship/online" className="text-orange-400 hover:opacity-80 text-sm">← Back to lobby</Link>
+      <Link href="/games/" className="text-orange-400 hover:opacity-80 text-sm">←Games</Link>
     </div>
   );
+
+  // ─── WAITING lobby ───────────────────────────────────────────────────────────
+  if (room.status === "WAITING") {
+    const isHost = myRole === "host";
+    const roomUrl = typeof window !== "undefined" ? window.location.href : "";
+    const TC_LABELS: Record<string, string> = {
+      none: "∞ Infinite", "60": "⚡ 1 min", "300": "🔥 5 min",
+      "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1 hour",
+    };
+
+    async function handleLeave() {
+      setLeaving(true);
+      await fetch(`/api/battleship-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
+      router.push("/games/");
+    }
+
+    async function handleCopy() {
+      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+
+    return (
+      <main className="max-w-lg mx-auto px-4 py-12">
+        <Link href="/games/"
+          className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm mb-6 transition-colors">
+          <ArrowLeft size={14} /> Games
+        </Link>
+
+        <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Battleship Room</h1>
+        <p className="text-[var(--text-muted)] text-sm mb-8">
+          {TC_LABELS[room.timeControl] ?? room.timeControl}
+          {room.rated && <span className="ml-2 text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
+        </p>
+
+        <div className="flex flex-col gap-3 mb-6">
+          {/* Host */}
+          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
+            {room.host?.image
+              ? <Image src={room.host.image} alt="" width={36} height={36} className="rounded-full shrink-0" />
+              : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.host?.name?.[0] ?? "?"}</div>}
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.host?.name ?? "Anonymous"}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[0.6rem] text-green-400">Host</span>
+                <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.host?.battleshipElo}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Waiting slot */}
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--border-subtle)] px-4 py-3">
+            <div className="relative w-9 h-9 shrink-0">
+              <span className="absolute inset-0 rounded-full bg-[var(--text-muted)]/10 animate-ping" />
+              <div className="w-9 h-9 rounded-full border-2 border-dashed border-[var(--border-subtle)] flex items-center justify-center relative z-10">
+                <Users size={14} className="text-[var(--text-muted)]" />
+              </div>
+            </div>
+            <p className="text-[var(--text-muted)] text-sm italic">Waiting for opponent…</p>
+          </div>
+        </div>
+
+        {/* Share link */}
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
+              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
+        </div>
+
+        {/* Leave */}
+        {isHost && (
+          <button onClick={handleLeave} disabled={leaving}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors text-sm font-display font-semibold">
+            {leaving ? <Loader2 size={13} className="animate-spin" /> : <ArrowLeft size={13} />}
+            Leave & close room
+          </button>
+        )}
+      </main>
+    );
+  }
 
   // ─── PLACEMENT ───────────────────────────────────────────────────────────────
   if (room.status === "PLACEMENT" && !placed) {

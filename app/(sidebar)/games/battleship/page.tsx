@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Board, Ship, emptyBoard, randomPlacement } from "@/lib/battleship";
 import { BotDifficulty, createBotMemory, getBotShot, updateBotMemory, BotMemory } from "@/lib/battleship-bot";
 import { BattleshipPlacement, type ShipRot } from "@/components/BattleshipPlacement";
+import Link from "next/link";
 
 const CELL = 40;
 const LABEL_W = 40;
@@ -363,6 +364,9 @@ export default function BattleshipBotPage() {
 
   return (
     <div className="flex flex-col items-center gap-6 p-4 sm:p-8">
+      <div className="flex items-center gap-3 mb-2">
+        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
+      </div>
       <h2 className="text-2xl font-bold text-white">{t("title")}</h2>
 
       <div className="text-lg font-semibold text-yellow-400">{message}</div>

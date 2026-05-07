@@ -298,7 +298,7 @@ function MovePanel({ moves }: { moves: string[] }) {
 function Avatar({ name, image, size=32 }: { name:string|null; image:string|null; size?:number }) {
   if (image) return <Image src={image} alt="" width={size} height={size} className="rounded-full" style={{width:size,height:size}} />;
   return (
-    <div className="rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold"
+    <div className="rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold"
       style={{ width:size, height:size, fontSize:size*0.4 }}>
       {name?.[0]??"?"}
     </div>
@@ -497,10 +497,18 @@ export default function ChessOnlineRoom() {
     const TC_LABELS: Record<string,string> = {
       none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min","600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
     };
+
+    async function handleCancelRoom() {
+      await fetch(`/api/chess-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
+      router.push("/games/chess/online");
+    }
+
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={handleResign} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>
+          {room.myRole === "host"
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave & close room</button>
+            : <button onClick={() => router.push("/games/chess/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
         </div>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Room</h1>
         <p className="text-[var(--text-muted)] text-sm mb-8">{TC_LABELS[room.timeControl] ?? room.timeControl} · Colors assigned randomly</p>

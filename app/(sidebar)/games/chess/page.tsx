@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { RotateCcw, Flag, ChevronRight } from "lucide-react";
+import { RotateCcw, Flag, ChevronRight, Link } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   initialState, getLegalMoves, applyMove, toSAN,
@@ -339,7 +339,7 @@ export default function ChessVsBotPage() {
               <button key={d} onClick={() => setDifficulty(d)}
                 className={["px-5 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
                   difficulty === d
-                    ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                    ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                     : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 ].join(" ")}>
                 {d === "easy" ? t("easy") : d === "medium" ? t("medium") : t("hard")}
@@ -359,6 +359,10 @@ export default function ChessVsBotPage() {
   return (
     <main className="overflow-y-auto lg:overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
       <div className="flex flex-col lg:flex-row gap-4 p-3 sm:p-4 lg:h-full items-center justify-center">
+
+      <div className="flex items-center gap-3 mb-2">
+        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
+      </div>
 
         {/* Board column */}
         <div className="flex flex-col shrink-0">
@@ -398,7 +402,7 @@ export default function ChessVsBotPage() {
 
           {/* Result banner */}
           {status === "over" && result && (
-            <div className="px-3 py-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[var(--accent-orange)] font-display font-bold text-sm text-center">
+            <div className="px-3 py-3 rounded-xl bg-pink-500/10 border border-pink-500/20 text-[var(--accent-orange)] font-display font-bold text-sm text-center">
               {result}
             </div>
           )}
@@ -410,7 +414,7 @@ export default function ChessVsBotPage() {
                 <button key={d} onClick={() => setDifficulty(d)}
                   className={["flex-1 py-1.5 rounded-lg text-[0.7rem] font-display font-semibold border transition-all",
                     difficulty === d
-                      ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                      ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                       : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   ].join(" ")}>
                   {d === "easy" ? t("easy") : d === "medium" ? t("medium") : t("hard")}

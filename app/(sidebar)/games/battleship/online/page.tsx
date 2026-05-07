@@ -64,7 +64,7 @@ export default function BattleshipOnlineLobby() {
   return (
     <main className="max-w-2xl mx-auto px-4 py-12">
       <div className="flex items-center gap-3 mb-2">
-        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">{t("title")}</Link>
+        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
       </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-1">Online {t("title")}</h1>
       <p className="text-[var(--text-muted)] mb-8">1 vs 1 in real-time · <Link href="/games/battleship/online/rated" className="text-pink-400 hover:opacity-80">Rated queue →</Link></p>
@@ -77,7 +77,7 @@ export default function BattleshipOnlineLobby() {
             <button key={opt.value} onClick={() => setTimeControl(opt.value)}
               className={["px-3 py-2 rounded-lg text-sm font-display font-semibold border transition-all text-left",
                 timeControl === opt.value
-                  ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                  ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                   : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
               ].join(" ")}>
               <span className="mr-1">{opt.icon}</span>{opt.label}
@@ -106,7 +106,7 @@ export default function BattleshipOnlineLobby() {
             <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
               {room.host.image
                 ? <Image src={room.host.image} alt="" width={36} height={36} className="rounded-full" />
-                : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-sm">{room.host.name?.[0] ?? "?"}</div>}
+                : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-sm">{room.host.name?.[0] ?? "?"}</div>}
               <div className="flex-1">
                 <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.host.name ?? "Anonymous"}</p>
                 <p className="text-[var(--text-muted)] text-xs">{TC_LABELS[room.timeControl] ?? room.timeControl} · ELO {room.host.battleshipElo}</p>
@@ -131,7 +131,7 @@ export default function BattleshipOnlineLobby() {
             {playing.map(room => (
               <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
                 <div className="flex items-center gap-1.5">
-                  {room.host.image ? <Image src={room.host.image} alt="" width={28} height={28} className="rounded-full" /> : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">{room.host.name?.[0] ?? "?"}</div>}
+                  {room.host.image ? <Image src={room.host.image} alt="" width={28} height={28} className="rounded-full" /> : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">{room.host.name?.[0] ?? "?"}</div>}
                   <span className="text-[0.65rem] text-[var(--text-muted)]">vs</span>
                   {room.guest?.image ? <Image src={room.guest.image} alt="" width={28} height={28} className="rounded-full" /> : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">{room.guest?.name?.[0] ?? "?"}</div>}
                 </div>

@@ -56,9 +56,10 @@ export default function BattleshipRatedPage() {
       pollRef.current = setInterval(async () => {
         const r = await fetch(`/api/battleship-rooms/${roomId}`);
         if (!r.ok) return;
-        const room = await r.json();
-        if (room.guestId) { stopTimers(); router.push(`/games/battleship/online/${roomId}`); }
-        else if (room.status === "FINISHED") { stopTimers(); setPhase("idle"); }
+        const json = await r.json();
+        const data = json.room ?? json;
+        if (data.guestId) { stopTimers(); router.push(`/games/battleship/online/${roomId}`); }
+        else if (data.status === "FINISHED") { stopTimers(); setPhase("idle"); }
       }, 2000);
 
       timerRef.current = setInterval(() => {

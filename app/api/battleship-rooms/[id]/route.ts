@@ -45,3 +45,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({ room: response });
 }
+
+// Host cancels a WAITING room
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const updated = await prisma.battleshipRoom.updateMany({
+    where: { id, hostId: session.user.id, status: "WAITING" },
+    data: { status: "FINISHED" },
+  });
+
+  if (updated.count === 0) return NextResponse.json({ error: "Cannot cancel" }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}

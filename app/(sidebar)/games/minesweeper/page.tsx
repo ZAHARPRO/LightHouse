@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { awardGameBadge } from "@/actions/badges";
-import { Flag, Bomb, RotateCcw, Trophy } from "lucide-react";
+import { Flag, Bomb, RotateCcw, Trophy, Link } from "lucide-react";
+
 
 type Difficulty = "easy" | "medium" | "hard";
 type GameState = "idle" | "playing" | "won" | "lost";
@@ -169,6 +170,9 @@ export default function GamesPage() {
 
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12 flex flex-col items-center">
+           <div className="flex items-center gap-3 mb-2">
+        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
+      </div>
       <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)] mb-2">
         Mini Games
       </h1>

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { RotateCcw, Flag, Crown, ChevronLeft, ChevronRight } from "lucide-react";
+import { RotateCcw, Flag, Crown, ChevronLeft, ChevronRight, Link } from "lucide-react";
 import {
   initialBoard, getLegalMoves, applyMove, canContinueJump, isGameOver, countPieces,
   type Board, type Cell, type Move,
 } from "@/lib/checkers";
 import { getBotMove, type Difficulty } from "@/lib/checkers-bot";
 import { awardGameBadge } from "@/actions/badges";
+
 
 type Status = "idle" | "playing" | "over";
 
@@ -382,7 +383,9 @@ export default function CheckersVsBotPage() {
   return (
     <main className="overflow-y-auto lg:overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
       <div className="flex flex-col lg:flex-row gap-4 p-3 sm:p-4 lg:h-full items-center justify-center">
-
+     <div className="flex items-center gap-3 mb-2">
+        <Link href="/games/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Games</Link>
+      </div>
         {/* Board column */}
         <div className="flex flex-col shrink-0">
           <PlayerRow label={`Bot · ${diffLabel}`} color="b" active={isBotTurn} pieces={blackPieces} />

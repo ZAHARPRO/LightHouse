@@ -105,7 +105,7 @@ export default function ChessOnlineLobby() {
             <button key={opt.value} onClick={() => setTimeControl(opt.value)}
               className={["px-3 py-2 rounded-lg text-sm font-display font-semibold border transition-all text-left",
                 timeControl === opt.value
-                  ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                  ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                   : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               ].join(" ")}
             >
@@ -139,7 +139,7 @@ export default function ChessOnlineLobby() {
             <div key={room.id} className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
               {room.host.image
                 ? <Image src={room.host.image} alt="" width={36} height={36} className="rounded-full" />
-                : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-sm">{room.host.name?.[0]??"?"}</div>
+                : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-sm">{room.host.name?.[0]??"?"}</div>
               }
               <div className="flex-1">
                 <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.host.name ?? "Anonymous"}</p>
@@ -170,7 +170,7 @@ export default function ChessOnlineLobby() {
                 <div className="flex items-center gap-1.5">
                   {room.host.image
                     ? <Image src={room.host.image} alt="" width={28} height={28} className="rounded-full" />
-                    : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">{room.host.name?.[0]??"?"}</div>
+                    : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">{room.host.name?.[0]??"?"}</div>
                   }
                   <span className="text-[0.65rem] text-[var(--text-muted)]">vs</span>
                   {room.guest?.image

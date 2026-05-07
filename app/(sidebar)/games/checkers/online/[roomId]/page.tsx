@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Loader2, Crown, Flag, RotateCcw, CheckCircle2, Clock,
@@ -265,6 +265,7 @@ function PlayerCard({ name, image, elo, color, timeMs, active, isMe, eloDelta, p
 export default function CheckersRoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const { data: session } = useSession();
+  const router = useRouter();
   const cellPx = useCellPx();
 
   const [room, setRoom]         = useState<RoomData | null>(null);
@@ -446,6 +447,11 @@ export default function CheckersRoomPage() {
     await fetchRoom(); setStarting(false);
   }
 
+  async function handleCancelRoom() {
+    await fetch(`/api/checkers-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
+    router.push("/games/checkers/online");
+  }
+
   async function resign() {
     if (!confirm("Resign this game?")) return;
     setResigning(true);
@@ -493,7 +499,7 @@ export default function CheckersRoomPage() {
   if (!room) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
       <p className="text-[var(--text-muted)]">Room not found.</p>
-      <Link href="/games/checkers/online" className="text-orange-400 hover:opacity-80 text-sm">← Back to lobby</Link>
+      <Link href="/games/" className="text-pink-400 hover:opacity-80 text-sm">← Games</Link>
     </div>
   );
 
@@ -507,20 +513,20 @@ export default function CheckersRoomPage() {
     const guestRank = room.guestElo ? getRank(room.guestElo) : null;
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
-        <Link href="/games/checkers/online" className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm mb-6">
-          <ArrowLeft size={14} /> Leave lobby
+        <Link href="/games/" className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm mb-6">
+          <ArrowLeft size={14} /> Games
         </Link>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Checkers Room</h1>
         <p className="text-[var(--text-muted)] text-sm mb-8">
           {TC[room.timeControl] ?? room.timeControl}
-          {room.rated && <span className="ml-2 text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
+          {room.rated && <span className="ml-2 text-xs font-bold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2 py-0.5 rounded-full">Rated</span>}
         </p>
         <div className="flex flex-col gap-3 mb-8">
           {/* Host */}
           <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
             {room.hostImage
               ? <Image src={room.hostImage} alt="" width={36} height={36} className="rounded-full shrink-0" />
-              : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
+              : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
             <div className="flex-1 min-w-0">
               <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Anonymous"}</p>
               <div className="flex items-center gap-1.5">
@@ -556,23 +562,37 @@ export default function CheckersRoomPage() {
             </div>
           )}
         </div>
-        <div className="flex gap-3">
-          {myRole === "guest" && (
-            <button onClick={toggleReady} disabled={readying}
-              className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
-                room.guestReady
-                  ? "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  : "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25",
-              ].join(" ")}>
-              {readying && <Loader2 size={14} className="animate-spin inline mr-1" />}
-              {room.guestReady ? "Cancel Ready" : "Ready!"}
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-3">
+            {myRole === "guest" && (
+              <button onClick={toggleReady} disabled={readying}
+                className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
+                  room.guestReady
+                    ? "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    : "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25",
+                ].join(" ")}>
+                {readying && <Loader2 size={14} className="animate-spin inline mr-1" />}
+                {room.guestReady ? "Cancel Ready" : "Ready!"}
+              </button>
+            )}
+            {myRole === "host" && (
+              <button onClick={startGame} disabled={!room.guestId || !room.guestReady || starting}
+                className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity">
+                {starting && <Loader2 size={14} className="animate-spin inline mr-1" />}
+                {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
+              </button>
+            )}
+          </div>
+          {myRole === "host" && (
+            <button onClick={handleCancelRoom}
+              className="w-full py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 font-display font-semibold text-sm transition-colors">
+              ← Leave &amp; close room
             </button>
           )}
-          {myRole === "host" && (
-            <button onClick={startGame} disabled={!room.guestId || !room.guestReady || starting}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity">
-              {starting && <Loader2 size={14} className="animate-spin inline mr-1" />}
-              {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
+          {myRole === "guest" && (
+            <button onClick={() => router.push("/games/checkers/online")}
+              className="w-full py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] font-display font-semibold text-sm transition-colors">
+              ← Leave Room
             </button>
           )}
         </div>
@@ -685,7 +705,7 @@ export default function CheckersRoomPage() {
           {/* Top bar */}
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/games/checkers/online" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs transition-colors">← Lobby</Link>
-            {room.rated && <span className="text-[0.65rem] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-1.5 py-0.5 rounded-full">Rated</span>}
+            {room.rated && <span className="text-[0.65rem] font-bold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-1.5 py-0.5 rounded-full">Rated</span>}
             <SpectatorBadge count={room.spectatorCount} />
             <div className="ml-auto flex items-center gap-1.5">
               <ConnectionBadge status={connStatus} />
@@ -700,7 +720,7 @@ export default function CheckersRoomPage() {
           {room.status === "PLAYING" && replayIdx === null && (
             <p className="text-center text-xs">
               {isMyTurn
-                ? <span className="text-orange-400 font-bold">Your turn</span>
+                ? <span className="text-pink-400 font-bold">Your turn</span>
                 : <span className="text-[var(--text-muted)]">Opponent&apos;s turn</span>}
             </p>
           )}
@@ -725,7 +745,7 @@ export default function CheckersRoomPage() {
           {/* Replay mode banner */}
           {replayIdx !== null && (
             <button onClick={() => setReplayIdx(null)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/15 border border-orange-500/40 text-[var(--accent-orange)] text-xs font-display font-semibold hover:bg-orange-500/25 transition-colors">
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pink-500/15 border border-pink-500/40 text-[var(--accent-orange)] text-xs font-display font-semibold hover:bg-pink-500/25 transition-colors">
               <ChevronRight size={12} /> Back to live
             </button>
           )}
@@ -749,7 +769,7 @@ export default function CheckersRoomPage() {
                   <button key={i} onClick={() => setReplayIdx(i)}
                     className={[
                       "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-left font-mono text-[0.65rem] transition-colors w-full",
-                      isActive  ? "bg-orange-500/20 text-[var(--accent-orange)]"
+                      isActive  ? "bg-pink-500/20 text-[var(--accent-orange)]"
                       : isLatest ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
                                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]",
                     ].join(" ")}>

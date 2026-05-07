@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const rooms = await prisma.battleshipRoom.findMany({
     where: {
       status: { in: ["WAITING", "PLAYING"] },
+      rated: false,
     },
     include: {
       host: { select: { id: true, name: true, image: true, battleshipElo: true } },
@@ -22,7 +23,9 @@ export async function GET(req: NextRequest) {
     take: 20,
   });
 
-  return NextResponse.json({ rooms });
+  const waiting = rooms.filter(r => r.status === "WAITING");
+  const playing = rooms.filter(r => r.status === "PLAYING");
+  return NextResponse.json({ waiting, playing });
 }
 
 // POST /api/battleship-rooms — создать комнату
@@ -51,5 +54,5 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ room });
+  return NextResponse.json({ id: room.id, room });
 }

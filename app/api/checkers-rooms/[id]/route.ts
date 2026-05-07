@@ -115,5 +115,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     guestEloDelta: room.guestEloDelta,
     chat: room.chatJson ? JSON.parse(room.chatJson) : [],
     spectatorCount,
+    movesJson: room.movesJson ?? "[]",
   });
 }

@@ -668,6 +668,7 @@ model CheckersRoom {
   boardJson      String?  @db.Text  // JSON: Cell[][]
   moveCount      Int      @default(0)
   mustJumpFrom   String?            // JSON: [row, col] | null (multi-jump continuations)
+  movesJson      String   @default("[]") @db.Text
 
   whiteTimeMs  Int?
   blackTimeMs  Int?

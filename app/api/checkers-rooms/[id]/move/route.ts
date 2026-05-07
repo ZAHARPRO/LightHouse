@@ -40,11 +40,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const canChain = !!matched.captured && !promoted && canContinueJump(newBoard, matched.to[0], matched.to[1]);
   const nextMoveCount = canChain ? room.moveCount : room.moveCount + 1;
 
+  const existingMoves: { from: [number,number]; to: [number,number]; color: string; captured: boolean }[] =
+    JSON.parse(room.movesJson || "[]");
+  existingMoves.push({ from: matched.from, to: matched.to, color: myColor, captured: !!matched.captured });
+
   const update: Record<string, unknown> = {
     boardJson: boardToJson(newBoard),
     moveCount: nextMoveCount,
     mustJumpFrom: canChain ? [matched.to[0], matched.to[1]] : null,
     lastMoveAt: new Date(),
+    movesJson: JSON.stringify(existingMoves),
   };
 
   // Time control

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star, Eye } from "lucide-react";
+import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star, Eye, Copy, Check } from "lucide-react";
 import Image from "next/image";
 import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
@@ -318,6 +318,7 @@ export default function ChessOnlineRoom() {
   const fetchAbortRef = useRef<AbortController|null>(null);
   const connFailsRef = useRef(0);
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
+  const [copied, setCopied] = useState(false);
   const prevRoomRef   = useRef<RoomData|null>(null);
   const timeWarnedRef = useRef(false);
 
@@ -498,6 +499,13 @@ export default function ChessOnlineRoom() {
       none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min","600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
     };
 
+   const roomUrl = typeof window !== "undefined" ? window.location.href : "";
+   async function handleCopy() {
+      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+
     async function handleCancelRoom() {
       await fetch(`/api/chess-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
       router.push("/games/chess/online");
@@ -507,7 +515,7 @@ export default function ChessOnlineRoom() {
       <main className="max-w-lg mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-6">
           {room.myRole === "host"
-            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave & close room</button>
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave</button>
             : <button onClick={() => router.push("/games/chess/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
         </div>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Room</h1>
@@ -539,9 +547,11 @@ export default function ChessOnlineRoom() {
               </>
             )}
           </div>
+
+
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-2 mb-6">
           {room.myRole === "guest" && (
             <button onClick={() => doAction("ready")}
               className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
@@ -558,6 +568,17 @@ export default function ChessOnlineRoom() {
               {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
             </button>
           )}
+        </div>
+
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
+              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
         </div>
       </main>
     );

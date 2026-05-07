@@ -356,11 +356,11 @@ export default function BattleshipOnlineRoom() {
       "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1 hour",
     };
 
-    async function handleLeave() {
-      setLeaving(true);
+    async function handleCancelRoom() {
       await fetch(`/api/battleship-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
-      router.push("/games/");
+      router.push("/games/battleship/online");
     }
+
 
     async function handleCopy() {
       try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
@@ -370,10 +370,11 @@ export default function BattleshipOnlineRoom() {
 
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
-        <Link href="/games/"
-          className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm mb-6 transition-colors">
-          <ArrowLeft size={14} /> Games
-        </Link>
+        <div className="flex items-center gap-3 mb-6">
+          {myRole === "host"
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave room</button>
+            : <button onClick={() => router.push("/games/battleship/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
+        </div>
 
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Battleship Room</h1>
         <p className="text-[var(--text-muted)] text-sm mb-8">
@@ -419,15 +420,6 @@ export default function BattleshipOnlineRoom() {
             </button>
           </div>
         </div>
-
-        {/* Leave */}
-        {isHost && (
-          <button onClick={handleLeave} disabled={leaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors text-sm font-display font-semibold">
-            {leaving ? <Loader2 size={13} className="animate-spin" /> : <ArrowLeft size={13} />}
-            Leave & close room
-          </button>
-        )}
       </main>
     );
   }

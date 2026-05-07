@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import {
   Loader2, Crown, Flag, RotateCcw, CheckCircle2, Clock,
   ArrowLeft, ChevronLeft, ChevronRight,
+  Copy,
+  Check,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -459,6 +461,14 @@ export default function CheckersRoomPage() {
     await fetchRoom(); setResigning(false);
   }
 
+  const roomUrl = typeof window !== "undefined" ? window.location.href : "";
+  const [copied, setCopied] = useState(false);
+   async function handleCopy() {
+      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+
   // ── Derived state ────────────────────────────────────────────────────────
   const isFinished  = room?.status === "FINISHED";
   const hostColor   = (room?.hostColor ?? "w") as Color;
@@ -503,6 +513,8 @@ export default function CheckersRoomPage() {
     </div>
   );
 
+  
+
   // ── WAITING lobby ────────────────────────────────────────────────────────
   if (room.status === "WAITING") {
     const TC: Record<string, string> = {
@@ -513,9 +525,11 @@ export default function CheckersRoomPage() {
     const guestRank = room.guestElo ? getRank(room.guestElo) : null;
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
-        <Link href="/games/" className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm mb-6">
-          <ArrowLeft size={14} /> Games
-        </Link>
+        <div className="flex items-center gap-3 mb-6">
+          {room.myRole === "host"
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave room</button>
+            : <button onClick={() => router.push("/games/checkers/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
+        </div>
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Checkers Room</h1>
         <p className="text-[var(--text-muted)] text-sm mb-8">
           {TC[room.timeControl] ?? room.timeControl}
@@ -562,7 +576,7 @@ export default function CheckersRoomPage() {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 mb-6">
           <div className="flex gap-3">
             {myRole === "guest" && (
               <button onClick={toggleReady} disabled={readying}
@@ -583,18 +597,16 @@ export default function CheckersRoomPage() {
               </button>
             )}
           </div>
-          {myRole === "host" && (
-            <button onClick={handleCancelRoom}
-              className="w-full py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 font-display font-semibold text-sm transition-colors">
-              ← Leave &amp; close room
+        </div>
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
+              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
             </button>
-          )}
-          {myRole === "guest" && (
-            <button onClick={() => router.push("/games/checkers/online")}
-              className="w-full py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] font-display font-semibold text-sm transition-colors">
-              ← Leave Room
-            </button>
-          )}
+          </div>
         </div>
       </main>
     );

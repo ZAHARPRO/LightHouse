@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star, Eye } from "lucide-react";
+import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star, Eye, Copy, Check } from "lucide-react";
 import Image from "next/image";
 import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
 import GameReportButton from "@/components/GameReportButton";
@@ -225,6 +225,7 @@ export default function GameRoomPage() {
   const prevRoomRef    = useRef<RoomData | null>(null);
   const soundFiredRef  = useRef(false);
   const hitIdxRef      = useRef<number | undefined>(undefined);
+   const [copied, setCopied] = useState(false);
 
   const fetchRoom = useCallback(async () => {
     const ctrl = new AbortController();
@@ -375,6 +376,21 @@ export default function GameRoomPage() {
   const rows     = room.rows ?? 9;
   const cols     = room.cols ?? 9;
 
+    const roomUrl = typeof window !== "undefined" ? window.location.href : "";
+  
+   async function handleCopy() {
+      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+
+   async function handleCancelRoom() {
+      await fetch(`/api/ms-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
+      router.push("/games/minesweeper/online");
+    }
+
+    
+
   // ── WAITING ────────────────────────────────────────────────────────────────
   if (room.status === "WAITING") {
     const myReady  = room.myRole === "host" ? room.hostReady : room.guestReady;
@@ -382,7 +398,11 @@ export default function GameRoomPage() {
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={handleLeave} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm transition-colors">← Leave</button>
+        <div className="flex items-center gap-3 mb-6">
+          {room.myRole === "host"
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave room</button>
+            : <button onClick={() => router.push("/games/minesweeper/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
+        </div>
           <span className="ml-auto flex items-center gap-1.5 text-xs text-green-400 font-display font-semibold">
             <Wifi size={12} /> Waiting
           </span>
@@ -424,7 +444,7 @@ export default function GameRoomPage() {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-6">
           {room.myRole === "guest" && !myReady && (
             <button onClick={() => doAction("ready")}
               className="flex-1 py-2.5 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 font-display font-bold text-sm hover:bg-green-500/25 transition-colors">
@@ -443,6 +463,16 @@ export default function GameRoomPage() {
               {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
             </button>
           )}
+        </div>
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
+              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
         </div>
       </main>
     );

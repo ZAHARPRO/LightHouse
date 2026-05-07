@@ -24,9 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const isHost = userId === room.hostId;
   const isGuest = userId === room.guestId;
 
+  const myRole = isHost ? "host" : isGuest ? "guest" : "spectator";
+
   // Строим ответ в зависимости от роли
   const response = {
     ...room,
+    myRole,
     // Своё полное поле (с кораблями)
     myBoard: isHost ? room.hostBoardJson : isGuest ? room.guestBoardJson : null,
     myShips: isHost ? room.hostShipsJson : isGuest ? room.guestShipsJson : null,
@@ -53,7 +56,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const updated = await prisma.battleshipRoom.updateMany({
-    where: { id, hostId: session.user.id, status: "WAITING" },
+    where: { id, hostId: session.user.id, status: { in: ["WAITING", "PLACEMENT"] } },
     data: { status: "FINISHED" },
   });
 

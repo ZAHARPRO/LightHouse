@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { awardGameBadge } from "@/actions/badges";
 import { Flag, Bomb, RotateCcw, Trophy, Link } from "lucide-react";
+import { playSound, preloadSounds } from "@/lib/gameSounds";
+
+type ActionEntry = {
+  type: "reveal" | "flag" | "unflag";
+  r: number; c: number;
+  board: Cell[][];
+  minesLeft: number;
+};
 
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -101,6 +109,70 @@ function floodReveal(board: Cell[][], startR: number, startC: number): Cell[][] 
   return next;
 }
 
+function ReplayPanel({
+  actions,
+  replayIdx,
+  onReplay,
+  actionsRef,
+}: {
+  actions: ActionEntry[];
+  replayIdx: number | null;
+  onReplay: (idx: number | null) => void;
+  actionsRef: React.RefObject<HTMLDivElement>;
+}) {
+  if (actions.length === 0) return null;
+  const atLive = replayIdx === null;
+  return (
+    <div className="flex flex-col gap-2 w-full max-w-xs">
+      <div
+        ref={actionsRef}
+        className="h-36 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2 flex flex-col gap-0.5"
+      >
+        {actions.map((a, i) => (
+          <button
+            key={i}
+            onClick={() => onReplay(i)}
+            className={`text-left text-xs px-2 py-0.5 rounded transition-colors font-mono ${
+              (replayIdx === i || (replayIdx === null && i === actions.length - 1))
+                ? "bg-orange-500/20 text-[var(--accent-orange)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            {i + 1}. {a.type === "reveal" ? "↗" : a.type === "flag" ? "⚑" : "⚐"} ({a.r},{a.c})
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1 justify-center">
+        <button
+          onClick={() => onReplay(0)}
+          disabled={replayIdx === 0}
+          className="px-2 py-1 rounded text-xs border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] disabled:opacity-30 hover:text-[var(--text-primary)] transition-colors"
+        >«</button>
+        <button
+          onClick={() => onReplay(replayIdx !== null && replayIdx > 0 ? replayIdx - 1 : 0)}
+          disabled={replayIdx === 0 || replayIdx === null}
+          className="px-2 py-1 rounded text-xs border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] disabled:opacity-30 hover:text-[var(--text-primary)] transition-colors"
+        >‹</button>
+        <button
+          onClick={() => onReplay(replayIdx !== null && replayIdx < actions.length - 1 ? replayIdx + 1 : actions.length - 1)}
+          disabled={atLive}
+          className="px-2 py-1 rounded text-xs border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] disabled:opacity-30 hover:text-[var(--text-primary)] transition-colors"
+        >›</button>
+        <button
+          onClick={() => onReplay(null)}
+          disabled={atLive}
+          className="px-2 py-1 rounded text-xs border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] disabled:opacity-30 hover:text-[var(--text-primary)] transition-colors"
+        >»</button>
+        {!atLive && (
+          <span className="text-xs text-[var(--text-muted)] ml-1">
+            {replayIdx! + 1}/{actions.length}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function GamesPage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [gameState, setGameState] = useState<GameState>("idle");
@@ -108,8 +180,18 @@ export default function GamesPage() {
   const [minesLeft, setMinesLeft] = useState(0);
   const [firstClick, setFirstClick] = useState(true);
   const [hitPos, setHitPos] = useState<{ r: number; c: number } | null>(null);
+  const [actions, setActions] = useState<ActionEntry[]>([]);
+  const [replayIdx, setReplayIdx] = useState<number | null>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { preloadSounds(); }, []);
 
   const cfg = DIFFICULTIES[difficulty];
+
+  useEffect(() => {
+    if (replayIdx === null && actionsRef.current)
+      actionsRef.current.scrollTop = actionsRef.current.scrollHeight;
+  }, [actions.length, replayIdx]);
 
   const startGame = useCallback((diff: Difficulty = difficulty) => {
     setDifficulty(diff);
@@ -118,53 +200,65 @@ export default function GamesPage() {
     setGameState("playing");
     setFirstClick(true);
     setHitPos(null);
+    setActions([]);
+    setReplayIdx(null);
   }, [difficulty]);
 
   const handleReveal = useCallback((r: number, c: number) => {
-    if (gameState !== "playing") return;
+    if (gameState !== "playing" || replayIdx !== null) return;
 
-    setBoard(prev => {
-      let b = prev.map(row => row.map(cell => ({ ...cell })));
-      if (b[r][c].isRevealed || b[r][c].isFlagged) return prev;
+    let b = board.map(row => row.map(cell => ({ ...cell })));
+    if (b[r][c].isRevealed || b[r][c].isFlagged) return;
 
-      if (firstClick) {
-        b = placeMines(b, cfg.mines, r, c);
-        setFirstClick(false);
-      }
+    if (firstClick) {
+      b = placeMines(b, cfg.mines, r, c);
+      setFirstClick(false);
+    }
 
-      if (b[r][c].isMine) {
-        b = b.map(row => row.map(cell => cell.isMine ? { ...cell, isRevealed: true } : cell));
-        setHitPos({ r, c });
-        setGameState("lost");
-        return b;
-      }
+    if (b[r][c].isMine) {
+      b = b.map(row => row.map(cell => cell.isMine ? { ...cell, isRevealed: true } : cell));
+      setHitPos({ r, c });
+      setBoard(b);
+      setActions(prev => [...prev, { type: "reveal", r, c, board: b, minesLeft }]);
+      setGameState("lost");
+      playSound("mine_explode");
+      return;
+    }
 
-      b = floodReveal(b, r, c);
+    b = floodReveal(b, r, c);
+    setBoard(b);
+    setActions(prev => [...prev, { type: "reveal", r, c, board: b, minesLeft }]);
+    playSound("cell_reveal");
 
-      const unrevealed = b.flat().filter(cell => !cell.isRevealed && !cell.isMine).length;
-      if (unrevealed === 0) {
-        setGameState("won");
-        awardGameBadge("MINESWEEPER_WIN").catch(() => {});
-        if (difficulty === "hard") awardGameBadge("MINESWEEPER_EXPERT").catch(() => {});
-      }
-
-      return b;
-    });
-  }, [gameState, firstClick, cfg.mines, difficulty]);
+    const unrevealed = b.flat().filter(cell => !cell.isRevealed && !cell.isMine).length;
+    if (unrevealed === 0) {
+      setGameState("won");
+      playSound("mine_win");
+      awardGameBadge("MINESWEEPER_WIN").catch(() => {});
+      if (difficulty === "hard") awardGameBadge("MINESWEEPER_EXPERT").catch(() => {});
+    }
+  }, [gameState, firstClick, cfg.mines, difficulty, board, minesLeft, replayIdx]);
 
   const handleFlag = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-    if (gameState !== "playing") return;
+    if (gameState !== "playing" || replayIdx !== null) return;
     if (board[r][c].isRevealed) return;
 
     const willFlag = !board[r][c].isFlagged;
-    setMinesLeft(m => willFlag ? m - 1 : m + 1);
-    setBoard(prev => {
-      const b = prev.map(row => row.map(cell => ({ ...cell })));
-      b[r][c].isFlagged = !b[r][c].isFlagged;
-      return b;
-    });
-  }, [gameState, board]);
+    const newMinesLeft = minesLeft + (willFlag ? -1 : 1);
+    setMinesLeft(newMinesLeft);
+    const b = board.map(row => row.map(cell => ({ ...cell })));
+    b[r][c].isFlagged = !b[r][c].isFlagged;
+    setBoard(b);
+    setActions(prev => [...prev, {
+      type: willFlag ? "flag" as const : "unflag" as const,
+      r, c, board: b, minesLeft: newMinesLeft,
+    }]);
+    playSound(willFlag ? "flag_place" : "flag_remove");
+  }, [gameState, board, minesLeft, replayIdx]);
+
+  const displayBoard = replayIdx !== null ? (actions[replayIdx]?.board ?? board) : board;
+  const displayMinesLeft = replayIdx !== null ? (actions[replayIdx]?.minesLeft ?? minesLeft) : minesLeft;
 
   const cellSize = difficulty === "hard" ? "w-7 h-7 text-xs" : "w-8 h-8 text-sm";
 
@@ -218,7 +312,7 @@ export default function GamesPage() {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 text-[var(--text-secondary)] font-display font-semibold text-sm">
               <Flag size={15} className="text-[var(--accent-orange)]" />
-              {minesLeft}
+              {displayMinesLeft}
             </div>
 
             <button
@@ -248,7 +342,7 @@ export default function GamesPage() {
               style={{ gridTemplateColumns: `repeat(${cfg.cols}, minmax(0, 1fr))` }}
               onContextMenu={e => e.preventDefault()}
             >
-              {board.map((row, r) =>
+              {displayBoard.map((row, r) =>
                 row.map((cell, c) => {
                   let bg = "bg-[var(--bg-elevated)] hover:bg-[var(--bg-card)] border-[var(--border-subtle)]";
                   let content: React.ReactNode = null;
@@ -285,9 +379,9 @@ export default function GamesPage() {
                   return (
                     <button
                       key={`${r}-${c}`}
-                      className={`${cellSize} flex items-center justify-center rounded border transition-colors duration-75 cursor-pointer ${bg}`}
-                      onClick={() => handleReveal(r, c)}
-                      onContextMenu={e => handleFlag(e, r, c)}
+                      className={`${cellSize} flex items-center justify-center rounded border transition-colors duration-75 ${replayIdx !== null ? "cursor-default" : "cursor-pointer"} ${bg}`}
+                      onClick={() => replayIdx === null && handleReveal(r, c)}
+                      onContextMenu={e => { if (replayIdx === null) handleFlag(e, r, c); else e.preventDefault(); }}
                     >
                       {content}
                     </button>
@@ -296,6 +390,13 @@ export default function GamesPage() {
               )}
             </div>
           </div>
+
+          <ReplayPanel
+            actions={actions}
+            replayIdx={replayIdx}
+            onReplay={setReplayIdx}
+            actionsRef={actionsRef}
+          />
         </div>
       )}
     </main>

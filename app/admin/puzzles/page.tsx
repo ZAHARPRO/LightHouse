@@ -10,6 +10,10 @@ const PIECE_UNICODE: Record<string, string> = {
   bK: "♚", bQ: "♛", bR: "♜", bB: "♝", bN: "♞", bP: "♟",
 };
 
+
+
+
+
 function MiniBoard({ fen }: { fen: string }) {
   let state: GameState | null = null;
   try { state = fromFEN(fen); } catch { /* invalid FEN */ }
@@ -96,6 +100,7 @@ function EditModal({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const fenValid = (() => { try { fromFEN(fen); return true; } catch { return false; } })();
+  
   const ratingNum = parseInt(rating);
   const ratingValid = !isNaN(ratingNum) && ratingNum >= 800 && ratingNum <= 2200;
 
@@ -193,6 +198,20 @@ export default function AdminPuzzlesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const allSelected = puzzles.length > 0 && selected.size === puzzles.length;
+
+
+const [validation, setValidation] = useState<{
+  loading: boolean;
+  valid: boolean;
+  error?: string;
+  bestMove?: string;
+  mateIn?: number;
+  pv?: string[];
+} | null>(null);
+
+
+
+
 
   function toggleSelect(id: string) {
     setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -317,6 +336,48 @@ FEN REMINDER:
 
   const fenValid = (() => { try { fromFEN(fen); return true; } catch { return false; } })();
 
+useEffect(() => {
+  if (!fenValid || !fen.trim()) {
+    setValidation(null);
+    return;
+  }
+
+  const timeout = setTimeout(async () => {
+    try {
+      setValidation({
+        loading: true,
+        valid: false,
+      });
+
+      const res = await fetch("/api/admin/puzzles/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fen,
+          difficulty,
+        }),
+      });
+
+      const data = await res.json();
+
+      setValidation({
+        loading: false,
+        ...data,
+      });
+    } catch {
+      setValidation({
+        loading: false,
+        valid: false,
+        error: "Validation failed",
+      });
+    }
+  }, 600);
+
+  return () => clearTimeout(timeout);
+}, [fen, difficulty, fenValid]);
+
   async function handleCreate() {
     if (!title.trim() || !fenValid) return;
     setCreating(true);
@@ -433,6 +494,7 @@ FEN REMINDER:
             ))}
           </div>
 
+
           {/* FEN */}
           <label className="block text-xs font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
             FEN position
@@ -479,12 +541,57 @@ FEN REMINDER:
           </div>
 
           {/* Board preview */}
-          {fenValid && fen && (
-            <div className="mb-4 flex flex-col items-start gap-2">
-              <p className="text-xs font-display font-semibold text-[var(--text-muted)]">Board preview</p>
-              <MiniBoard fen={fen} />
-            </div>
-          )}
+                    {validation && (
+  <div
+    className={[
+      "mb-4 rounded-xl border p-3 text-sm",
+      validation.loading
+        ? "border-violet-500/30 bg-violet-500/10"
+        : validation.valid
+        ? "border-green-500/30 bg-green-500/10"
+        : "border-red-500/30 bg-red-500/10",
+    ].join(" ")}
+  >
+    {validation.loading ? (
+      <div className="flex items-center gap-2 text-violet-300">
+        <Loader2 size={14} className="animate-spin" />
+        Analyzing position...
+      </div>
+    ) : validation.valid ? (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-green-400 font-semibold">
+          <CheckCircle2 size={14} />
+          Unique mate in {validation.mateIn}
+        </div>
+
+        {validation.bestMove && (
+          <p className="text-[var(--text-secondary)]">
+            Best move:
+            <span className="ml-1 font-mono text-violet-300">
+              {validation.bestMove}
+            </span>
+          </p>
+        )}
+
+        {validation.pv && validation.pv.length > 0 && (
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-mono break-all">
+            PV: {validation.pv.join(" ")}
+          </p>
+        )}
+
+        <p className="text-[0.7rem] text-green-300">
+          Depth 18 validated
+        </p>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2 text-red-400">
+        <AlertCircle size={14} />
+        {validation.error}
+      </div>
+    )}
+  </div>
+)}
+
 
           <p className="text-[0.7rem] text-green-400/80 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 mb-4">
             ✓ No solution needed — the engine validates moves dynamically at play time.

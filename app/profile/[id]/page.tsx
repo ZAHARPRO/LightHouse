@@ -16,6 +16,7 @@ import UserAvatar from "@/components/UserAvatar";
 import FavoriteSongCard from "@/components/FavoriteSongCard";
 import MatchHistoryButton from "@/components/MatchHistory";
 import { getTranslations } from "next-intl/server";
+import { BADGE_DEFS } from "@/lib/badges";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -109,17 +110,11 @@ export default async function PublicProfilePage({
   const displayHandle = user.username ? `@${user.username}` : (user.name ?? "Unknown");
   const displayName   = user.username ? (user.name ?? null) : null;
 
-  const REWARD_META_PUB: Record<string, { icon: string; color: string; label: string }> = {
-    WATCH_STREAK:   { icon: "🔥", color: "#f97316", label: "Watch Streak" },
-    FIRST_COMMENT:  { icon: "💬", color: "#6366f1", label: "First Comment" },
-    SUPER_FAN:      { icon: "⭐", color: "#fbbf24", label: "Super Fan" },
-    EARLY_ADOPTER:  { icon: "🚀", color: "#10b981", label: "Early Adopter" },
-    PREMIUM_MEMBER: { icon: "👑", color: "#fbbf24", label: "Premium Member" },
-  };
   type PubReward = { id: string; type: string; description: string; customBadge: { icon: string; label: string; color: string } | null };
   function getPubMeta(r: PubReward) {
     if (r.customBadge) return { icon: r.customBadge.icon, color: r.customBadge.color, label: r.customBadge.label };
-    return REWARD_META_PUB[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
+    const def = BADGE_DEFS[r.type];
+    return def ? { icon: def.icon, color: def.color, label: def.label } : { icon: "🎖️", color: "#888", label: r.type };
   }
   const showcaseIds: string[] = (() => { try { return JSON.parse(user.badgeShowcase ?? "[]"); } catch { return []; } })();
   const showcaseBadges = showcaseIds
@@ -320,76 +315,136 @@ export default async function PublicProfilePage({
               <div className="profile-badge-col">
                 <p style={{
                   fontSize: "0.6875rem", fontFamily: "var(--font-display)", fontWeight: 700,
-                  color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em",
-                  marginBottom: "0.875rem", textAlign: "center",
+                  color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em",
+                  marginBottom: "1rem", textAlign: "center",
                 }}>
                   {t("featured")}
                 </p>
+
                 {showcaseBadges[0] ? (() => {
                   const meta = getPubMeta(showcaseBadges[0]);
                   return (
-                    <div className="profile-badge-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-                      <div className="profile-badge-card" style={{
-                        borderRadius: 18,
-                        border: `2px solid ${meta.color}50`,
-                        background: `linear-gradient(160deg, ${meta.color}14 0%, ${meta.color}06 100%)`,
-                        boxShadow: `0 0 24px ${meta.color}22, inset 0 1px 0 ${meta.color}20`,
-                        padding: "1.5rem 1rem 1.25rem",
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem",
-                        width: "100%",
-                      }}>
-                        <span className="profile-badge-emoji" style={{ fontSize: "3.5rem", lineHeight: 1, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }}>{meta.icon}</span>
-                        <span style={{
-                          fontSize: "0.8125rem", fontFamily: "var(--font-display)", fontWeight: 800,
-                          color: meta.color, textAlign: "center", lineHeight: 1.3,
-                          textShadow: `0 0 12px ${meta.color}55`,
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+
+                      {/* Floating card wrapper */}
+                      <div className="profile-badge-float" style={{ position: "relative", width: "100%" }}>
+
+                        {/* Outer glow halo */}
+                        <div className="profile-badge-glow-pulse" style={{
+                          position: "absolute", inset: -10, borderRadius: 28,
+                          background: `radial-gradient(ellipse at 50% 60%, ${meta.color}38 0%, transparent 72%)`,
+                          filter: "blur(10px)",
+                          pointerEvents: "none",
+                        }} />
+
+                        {/* Card */}
+                        <div style={{
+                          position: "relative",
+                          borderRadius: 20,
+                          border: `1.5px solid ${meta.color}55`,
+                          background: `linear-gradient(155deg, ${meta.color}1c 0%, rgba(0,0,0,0.55) 55%, ${meta.color}0e 100%)`,
+                          boxShadow: `0 12px 40px ${meta.color}30, 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 ${meta.color}40`,
+                          padding: "1.75rem 1.25rem 1.5rem",
+                          display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem",
+                          overflow: "hidden",
                         }}>
-                          {meta.label}
-                        </span>
-                        <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 }}>
-                          {showcaseBadges[0].description}
-                        </span>
+
+                          {/* Shimmer sweep */}
+                          <div className="profile-badge-shimmer-track" />
+
+                          {/* Top shine line */}
+                          <div style={{
+                            position: "absolute", top: 0, left: "20%", right: "20%", height: 1,
+                            background: `linear-gradient(90deg, transparent, ${meta.color}80, transparent)`,
+                          }} />
+
+                          {/* Emoji bloom */}
+                          <div style={{ position: "relative", marginBottom: "0.1rem" }}>
+                            <div style={{
+                              position: "absolute", inset: -12,
+                              borderRadius: "50%",
+                              background: `radial-gradient(ellipse, ${meta.color}45 0%, transparent 70%)`,
+                              filter: "blur(6px)",
+                              pointerEvents: "none",
+                            }} />
+                            <span style={{
+                              fontSize: "4rem",
+                              lineHeight: 1,
+                              display: "block",
+                              position: "relative",
+                              filter: `drop-shadow(0 0 10px ${meta.color}90) drop-shadow(0 3px 10px rgba(0,0,0,0.6))`,
+                            }}>{meta.icon}</span>
+                          </div>
+
+                          {/* Label */}
+                          <span style={{
+                            fontSize: meta.label.length > 14 ? "0.72rem" : "0.875rem",
+                            fontFamily: "var(--font-display)", fontWeight: 800,
+                            color: meta.color, textAlign: "center", lineHeight: 1.3,
+                            textShadow: `0 0 18px ${meta.color}70`,
+                            letterSpacing: "0.01em",
+                            wordBreak: "break-word", width: "100%",
+                          }}>
+                            {meta.label}
+                          </span>
+
+                          {/* Description */}
+                          <span style={{
+                            fontSize: "0.64rem", color: "var(--text-muted)", textAlign: "center",
+                            lineHeight: 1.5, opacity: 0.75,
+                          }}>
+                            {showcaseBadges[0].description}
+                          </span>
+                        </div>
                       </div>
+
+                      {/* Pedestal stand */}
                       <div className="profile-badge-stand">
+                        {/* Neck */}
                         <div style={{
-                          width: 28, height: 14,
-                          background: `linear-gradient(180deg, ${meta.color}30 0%, ${meta.color}18 100%)`,
-                          borderLeft: `1px solid ${meta.color}25`,
-                          borderRight: `1px solid ${meta.color}25`,
+                          width: 26, height: 16,
+                          background: `linear-gradient(180deg, ${meta.color}40 0%, ${meta.color}1a 100%)`,
+                          borderLeft: `1px solid ${meta.color}45`,
+                          borderRight: `1px solid ${meta.color}45`,
                         }} />
+                        {/* Wide base */}
                         <div style={{
-                          width: "85%", height: 10, borderRadius: "0 0 8px 8px",
-                          background: `linear-gradient(180deg, ${meta.color}28 0%, ${meta.color}10 100%)`,
-                          border: `1px solid ${meta.color}30`, borderTop: "none",
-                          boxShadow: `0 4px 12px ${meta.color}18`,
+                          width: "92%", height: 13, borderRadius: "0 0 10px 10px",
+                          background: `linear-gradient(180deg, ${meta.color}35 0%, ${meta.color}14 100%)`,
+                          border: `1px solid ${meta.color}40`, borderTop: "none",
+                          boxShadow: `0 6px 18px ${meta.color}25`,
                         }} />
+                        {/* Narrow foot */}
                         <div style={{
-                          width: "68%", height: 6, borderRadius: "0 0 6px 6px",
-                          background: `linear-gradient(180deg, ${meta.color}18 0%, ${meta.color}08 100%)`,
-                          border: `1px solid ${meta.color}20`, borderTop: "none",
+                          width: "72%", height: 7, borderRadius: "0 0 8px 8px",
+                          background: `linear-gradient(180deg, ${meta.color}22 0%, transparent 100%)`,
+                          border: `1px solid ${meta.color}28`, borderTop: "none",
+                        }} />
+                        {/* Floor shadow */}
+                        <div style={{
+                          width: "55%", height: 5, borderRadius: "50%", marginTop: 3,
+                          background: `radial-gradient(ellipse, ${meta.color}28 0%, transparent 70%)`,
+                          filter: "blur(3px)",
                         }} />
                       </div>
                     </div>
                   );
                 })() : (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", opacity: 0.4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", opacity: 0.35 }}>
                     <div style={{
-                      borderRadius: 18, border: "1.5px dashed var(--border-subtle)",
-                      padding: "1.5rem 1rem 1.25rem",
-                      display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem", width: "100%",
+                      borderRadius: 20, border: "1.5px dashed var(--border-subtle)",
+                      padding: "1.75rem 1.25rem 1.5rem",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", width: "100%",
                     }}>
-                      <div style={{
-                        width: 52, height: 52, borderRadius: "50%", background: "var(--bg-elevated)",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.75rem",
-                      }}>🎖️</div>
+                      <span style={{ fontSize: "3.5rem", lineHeight: 1 }}>🏆</span>
                       <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
                         {t("noBadge")}
                       </span>
                     </div>
                     <div className="profile-badge-stand">
-                      <div style={{ width: 28, height: 14, background: "var(--bg-elevated)", borderLeft: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }} />
-                      <div style={{ width: "85%", height: 10, borderRadius: "0 0 8px 8px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
-                      <div style={{ width: "68%", height: 6, borderRadius: "0 0 6px 6px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                      <div style={{ width: 26, height: 16, background: "var(--bg-elevated)", borderLeft: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }} />
+                      <div style={{ width: "92%", height: 13, borderRadius: "0 0 10px 10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                      <div style={{ width: "72%", height: 7, borderRadius: "0 0 8px 8px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
                     </div>
                   </div>
                 )}

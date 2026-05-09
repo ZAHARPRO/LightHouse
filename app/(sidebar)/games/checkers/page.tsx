@@ -363,13 +363,13 @@ export default function CheckersVsBotPage() {
               <button key={d} onClick={() => setDifficulty(d)}
                 className={["px-5 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
                   difficulty === d
-                    ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                    ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                     : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 ].join(" ")}>
                 {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
               </button>
             ))}
-          </div>
+          </div>    
           <button onClick={startGame}
             className="px-10 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-base hover:opacity-90 transition-opacity">
             Start Game
@@ -410,7 +410,7 @@ export default function CheckersVsBotPage() {
           {/* Controls */}
           {replayIdx !== null ? (
             <button onClick={() => setReplayIdx(null)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/15 border border-orange-500/40 text-[var(--accent-orange)] text-xs font-display font-semibold hover:bg-orange-500/25 transition-colors">
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pink-500/15 border border-pink-500/40 text-[var(--accent-orange)] text-xs font-display font-semibold hover:bg-pink-500/25 transition-colors">
               <ChevronRight size={12} /> Exit Replay
             </button>
           ) : (
@@ -430,7 +430,7 @@ export default function CheckersVsBotPage() {
 
           {/* Result banner */}
           {status === "over" && result && (
-            <div className="px-3 py-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[var(--accent-orange)] font-display font-bold text-sm text-center">
+            <div className="px-3 py-3 rounded-xl bg-pink-500/10 border border-pink-500/20 text-[var(--accent-orange)] font-display font-bold text-sm text-center">
               {result}
             </div>
           )}
@@ -442,7 +442,7 @@ export default function CheckersVsBotPage() {
                 <button key={d} onClick={() => setDifficulty(d)}
                   className={["flex-1 py-1.5 rounded-lg text-[0.7rem] font-display font-semibold border transition-all",
                     difficulty === d
-                      ? "bg-orange-500/15 border-orange-500/40 text-[var(--accent-orange)]"
+                      ? "bg-pink-500/15 border-pink-500/40 text-[var(--accent-orange)]"
                       : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   ].join(" ")}>
                   {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
@@ -488,7 +488,7 @@ export default function CheckersVsBotPage() {
                   <button key={i} onClick={() => setReplayIdx(i)}
                     className={["flex items-center gap-1.5 px-1.5 py-0.5 rounded text-left font-mono text-[0.65rem] transition-colors",
                       isActive
-                        ? "bg-orange-500/20 text-[var(--accent-orange)]"
+                        ? "bg-pink-500/20 text-[var(--accent-orange)]"
                         : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]",
                     ].join(" ")}>
                     <span className="w-5 shrink-0 text-right text-[var(--text-muted)]">{entry.moveNum}.</span>

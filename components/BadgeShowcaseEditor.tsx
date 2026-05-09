@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { X, Plus, Check, Loader2 } from "lucide-react";
+import { BADGE_DEFS } from "@/lib/badges";
 import { updateBadgeShowcase } from "@/actions/profile";
 
 export type ShowcaseReward = {
@@ -11,18 +12,11 @@ export type ShowcaseReward = {
   customBadge: { icon: string; label: string; color: string } | null;
 };
 
-const REWARD_META: Record<string, { icon: string; color: string; label: string }> = {
-  WATCH_STREAK:   { icon: "🔥", color: "#f97316", label: "Watch Streak" },
-  FIRST_COMMENT:  { icon: "💬", color: "#6366f1", label: "First Comment" },
-  SUPER_FAN:      { icon: "⭐", color: "#fbbf24", label: "Super Fan" },
-  EARLY_ADOPTER:  { icon: "🚀", color: "#10b981", label: "Early Adopter" },
-  PREMIUM_MEMBER: { icon: "👑", color: "#fbbf24", label: "Premium Member" },
-};
-
 export function getBadgeMeta(r: ShowcaseReward) {
   if (r.customBadge)
     return { icon: r.customBadge.icon, color: r.customBadge.color, label: r.customBadge.label };
-  return REWARD_META[r.type] ?? { icon: "🎖️", color: "#888", label: r.type };
+  const def = BADGE_DEFS[r.type];
+  return def ? { icon: def.icon, color: def.color, label: def.label } : { icon: "🎖️", color: "#888", label: r.type };
 }
 
 export default function BadgeShowcaseEditor({

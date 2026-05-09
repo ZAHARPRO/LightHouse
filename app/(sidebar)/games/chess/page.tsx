@@ -2,15 +2,22 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { RotateCcw, Flag, ChevronRight, Link } from "lucide-react";
+import { RotateCcw, Flag, ChevronRight, ChevronLeft, Link } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   initialState, getLegalMoves, applyMove, toSAN,
   isCheckmate, isStalemate, isInCheck,
   type GameState, type Move,
 } from "@/lib/chess";
+
+type HistoryEntry = {
+  state: GameState;
+  move: Move;
+  san: string;
+};
 import { getBotMove } from "@/lib/chess-bot";
 import { awardGameBadge } from "@/actions/badges";
+import { playSound, preloadSounds } from "@/lib/gameSounds";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Status = "idle" | "playing" | "over";
@@ -169,24 +176,80 @@ function ChessBoard({ state, cellPx, selected, legalDots, lastMove, onSquare, on
   );
 }
 
-function MovePanel({ moves }: { moves: string[] }) {
+function ReplayMovePanel({
+  history, replayIdx, onReplay,
+}: {
+  history: HistoryEntry[];
+  replayIdx: number | null;
+  onReplay: (idx: number | null) => void;
+}) {
   const t = useTranslations("chess");
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { ref.current?.scrollTo({ top: 9999, behavior: "smooth" }); }, [moves]);
-  const pairs: [string, string|undefined][] = [];
-  for (let i = 0; i < moves.length; i += 2) pairs.push([moves[i], moves[i + 1]]);
+  useEffect(() => {
+    if (replayIdx === null && ref.current)
+      ref.current.scrollTop = ref.current.scrollHeight;
+  }, [history.length, replayIdx]);
+
+  const pairs: [HistoryEntry, HistoryEntry | undefined][] = [];
+  for (let i = 0; i < history.length; i += 2) pairs.push([history[i], history[i + 1]]);
+
   return (
-    <div ref={ref} className="flex-1 overflow-y-auto min-h-0">
-      {pairs.length === 0 && (
-        <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">{t("noMoves")}</p>
-      )}
-      {pairs.map(([w, b], i) => (
-        <div key={i} className="flex gap-1 text-sm font-mono px-2 py-[3px] rounded hover:bg-[var(--bg-secondary)]">
-          <span className="text-[var(--text-muted)] w-7 shrink-0">{i + 1}.</span>
-          <span className="flex-1 text-[var(--text-primary)]">{w}</span>
-          <span className="flex-1 text-[var(--text-secondary)]">{b ?? ""}</span>
-        </div>
-      ))}
+    <div className="flex flex-col min-h-0 gap-1">
+      <div ref={ref} className="overflow-y-auto max-h-36 lg:max-h-48 flex flex-col gap-px">
+        {pairs.length === 0 && (
+          <p className="text-[var(--text-muted)] text-xs italic py-2 px-1">{t("noMoves")}</p>
+        )}
+        {pairs.map(([w, b], i) => (
+          <div key={i} className="flex gap-1 font-mono text-xs">
+            <span className="text-[var(--text-muted)] w-6 shrink-0 text-right leading-[1.6rem]">{i + 1}.</span>
+            <button onClick={() => onReplay(i * 2)}
+              className={["flex-1 px-1.5 py-0.5 rounded text-left transition-colors",
+                replayIdx === i * 2
+                  ? "bg-pink-500/20 text-[var(--accent-orange)]"
+                  : "text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]",
+              ].join(" ")}>
+              {w.san}
+            </button>
+            {b && (
+              <button onClick={() => onReplay(i * 2 + 1)}
+                className={["flex-1 px-1.5 py-0.5 rounded text-left transition-colors",
+                  replayIdx === i * 2 + 1
+                    ? "bg-pink-500/20 text-[var(--accent-orange)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]",
+                ].join(" ")}>
+                {b.san}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-0.5 pt-1 border-t border-[var(--border-subtle)]">
+        <button onClick={() => onReplay(0)}
+          disabled={history.length === 0 || replayIdx === 0}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 font-mono">
+          «
+        </button>
+        <button onClick={() => onReplay(replayIdx !== null ? Math.max(0, replayIdx - 1) : history.length - 1)}
+          disabled={history.length === 0 || replayIdx === 0}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronLeft size={14} />
+        </button>
+        <span className="flex-1 text-center text-[0.65rem] font-mono text-[var(--text-muted)]">
+          {replayIdx !== null ? `${replayIdx + 1}/${history.length}` : `${history.length}/${history.length}`}
+        </span>
+        <button onClick={() => onReplay(replayIdx !== null ? Math.min(history.length - 1, replayIdx + 1) : null)}
+          disabled={history.length === 0 || replayIdx === history.length - 1}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronRight size={14} />
+        </button>
+        <button onClick={() => onReplay(null)}
+          disabled={replayIdx === null}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--accent-orange)] disabled:opacity-30 font-mono"
+          title="Return to live">
+          »
+        </button>
+      </div>
     </div>
   );
 }
@@ -246,19 +309,23 @@ export default function ChessVsBotPage() {
   const [selected, setSelected] = useState<[number,number]|null>(null);
   const [legalDots, setLegalDots] = useState<[number,number][]>([]);
   const [lastMove, setLastMove] = useState<Move|null>(null);
-  const [moveList, setMoveList] = useState<string[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const [result, setResult] = useState<string>("");
   const [botThinking, setBotThinking] = useState(false);
   const [whiteCaptured, setWhiteCaptured] = useState<string[]>([]);
   const [blackCaptured, setBlackCaptured] = useState<string[]>([]);
   const cellPx = useCellPx();
 
+  useEffect(() => { preloadSounds(); }, []);
+
   function startGame() {
     setGameState(initialState());
     setSelected(null); setLegalDots([]); setLastMove(null);
-    setMoveList([]); setResult(""); setBotThinking(false);
+    setHistory([]); setReplayIdx(null); setResult(""); setBotThinking(false);
     setWhiteCaptured([]); setBlackCaptured([]);
     setStatus("playing");
+    playSound("match_start");
   }
 
   const doMove = useCallback((state: GameState, move: Move): GameState => {
@@ -269,14 +336,27 @@ export default function ChessVsBotPage() {
       else setBlackCaptured(p => [...p, move.captured!]);
     }
     setLastMove(move);
-    setMoveList(prev => [...prev, san]);
+    setHistory(h => [...h, { state: next, move, san }]);
     setGameState(next);
     if (isCheckmate(next)) {
       const playerWon = next.turn === "b";
       setResult(playerWon ? t("whiteWins") : t("blackWins"));
       setStatus("over");
+      playSound(playerWon ? "checkmate" : "checkmate");
       if (playerWon) awardGameBadge("CHESS_WIN").catch(() => {});
-    } else if (isStalemate(next)) { setResult(t("stalemate")); setStatus("over"); }
+    } else if (isStalemate(next)) {
+      setResult(t("stalemate")); setStatus("over");
+    } else if (isInCheck(next, next.turn)) {
+      playSound("check");
+    } else if (san.includes("O-O")) {
+      playSound("castle");
+    } else if (san.includes("=")) {
+      playSound("promote");
+    } else if (move.captured) {
+      playSound(state.turn === "w" ? "capture" : "opponent_move");
+    } else {
+      playSound(state.turn === "w" ? "piece_move" : "opponent_move");
+    }
     return next;
   }, [t]);
 
@@ -317,9 +397,12 @@ export default function ChessVsBotPage() {
     if (!isCheckmate(next) && !isStalemate(next)) triggerBot(next);
   }
 
+  const displayState = replayIdx !== null ? (history[replayIdx]?.state ?? gameState) : gameState;
+  const displayLastMove = replayIdx !== null ? (history[replayIdx]?.move ?? null) : lastMove;
+
   const inCheck = status === "playing" && isInCheck(gameState, gameState.turn);
-  const isMyTurn = status === "playing" && gameState.turn === "w" && !botThinking;
-  const isBotTurn = status === "playing" && (gameState.turn === "b" || botThinking);
+  const isMyTurn = status === "playing" && gameState.turn === "w" && !botThinking && replayIdx === null;
+  const isBotTurn = status === "playing" && (gameState.turn === "b" || botThinking) && replayIdx === null;
 
   const whiteValue = whiteCaptured.reduce((s, p) => s + (PIECE_VALUES[p] ?? 0), 0);
   const blackValue = blackCaptured.reduce((s, p) => s + (PIECE_VALUES[p] ?? 0), 0);
@@ -370,14 +453,14 @@ export default function ChessVsBotPage() {
           <PlayerRow label={`Bot · ${difficulty === "easy" ? t("easy") : difficulty === "medium" ? t("medium") : t("hard")}`} color="b" active={isBotTurn} captured={blackCaptured} advantage={Math.max(0, blackValue - whiteValue)} />
 
           <ChessBoard
-            state={gameState}
+            state={displayState}
             cellPx={cellPx}
-            selected={selected}
-            legalDots={legalDots}
-            lastMove={lastMove}
+            selected={replayIdx !== null ? null : selected}
+            legalDots={replayIdx !== null ? [] : legalDots}
+            lastMove={displayLastMove}
             onSquare={handleSquare}
             onDrop={handleDrop}
-            disabled={status === "over" || gameState.turn !== "w" || botThinking}
+            disabled={status === "over" || gameState.turn !== "w" || botThinking || replayIdx !== null}
           />
 
           {/* Player */}
@@ -423,13 +506,21 @@ export default function ChessVsBotPage() {
             </div>
           )}
 
-          {/* Move history */}
+          {/* Move history + replay */}
           <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3 flex-1 min-h-0">
-            <div className="flex items-center gap-2 mb-2 shrink-0">
-              <ChevronRight size={13} className="text-[var(--text-muted)]" />
-              <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">{t("moveHistory")}</span>
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <ChevronRight size={13} className="text-[var(--text-muted)]" />
+                <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">{t("moveHistory")}</span>
+              </div>
+              {replayIdx !== null && (
+                <button onClick={() => setReplayIdx(null)}
+                  className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">
+                  Live »
+                </button>
+              )}
             </div>
-            <MovePanel moves={moveList} />
+            <ReplayMovePanel history={history} replayIdx={replayIdx} onReplay={setReplayIdx} />
           </div>
         </div>
 

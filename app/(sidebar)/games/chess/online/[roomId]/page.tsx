@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, LogOut, Trophy, Star, Eye, Copy, Check } from "lucide-react";
+import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, ChevronLeft, LogOut, Trophy, Star, Eye, Copy, Check } from "lucide-react";
 import Image from "next/image";
-import { fromFEN, toFEN, getLegalMoves, applyMove, type GameState, isInCheck } from "@/lib/chess";
+import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, type GameState, type Move, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
@@ -275,22 +275,67 @@ function Timer({ ms, active }: { ms: number|null; active: boolean }) {
   );
 }
 
-// ── Move panel ───────────────────────────────────────────────────────────────
-function MovePanel({ moves }: { moves: string[] }) {
+// ── Move panel with replay ───────────────────────────────────────────────────
+function MovePanel({
+  moves, replayIdx, onReplay,
+}: {
+  moves: string[];
+  replayIdx: number | null;
+  onReplay: (idx: number | null) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { ref.current?.scrollTo({ top:9999, behavior:"smooth" }); }, [moves]);
-  const pairs: [string,string|undefined][] = [];
-  for (let i=0;i<moves.length;i+=2) pairs.push([moves[i],moves[i+1]]);
+  useEffect(() => {
+    if (replayIdx === null && ref.current)
+      ref.current.scrollTop = ref.current.scrollHeight;
+  }, [moves.length, replayIdx]);
+
+  const pairs: [string, string|undefined][] = [];
+  for (let i=0; i<moves.length; i+=2) pairs.push([moves[i], moves[i+1]]);
+
   return (
-    <div ref={ref} className="flex-1 overflow-y-auto min-h-0 pr-1">
-      {pairs.length===0&&<p className="text-[var(--text-muted)] text-xs italic py-2">The move history will appear here.</p>}
-      {pairs.map(([w,b],i)=>(
-        <div key={i} className="flex gap-1 text-sm font-mono px-2 py-0.5 rounded hover:bg-[var(--bg-secondary)]">
-          <span className="text-[var(--text-muted)] w-6 shrink-0">{i+1}.</span>
-          <span className="flex-1 text-[var(--text-primary)]">{w}</span>
-          <span className="flex-1 text-[var(--text-secondary)]">{b??""}</span>
-        </div>
-      ))}
+    <div className="flex flex-col min-h-0 gap-1 flex-1">
+      <div ref={ref} className="flex-1 overflow-y-auto min-h-0 pr-1">
+        {pairs.length===0 && <p className="text-[var(--text-muted)] text-xs italic py-2">The move history will appear here.</p>}
+        {pairs.map(([w,b],i)=>(
+          <div key={i} className="flex gap-1 font-mono text-xs">
+            <span className="text-[var(--text-muted)] w-6 shrink-0 text-right leading-[1.6rem]">{i+1}.</span>
+            <button onClick={()=>onReplay(i*2)}
+              className={["flex-1 px-1 py-0.5 rounded text-left transition-colors",
+                replayIdx===i*2 ? "bg-pink-500/20 text-[var(--accent-orange)]"
+                  : "text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"].join(" ")}>
+              {w}
+            </button>
+            {b && (
+              <button onClick={()=>onReplay(i*2+1)}
+                className={["flex-1 px-1 py-0.5 rounded text-left transition-colors",
+                  replayIdx===i*2+1 ? "bg-pink-500/20 text-[var(--accent-orange)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"].join(" ")}>
+                {b}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-0.5 pt-1 border-t border-[var(--border-subtle)] shrink-0">
+        <button onClick={()=>onReplay(0)} disabled={moves.length===0||replayIdx===0}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 font-mono">«</button>
+        <button onClick={()=>onReplay(replayIdx!==null ? Math.max(0,replayIdx-1) : moves.length-1)}
+          disabled={moves.length===0||replayIdx===0}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronLeft size={14}/>
+        </button>
+        <span className="flex-1 text-center text-[0.65rem] font-mono text-[var(--text-muted)]">
+          {replayIdx!==null ? `${replayIdx+1}/${moves.length}` : `${moves.length}/${moves.length}`}
+        </span>
+        <button onClick={()=>onReplay(replayIdx!==null ? Math.min(moves.length-1,replayIdx+1) : null)}
+          disabled={moves.length===0||replayIdx===moves.length-1}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronRight size={14}/>
+        </button>
+        <button onClick={()=>onReplay(null)} disabled={replayIdx===null}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--accent-orange)] disabled:opacity-30 font-mono" title="Return to live">»</button>
+      </div>
     </div>
   );
 }
@@ -314,7 +359,30 @@ export default function ChessOnlineRoom() {
   const [error, setError] = useState<string|null>(null);
   const [selected, setSelected] = useState<[number,number]|null>(null);
   const [legalDots, setLegalDots] = useState<[number,number][]>([]);
+  const [replayIdx, setReplayIdx] = useState<number|null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
+  const stateHistory = useMemo(() => {
+    const INIT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    let st = fromFEN(INIT_FEN);
+    const hist: Array<{ state: GameState; from: [number,number]; to: [number,number] }> = [];
+    for (const san of (room?.movesSAN ?? [])) {
+      let found: { move: Move; from: [number,number] } | null = null;
+      outer: for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = st.board[r][c];
+          if (!piece || piece.color !== st.turn) continue;
+          for (const m of getLegalMoves(st, r, c)) {
+            if (toSAN(st, m) === san) { found = { move: m, from: [r, c] }; break outer; }
+          }
+        }
+      }
+      if (!found) break;
+      st = applyMove(st, found.move);
+      hist.push({ state: st, from: found.from, to: found.move.to });
+    }
+    return hist;
+  }, [room?.movesSAN]); // eslint-disable-line react-hooks/exhaustive-deps
   const fetchAbortRef = useRef<AbortController|null>(null);
   const connFailsRef = useRef(0);
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
@@ -633,7 +701,7 @@ export default function ChessOnlineRoom() {
                 <ChevronRight size={14} className="text-[var(--text-muted)]"/>
                 <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Move History</span>
               </div>
-              <MovePanel moves={room.movesSAN} />
+              <MovePanel moves={room.movesSAN} replayIdx={replayIdx} onReplay={setReplayIdx} />
             </div>
             <button onClick={() => router.push("/games/")}
               className="px-5 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-bold text-sm hover:text-[var(--text-primary)] transition-colors text-center">
@@ -650,10 +718,15 @@ export default function ChessOnlineRoom() {
   const state = fromFEN(room.fen);
   const isSpectator = room.myRole === "spectator";
 
+  const displayState = replayIdx !== null ? (stateHistory[replayIdx]?.state ?? state) : state;
+  const displayLastMove = replayIdx !== null
+    ? (stateHistory[replayIdx] ? { from: stateHistory[replayIdx].from, to: stateHistory[replayIdx].to } : null)
+    : room.lastMove;
+
   // Spectators always see white at the bottom
   const myColor = isSpectator ? "w" : getMyColor(room);
   const oppColor = myColor === "w" ? "b" : "w";
-  const isMyTurn = state.turn === myColor;
+  const isMyTurn = state.turn === myColor && replayIdx === null;
   const flip = !isSpectator && myColor === "b";
 
   // White/black player names (resolved from hostColor)
@@ -741,14 +814,14 @@ export default function ChessOnlineRoom() {
           <div className="mb-2"/>
 
           <ChessBoard
-            state={state}
+            state={displayState}
             flip={flip}
-            selected={selected}
-            legalDots={legalDots}
-            lastMove={room.lastMove}
+            selected={replayIdx !== null ? null : selected}
+            legalDots={replayIdx !== null ? [] : legalDots}
+            lastMove={displayLastMove}
             onSquare={handleSquare}
             onDrop={handleDrop}
-            disabled={isSpectator || !isMyTurn}
+            disabled={isSpectator || !isMyTurn || replayIdx !== null}
             cellPx={cellPx}
           />
 
@@ -799,7 +872,7 @@ export default function ChessOnlineRoom() {
               <ChevronRight size={14} className="text-[var(--text-muted)]"/>
               <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Move History</span>
             </div>
-            <MovePanel moves={room.movesSAN} />
+            <MovePanel moves={room.movesSAN} replayIdx={replayIdx} onReplay={setReplayIdx} />
           </div>
 
           {room.myRole !== "spectator" && (

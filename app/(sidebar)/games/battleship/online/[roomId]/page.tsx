@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { Loader2, Flag, ArrowLeft, Users, Copy, Check } from "lucide-react";
+import { Loader2, Flag, ArrowLeft, Users, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Board, Ship, emptyBoard } from "@/lib/battleship";
@@ -140,6 +140,95 @@ function BattleBoard({
       </div>
     </div>
   );
+}
+
+// ─── Replay panel ─────────────────────────────────────────────────────────────
+function ReplayPanel({
+  moves, replayIndex, onReplay, isFinished,
+}: {
+  moves: MoveEntry[];
+  replayIndex: number | null;
+  onReplay: (idx: number | null) => void;
+  isFinished: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (replayIndex === null && ref.current)
+      ref.current.scrollTop = ref.current.scrollHeight;
+  }, [moves.length, replayIndex]);
+
+  const cols = "ABCDEFGHIJ";
+
+  return (
+    <div className="flex flex-col bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-3 w-full max-w-sm gap-2">
+      <p className="text-xs font-display font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Shot History</p>
+      <div ref={ref} className="flex flex-col gap-px overflow-y-auto max-h-40">
+        {moves.map((m, i) => {
+          const label = `${cols[m.col]}${m.row + 1}`;
+          const result = m.sunk ? "💥" : m.hit ? "🔴" : "💧";
+          const isActive = replayIndex === i;
+          return (
+            <button key={i} onClick={() => onReplay(i)}
+              className={["flex items-center gap-2 px-1.5 py-0.5 rounded text-left font-mono text-[0.65rem] transition-colors",
+                isActive ? "bg-orange-500/20 text-orange-300" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]",
+              ].join(" ")}>
+              <span className="w-5 shrink-0 text-right text-[var(--text-muted)]">{i + 1}.</span>
+              <span className={m.shooter === "host" ? "text-cyan-400" : "text-orange-400"}>
+                {m.shooter === "host" ? "H" : "G"}
+              </span>
+              <span>{label}</span>
+              <span>{result}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-0.5 pt-1 border-t border-[var(--border-subtle)]">
+        <button onClick={() => onReplay(0)} disabled={moves.length === 0 || replayIndex === 0}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 font-mono">«</button>
+        <button onClick={() => onReplay(replayIndex !== null ? Math.max(0, replayIndex - 1) : moves.length - 1)}
+          disabled={moves.length === 0 || replayIndex === 0}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronLeft size={14} />
+        </button>
+        <span className="flex-1 text-center text-[0.65rem] font-mono text-[var(--text-muted)]">
+          {replayIndex !== null ? `${replayIndex + 1}/${moves.length}` : "Live"}
+        </span>
+        <button onClick={() => onReplay(replayIndex !== null ? Math.min(moves.length - 1, replayIndex + 1) : null)}
+          disabled={moves.length === 0 || replayIndex === moves.length - 1}
+          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+          <ChevronRight size={14} />
+        </button>
+        <button onClick={() => onReplay(null)} disabled={replayIndex === null || isFinished}
+          className="px-2 py-0.5 text-base leading-none text-[var(--text-muted)] hover:text-orange-400 disabled:opacity-30 font-mono" title="Live">»</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Infer sunk ships from visible board (for enemy board during game) ───────
+function inferSunkShips(board: Board): Ship[] {
+  const visited = Array.from({ length: 10 }, () => new Array(10).fill(false));
+  const ships: Ship[] = [];
+  let id = 1000;
+
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (board[r][c] === "sunk" && !visited[r][c]) {
+        const cells: [number, number][] = [];
+        const queue: [number, number][] = [[r, c]];
+        while (queue.length > 0) {
+          const [cr, cc] = queue.shift()!;
+          if (cr < 0 || cr >= 10 || cc < 0 || cc >= 10) continue;
+          if (visited[cr][cc] || board[cr][cc] !== "sunk") continue;
+          visited[cr][cc] = true;
+          cells.push([cr, cc]);
+          queue.push([cr - 1, cc], [cr + 1, cc], [cr, cc - 1], [cr, cc + 1]);
+        }
+        ships.push({ id: id++, size: cells.length, cells, hits: cells.length });
+      }
+    }
+  }
+  return ships;
 }
 
 // ─── Replay helper ─────────────────────────────────────────────────────────────
@@ -509,33 +598,19 @@ export default function BattleshipOnlineRoom() {
               label={t("battle.enemyBoard")}
               interactive={isMyTurn && room.status === "PLAYING" && replayIndex === null && !shooting}
               onCellClick={handleShot}
+              ships={room.opponentShips ? JSON.parse(room.opponentShips) : inferSunkShips(displayOpponentBoard)}
+              onlySunk={!room.opponentShips}
             />
           </div>
 
-          {/* Replay scrubber */}
+          {/* Replay panel */}
           {moves.length > 0 && myRole !== "spectator" && parsedMyShips.length > 0 && (
-            <div className="flex flex-col gap-1 w-full max-w-sm">
-              <div className="flex justify-between text-[0.65rem] text-[var(--text-muted)]">
-                <span>{t("replay.title")}</span>
-                <span>{replayIndex !== null ? `${t("replay.shot", { n: replayIndex + 1 })} / ${moves.length}` : "Live"}</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={moves.length - 1}
-                value={replayIndex ?? moves.length - 1}
-                onChange={e => {
-                  const v = parseInt(e.target.value);
-                  setReplayIndex(v === moves.length - 1 && !isFinished ? null : v);
-                }}
-                className="w-full accent-orange-500"
-              />
-              {replayIndex !== null && (
-                <button onClick={() => setReplayIndex(null)} className="text-xs text-orange-400 hover:opacity-70 text-left">
-                  ← Back to live
-                </button>
-              )}
-            </div>
+            <ReplayPanel
+              moves={moves}
+              replayIndex={replayIndex}
+              onReplay={setReplayIndex}
+              isFinished={isFinished}
+            />
           )}
 
           {/* Resign */}

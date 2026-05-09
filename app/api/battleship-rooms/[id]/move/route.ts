@@ -133,29 +133,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     updateData.endedAt = now;
 
     // ELO и бейджи
-    if (room.rated && room.hostEloSnapshot && room.guestEloSnapshot) {
+    if (room.rated && room.hostEloSnapshot != null && room.guestEloSnapshot != null) {
       const winnerElo = winner === "host" ? room.hostEloSnapshot : room.guestEloSnapshot;
-      const loserElo = winner === "host" ? room.guestEloSnapshot : room.hostEloSnapshot;
+      const loserElo  = winner === "host" ? room.guestEloSnapshot : room.hostEloSnapshot;
       const [winDelta, loseDelta] = calculateEloDelta(winnerElo, loserElo);
-      
-      updateData.hostEloDelta = winner === "host" ? winDelta : loseDelta;
-      updateData.guestEloDelta = winner === "guest" ? winDelta : loseDelta;
 
-      // Обновляем ELO в профилях
-      await prisma.user.update({
-        where: { id: room.hostId },
-        data: { battleshipElo: { increment: updateData.hostEloDelta } },
-      });
+      const hostDelta  = winner === "host" ?  winDelta : -loseDelta;
+      const guestDelta = winner === "guest" ?  winDelta : -loseDelta;
+
+      updateData.hostEloDelta  = hostDelta;
+      updateData.guestEloDelta = guestDelta;
+
+      const hostNewElo  = Math.max(100, room.hostEloSnapshot  + hostDelta);
+      const guestNewElo = Math.max(100, room.guestEloSnapshot + guestDelta);
+
+      await prisma.user.update({ where: { id: room.hostId }, data: { battleshipElo: hostNewElo } });
       if (room.guestId) {
-        await prisma.user.update({
-          where: { id: room.guestId },
-          data: { battleshipElo: { increment: updateData.guestEloDelta } },
-        });
+        await prisma.user.update({ where: { id: room.guestId }, data: { battleshipElo: guestNewElo } });
       }
 
-      // Бейджи за победу
-      const winnerId = winner === "host" ? room.hostId : room.guestId!;
-      const winnerNewElo = winnerElo + winDelta;
+      const winnerId    = winner === "host" ? room.hostId : room.guestId!;
+      const winnerNewElo = winner === "host" ? hostNewElo : guestNewElo;
       await awardBadge(prisma, winnerId, "BATTLESHIP_ONLINE_WIN");
       await awardBattleshipEloBadges(prisma, winnerId, winnerNewElo);
     }

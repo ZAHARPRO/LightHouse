@@ -1,12 +1,14 @@
 // app/(sidebar)/games/battleship/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Board, Ship, emptyBoard, randomPlacement } from "@/lib/battleship";
 import { BotDifficulty, createBotMemory, getBotShot, updateBotMemory, BotMemory } from "@/lib/battleship-bot";
 import { BattleshipPlacement, type ShipRot } from "@/components/BattleshipPlacement";
 import Link from "next/link";
+import { playSound, preloadSounds } from "@/lib/gameSounds";
 
 const CELL = 40;
 const LABEL_W = 40;
@@ -137,6 +139,74 @@ function BattleBoard({
   );
 }
 
+// ─── Replay panel ────────────────────────────────────────────────────────────
+type ShotEntry = { shooter: "player" | "bot"; row: number; col: number; hit: boolean; sunk: boolean };
+
+function ReplayPanel({
+  moves, replayIndex, onReplay,
+}: {
+  moves: ShotEntry[];
+  replayIndex: number | null;
+  onReplay: (idx: number | null) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (replayIndex === null && ref.current)
+      ref.current.scrollTop = ref.current.scrollHeight;
+  }, [moves.length, replayIndex]);
+
+  const cols = "ABCDEFGHIJ";
+
+  return (
+    <div className="flex flex-col bg-[var(--bg-elevated,#1e293b)] border border-[var(--border-subtle,#334155)] rounded-xl p-3 w-full max-w-xs gap-2">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Shot History</p>
+
+      <div ref={ref} className="flex flex-col gap-px overflow-y-auto max-h-40">
+        {moves.map((m, i) => {
+          const label = `${cols[m.col]}${m.row + 1}`;
+          const result = m.sunk ? "💥 sunk" : m.hit ? "🔴 hit" : "💧 miss";
+          const isActive = replayIndex === i;
+          return (
+            <button key={i} onClick={() => onReplay(i)}
+              className={["flex items-center gap-2 px-1.5 py-0.5 rounded text-left font-mono text-[0.65rem] transition-colors",
+                isActive
+                  ? "bg-blue-500/20 text-blue-300"
+                  : "text-gray-400 hover:text-white hover:bg-white/5",
+              ].join(" ")}>
+              <span className="w-5 shrink-0 text-right text-gray-500">{i + 1}.</span>
+              <span className={m.shooter === "player" ? "text-cyan-400" : "text-orange-400"}>
+                {m.shooter === "player" ? "You" : "Bot"}
+              </span>
+              <span>{label}</span>
+              <span>{result}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-0.5 pt-1 border-t border-gray-700">
+        <button onClick={() => onReplay(0)} disabled={moves.length === 0 || replayIndex === 0}
+          className="px-2 py-0.5 text-base leading-none text-gray-500 hover:text-white disabled:opacity-30 font-mono">«</button>
+        <button onClick={() => onReplay(replayIndex !== null ? Math.max(0, replayIndex - 1) : moves.length - 1)}
+          disabled={moves.length === 0 || replayIndex === 0}
+          className="p-1 text-gray-500 hover:text-white disabled:opacity-30">
+          <ChevronLeft size={14} />
+        </button>
+        <span className="flex-1 text-center text-[0.65rem] font-mono text-gray-500">
+          {replayIndex !== null ? `${replayIndex + 1}/${moves.length}` : `${moves.length}/${moves.length}`}
+        </span>
+        <button onClick={() => onReplay(replayIndex !== null ? Math.min(moves.length - 1, replayIndex + 1) : null)}
+          disabled={moves.length === 0 || replayIndex === moves.length - 1}
+          className="p-1 text-gray-500 hover:text-white disabled:opacity-30">
+          <ChevronRight size={14} />
+        </button>
+        <button onClick={() => onReplay(null)} disabled={replayIndex === null}
+          className="px-2 py-0.5 text-base leading-none text-gray-500 hover:text-blue-400 disabled:opacity-30 font-mono" title="Live">»</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Главный компонент ───────────────────────────────────────────────────────
 type Phase = "setup" | "placement" | "battle" | "finished";
 
@@ -164,6 +234,8 @@ export default function BattleshipBotPage() {
   }>>([]);
   const [replayIndex, setReplayIndex] = useState<number | null>(null);
 
+  useEffect(() => { preloadSounds(); }, []);
+
   // ─── Setup → Placement ───────────────────────────────────────────────────
   function startGame() {
     const { board: bb, ships: bs } = randomPlacement();
@@ -186,6 +258,7 @@ export default function BattleshipBotPage() {
     setCurrentTurn("player");
     setPhase("battle");
     setMessage(t("battle.yourTurn"));
+    playSound("match_start");
   }
 
   // ─── Выстрел игрока ───────────────────────────────────────────────────────
@@ -231,6 +304,10 @@ export default function BattleshipBotPage() {
       setMessage(t("battle.miss"));
     }
 
+    if (sunk) playSound("bs_sunk");
+    else if (hit) playSound("bs_explosion");
+    else playSound("bs_splash");
+
     setBotBoard(newBotBoard);
     setBotShips(newBotShips);
     setBotVisibleBoard(newVisible);
@@ -241,6 +318,7 @@ export default function BattleshipBotPage() {
     if (newBotShips.every(s => s.hits >= s.size)) {
       setWinner("player");
       setPhase("finished");
+      playSound("bs_victory");
       return;
     }
 
@@ -279,6 +357,10 @@ export default function BattleshipBotPage() {
         setMessage(t("battle.miss") + " (бот)");
       }
 
+      if (sunk) playSound("bs_sunk");
+      else if (hit) playSound("bs_explosion");
+      else playSound("bs_splash");
+
       setPlayerBoard(newPlayerBoard);
       setPlayerShips(newPlayerShips);
 
@@ -291,6 +373,7 @@ export default function BattleshipBotPage() {
       if (newPlayerShips.every(s => s.hits >= s.size)) {
         setWinner("bot");
         setPhase("finished");
+        playSound("bs_defeat");
       } else if (hit) {
         setIsAnimating(false);
         setTimeout(() => botTurn(newMoves, updatedMem, newPlayerBoard, newPlayerShips), 700);
@@ -390,29 +473,11 @@ export default function BattleshipBotPage() {
       </div>
 
       {moves.length > 0 && (
-        <div className="flex flex-col items-center gap-2 w-full max-w-xl">
-          <div className="text-gray-400 text-sm">
-            {replayIndex !== null
-              ? `${t("replay.shot", { n: replayIndex + 1 })} / ${moves.length}`
-              : t("battle.yourTurn")}
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={moves.length - 1}
-            value={replayIndex ?? moves.length - 1}
-            onChange={e => {
-              const v = parseInt(e.target.value);
-              setReplayIndex(v === moves.length - 1 ? null : v);
-            }}
-            className="w-full"
-          />
-          {replayIndex !== null && (
-            <button onClick={() => setReplayIndex(null)} className="text-blue-400 text-sm underline">
-              {t("UI.Back")}
-            </button>
-          )}
-        </div>
+        <ReplayPanel
+          moves={moves}
+          replayIndex={replayIndex}
+          onReplay={setReplayIndex}
+        />
       )}
 
       {phase === "finished" && (

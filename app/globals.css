@@ -340,6 +340,42 @@ body {
   align-items: center;
 }
 
+@keyframes badgeFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes badgeGlow {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@keyframes badgeShimmer {
+  0%   { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(300%) skewX(-15deg); }
+}
+
+.profile-badge-float {
+  animation: badgeFloat 3.2s ease-in-out infinite;
+}
+
+.profile-badge-glow-pulse {
+  animation: badgeGlow 2.4s ease-in-out infinite;
+}
+
+.profile-badge-shimmer-track {
+  position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none;
+}
+
+.profile-badge-shimmer-track::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
+  animation: badgeShimmer 3.5s ease-in-out infinite;
+}
+
 .videos-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

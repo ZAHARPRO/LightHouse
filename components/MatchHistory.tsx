@@ -36,6 +36,13 @@ type ChessGame = {
   movesSAN: string[]; totalMoves: number;
 };
 
+type CheckersGame = {
+  id: string; result: "win" | "loss" | "draw"; winReason: string | null;
+  moveCount: number | null; timeControl: string; rated: boolean;
+  eloDelta: number | null; startedAt: string | null; endedAt: string | null;
+  opponent: { id: string; name: string | null; image: string | null; checkersElo: number } | null;
+};
+
 type MoveEntry = { k: "r" | "f"; i: number; d: number[]; t: number; h?: 1 };
 
 type MineGame = {
@@ -926,6 +933,42 @@ function MineGameCard({ game, onView }: { game: MineGame; onView: () => void }) 
   );
 }
 
+function CheckersGameCard({ game }: { game: CheckersGame }) {
+  const WIN_REASON: Record<string, string> = { resigned: "Resigned", timeout: "Timeout", no_moves: "No moves" };
+  const resultColor = game.result === "draw" ? "text-[var(--text-muted)]" : game.result === "win" ? "text-yellow-400" : "text-red-400";
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] hover:border-[var(--border-default)] transition-colors">
+      <AvatarImg name={game.opponent?.name ?? null} image={game.opponent?.image ?? null} size={30} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`font-display font-bold text-xs ${resultColor}`}>
+            {game.result === "win" ? "Win" : game.result === "loss" ? "Loss" : "Draw"}
+          </span>
+          <span className="text-[0.6rem] text-[var(--text-muted)]">{WIN_REASON[game.winReason ?? ""] ?? game.winReason}</span>
+          {game.rated && <Star size={8} className="text-yellow-400 shrink-0" />}
+        </div>
+        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+          <span className="text-[0.6rem] text-[var(--text-muted)] truncate max-w-[90px]">{game.opponent?.name ?? "Opp"}</span>
+          <span className="text-[0.55rem] text-[var(--border-default)]">·</span>
+          <span className="text-[0.6rem] text-[var(--text-muted)] whitespace-nowrap">{TC_LABEL[game.timeControl] ?? game.timeControl}</span>
+          {game.moveCount != null && <>
+            <span className="text-[0.55rem] text-[var(--border-default)]">·</span>
+            <span className="text-[0.6rem] text-[var(--text-muted)] whitespace-nowrap">{game.moveCount}mv</span>
+          </>}
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {game.eloDelta != null && (
+          <span className={`text-xs font-bold ${game.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+            {game.eloDelta >= 0 ? "+" : ""}{game.eloDelta}
+          </span>
+        )}
+        <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────── history panels
 
 function ChessHistoryPanel({ userId }: { userId: string }) {
@@ -1012,6 +1055,47 @@ function MineHistoryPanel({ userId }: { userId: string }) {
   );
 }
 
+function CheckersHistoryPanel({ userId }: { userId: string }) {
+  const [games, setGames]     = useState<CheckersGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  function load(p: number) {
+    setLoading(true);
+    fetch(`/api/checkers-rooms/history?page=${p}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((d: CheckersGame[]) => {
+        setGames(prev => p === 1 ? d : [...prev, ...d]);
+        setHasMore(d.length === 10);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(1); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading && page === 1) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
+  if (!loading && games.length === 0) return (
+    <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-muted)]">
+      <span className="text-3xl">🟤</span><p className="text-sm">No checkers games yet</p>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {games.map(g => <CheckersGameCard key={g.id} game={g} />)}
+      </div>
+      {hasMore && (
+        <button onClick={() => { const next = page + 1; setPage(next); load(next); }} disabled={loading}
+          className="mt-3 w-full py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors touch-manipulation">
+          {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 function BattleshipHistoryPanel({ userId }: { userId: string }) {
   const [games, setGames]     = useState<BattleshipGame[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1053,10 +1137,95 @@ function BattleshipHistoryPanel({ userId }: { userId: string }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────── billiards history
+
+type BilliardsGame = {
+  id: string; rated: boolean; timeControl: string; outcome: "win" | "loss" | "draw";
+  startedAt: string | null; endedAt: string | null;
+  winner: string | null; winReason: string | null;
+  myEloDelta: number | null; myEloSnapshot: number | null;
+  oppName: string | null; oppImage: string | null;
+  shotsJson: string | null; totalShots: number;
+};
+
+function BilliardsGameCard({ game }: { game: BilliardsGame }) {
+  const won  = game.outcome === "win";
+  const drew = game.outcome === "draw";
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+      <div className={["w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
+        won ? "bg-green-500/20 text-green-400" : drew ? "bg-yellow-500/20 text-yellow-400" : "bg-red-500/20 text-red-400"
+      ].join(" ")}>
+        {won ? "W" : drew ? "D" : "L"}
+      </div>
+      {game.oppImage
+        ? <Image src={game.oppImage} alt="" width={28} height={28} className="rounded-full shrink-0"/>
+        : <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-xs shrink-0">{game.oppName?.[0]??"?"}</div>
+      }
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{game.oppName ?? "Anonymous"}</p>
+        <p className="text-xs text-[var(--text-muted)]">
+          {TC_LABEL[game.timeControl] ?? game.timeControl}
+          {game.rated ? " · Rated" : ""}
+          {" · "}{game.totalShots} shots
+          {game.winReason ? ` · ${game.winReason.replace(/_/g, " ")}` : ""}
+        </p>
+      </div>
+      <div className="flex flex-col items-end shrink-0 gap-0.5">
+        {game.myEloDelta !== null && (
+          <span className={["text-xs font-bold", game.myEloDelta >= 0 ? "text-green-400" : "text-red-400"].join(" ")}>
+            {game.myEloDelta >= 0 ? "+" : ""}{game.myEloDelta}
+          </span>
+        )}
+        <span className="text-[0.65rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function BilliardsHistoryPanel({ userId }: { userId: string }) {
+  const [games, setGames]     = useState<BilliardsGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
+  function load(p: number) {
+    setLoading(true);
+    fetch(`/api/billiards-rooms/history?userId=${userId}&page=${p}`)
+      .then(r => r.ok ? r.json() : { items: [], hasMore: false })
+      .then(d => { setGames(prev => p === 0 ? d.items : [...prev, ...d.items]); setHasMore(d.hasMore); })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(0); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (page > 0) load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading && page === 0) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
+  if (!loading && games.length === 0) return (
+    <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-muted)]">
+      <span className="text-3xl">🎱</span><p className="text-sm">No billiards games yet</p>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {games.map(g => <BilliardsGameCard key={g.id} game={g} />)}
+      </div>
+      {hasMore && (
+        <button onClick={() => setPage(p => p + 1)} disabled={loading}
+          className="mt-3 w-full py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors touch-manipulation">
+          {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────── main modal + button
 
 function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<"chess"|"mine"|"battleship">("chess");
+  const [tab, setTab] = useState<"chess"|"mine"|"battleship"|"checkers"|"billiards">("chess");
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -1083,7 +1252,7 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
         </div>
 
         <div className="flex border-b border-[var(--border-subtle)] shrink-0">
-          {([["chess","♟️ Chess"],["mine","💣 Mine"],["battleship","⚓ Battleship"]] as const).map(([key,label]) => (
+          {([["chess","♟️ Chess"],["mine","💣 Mine"],["battleship","⚓ Battleship"],["checkers","🟤 Checkers"],["billiards","🎱 Billiards"]] as const).map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={["flex-1 py-3 text-xs sm:text-sm font-display font-semibold border-b-2 transition-colors touch-manipulation",
                 tab === key
@@ -1096,9 +1265,11 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-          {tab === "chess"      && <ChessHistoryPanel     userId={userId} />}
-          {tab === "mine"       && <MineHistoryPanel      userId={userId} />}
+          {tab === "chess"      && <ChessHistoryPanel      userId={userId} />}
+          {tab === "mine"       && <MineHistoryPanel       userId={userId} />}
           {tab === "battleship" && <BattleshipHistoryPanel userId={userId} />}
+          {tab === "checkers"   && <CheckersHistoryPanel   userId={userId} />}
+          {tab === "billiards"  && <BilliardsHistoryPanel  userId={userId} />}
         </div>
       </div>
     </div>,

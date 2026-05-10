@@ -78,6 +78,9 @@ model User {
   battleshipElo     Int     @default(400)
   battleshipRooms1  BattleshipRoom[] @relation("BattleshipHost")
   battleshipRooms2  BattleshipRoom[] @relation("BattleshipGuest")
+  billiardsElo      Int     @default(400)
+  billiardsRooms1   BilliardsRoom[] @relation("BilliardsHost")
+  billiardsRooms2   BilliardsRoom[] @relation("BilliardsGuest")
 }
 
 model BattleshipRoom {
@@ -470,6 +473,12 @@ enum RewardType {
   BATTLESHIP_GOLD
   BATTLESHIP_PLATINUM
   BATTLESHIP_DIAMOND
+  BILLIARDS_WIN
+  BILLIARDS_ONLINE_WIN
+  BILLIARDS_SILVER
+  BILLIARDS_GOLD
+  BILLIARDS_PLATINUM
+  BILLIARDS_DIAMOND
 }
 
 enum ContactStatus {
@@ -774,4 +783,57 @@ model UserPuzzleSolve {
   puzzle   ChessPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, puzzleId])
+}
+
+model BilliardsRoom {
+  id         String              @id @default(cuid())
+  hostId     String
+  guestId    String?
+  status     BilliardsRoomStatus @default(WAITING)
+  timeControl String             @default("none")
+  hostReady  Boolean             @default(true)
+  guestReady Boolean             @default(false)
+  rated      Boolean             @default(false)
+  hostEloSnapshot  Int?
+  guestEloSnapshot Int?
+  hostEloDelta     Int?
+  guestEloDelta    Int?
+  resultReverted   Boolean       @default(false)
+
+  // Game state — ball positions JSON + shot history for replay
+  ballsJson    String  @default("[]") @db.Text
+  shotsJson    String  @default("[]") @db.Text
+  currentTurn  String  @default("host")
+  hostGroup    String?
+  guestGroup   String?
+  phase        String  @default("playing")
+
+  winner    String?
+  winReason String?
+
+  hostHistoryHidden  Boolean @default(false)
+  guestHistoryHidden Boolean @default(false)
+  chatJson     String  @default("[]") @db.Text
+  spectatorsJson String @default("[]") @db.Text
+
+  hostLastSeen  DateTime?
+  guestLastSeen DateTime?
+
+  hostTimeMs Int?
+  guestTimeMs Int?
+  lastMoveAt DateTime?
+
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  host  User  @relation("BilliardsHost",  fields: [hostId],  references: [id], onDelete: Cascade)
+  guest User? @relation("BilliardsGuest", fields: [guestId], references: [id], onDelete: Cascade)
+}
+
+enum BilliardsRoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
 }

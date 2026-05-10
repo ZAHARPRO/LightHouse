@@ -72,6 +72,17 @@ function PuzzleIcon({ size = 22 }: { size?: number }) {
   );
 }
 
+function BilliardsIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4"/>
+      <circle cx="32" cy="32" r="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4"/>
+      <circle cx="32" cy="32" r="10" fill="currentColor" opacity="0.85"/>
+      <text x="32" y="37" textAnchor="middle" fontSize="12" fontWeight="bold" fill="white" fontFamily="sans-serif">8</text>
+    </svg>
+  );
+}
+
 function BattleshipIcon({ size = 22 }: { size?: number }) {
   return (
 <svg width="800px" height="800px" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
@@ -92,8 +103,10 @@ const GAMES = [
   { href: "/games/checkers",                 title: "Checkers vs Bot",    description: "3 difficulty levels",           icon: CheckersIcon, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
   { href: "/games/checkers/online",          title: "Checkers Online",    description: "1 vs 1 in real-time",           icon: CheckersIcon, color: "text-amber-400",  bg: "bg-indigo-500/10 border-indigo-500/20"    },
   { href: "/games/checkers/online/rated",    title: "Checkers Rated",     description: "Earn ELO",                      icon: CheckersIcon, color: "text-orange-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
-  { href: "/games/battleship/online/rated",   title: "Battleship Rated",   description: "Earn ELO",                      icon: BattleshipIcon, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
-  
+  { href: "/games/battleship/online/rated",   title: "Battleship Rated",   description: "Earn ELO",                      icon: BattleshipIcon,  color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/billiards",                 title: "Billiards vs Bot",   description: "8-ball pool, 3 levels",         icon: BilliardsIcon,   color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20"    },
+  { href: "/games/billiards/online",          title: "Billiards Online",   description: "1 vs 1 in real-time",           icon: BilliardsIcon,   color: "text-teal-400",   bg: "bg-teal-500/10 border-teal-500/20"      },
+  { href: "/games/billiards/online/rated",    title: "Billiards Rated",    description: "Earn ELO",                      icon: BilliardsIcon,   color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
 ];
 
 type LeaderEntry = {
@@ -104,6 +117,7 @@ type LeaderEntry = {
   minesweeperElo: number;
   checkersElo: number;
   battleshipElo: number;
+  billiardsElo: number;
   wins: number;
   maxStreak: number;
 };
@@ -112,7 +126,8 @@ const LEADERBOARDS = [
   { key: "chess",       label: "♟ Chess",        eloField: "chessElo"       as const },
   { key: "minesweeper", label: "💣 Minesweeper",  eloField: "minesweeperElo" as const },
   { key: "checkers",    label: "🔴 Checkers",     eloField: "checkersElo"    as const },
-  { key: "battleship",   label: "🚢 Battleship",   eloField: "battleshipElo"  as const },
+  { key: "battleship",  label: "🚢 Battleship",   eloField: "battleshipElo"  as const },
+  { key: "billiards",   label: "🎱 Billiards",    eloField: "billiardsElo"   as const },
 ];
 
 const PLACE_COLOR = ["#ffd700", "#c0c0c0", "#cd7f32"];

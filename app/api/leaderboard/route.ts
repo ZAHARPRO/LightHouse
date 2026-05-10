@@ -10,7 +10,8 @@ export async function GET(req: Request) {
   const isCheckers = game === "checkers";
   const isBattleship = game === "battleship";
   const isMinesweeper = game === "minesweeper";
-  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : isBattleship ? "battleshipElo" : "minesweeperElo";
+  const isBilliards = game === "billiards";
+  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : isBattleship ? "battleshipElo" : isBilliards ? "billiardsElo" : "minesweeperElo";
   const search = searchParams.get("search")?.trim() ?? "";
 
   const users = await prisma.user.findMany({
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
     },
     orderBy: { [field]: "desc" },
     take: limit,
-    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true, battleshipElo: true },
+    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true, battleshipElo: true, billiardsElo: true },
   });
 
   // Compute wins + max win streak per user
@@ -78,6 +79,28 @@ export async function GET(req: Request) {
     }
   } else if (isBattleship) {
     const rooms = await prisma.battleshipRoom.findMany({
+      where: {
+        status: "FINISHED",
+        rated: true,
+        OR: [{ hostId: { in: userIds } }, { guestId: { in: userIds } }],
+      },
+      select: { hostId: true, guestId: true, winner: true, endedAt: true },
+      orderBy: { endedAt: "asc" },
+    });
+
+    for (const uid of userIds) {
+      const userRooms = rooms.filter(r => r.hostId === uid || r.guestId === uid);
+      let wins = 0, streak = 0, maxStreak = 0;
+      for (const r of userRooms) {
+        const myRole = r.hostId === uid ? "host" : "guest";
+        const won = r.winner === myRole;
+        if (won) { wins++; streak++; maxStreak = Math.max(maxStreak, streak); }
+        else streak = 0;
+      }
+      winStreaks[uid] = { wins, maxStreak };
+    }
+  } else if (isBilliards) {
+    const rooms = await prisma.billiardsRoom.findMany({
       where: {
         status: "FINISHED",
         rated: true,

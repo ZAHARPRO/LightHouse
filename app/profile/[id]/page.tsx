@@ -399,32 +399,81 @@ export default async function PublicProfilePage({
                       </div>
 
                       {/* Pedestal stand */}
-                      <div className="profile-badge-stand">
-                        {/* Neck */}
+                      <div className="profile-badge-stand" style={{ width: "100%" }}>
+
+                        {/* ── Neck pin connecting card to pedestal ── */}
                         <div style={{
-                          width: 26, height: 16,
-                          background: `linear-gradient(180deg, ${meta.color}40 0%, ${meta.color}1a 100%)`,
-                          borderLeft: `1px solid ${meta.color}45`,
-                          borderRight: `1px solid ${meta.color}45`,
+                          width: 20, height: 14,
+                          background: `linear-gradient(90deg, ${meta.color}30 0%, ${meta.color}60 40%, ${meta.color}60 60%, ${meta.color}30 100%)`,
+                          borderLeft: `1px solid ${meta.color}40`,
+                          borderRight: `1px solid ${meta.color}40`,
                         }} />
-                        {/* Wide base */}
+
+                        {/* ── Tier 1 — top platform (100% width) ── */}
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+                          {/* lit top face */}
+                          <div style={{
+                            height: 7,
+                            background: `linear-gradient(180deg, ${meta.color}70 0%, ${meta.color}45 100%)`,
+                            borderRadius: "5px 5px 0 0",
+                            border: `1px solid ${meta.color}65`,
+                            borderBottom: "none",
+                            boxShadow: `inset 0 1px 0 ${meta.color}50`,
+                          }} />
+                          {/* front face */}
+                          <div style={{
+                            height: 14,
+                            background: `linear-gradient(180deg, ${meta.color}30 0%, ${meta.color}18 100%)`,
+                            border: `1px solid ${meta.color}45`,
+                            borderTop: "none",
+                          }} />
+                        </div>
+
+                        {/* ── Tier 2 — middle step (78% width, centred) ── */}
+                        <div style={{ width: "78%", display: "flex", flexDirection: "column" }}>
+                          {/* lit top face */}
+                          <div style={{
+                            height: 6,
+                            background: `linear-gradient(180deg, ${meta.color}55 0%, ${meta.color}35 100%)`,
+                            borderRadius: "4px 4px 0 0",
+                            border: `1px solid ${meta.color}50`,
+                            borderBottom: "none",
+                          }} />
+                          {/* front face */}
+                          <div style={{
+                            height: 12,
+                            background: `linear-gradient(180deg, ${meta.color}25 0%, ${meta.color}12 100%)`,
+                            border: `1px solid ${meta.color}35`,
+                            borderTop: "none",
+                          }} />
+                        </div>
+
+                        {/* ── Tier 3 — base (58% width, centred) ── */}
+                        <div style={{ width: "58%", display: "flex", flexDirection: "column" }}>
+                          {/* lit top face */}
+                          <div style={{
+                            height: 5,
+                            background: `linear-gradient(180deg, ${meta.color}40 0%, ${meta.color}25 100%)`,
+                            borderRadius: "3px 3px 0 0",
+                            border: `1px solid ${meta.color}40`,
+                            borderBottom: "none",
+                          }} />
+                          {/* front face */}
+                          <div style={{
+                            height: 10,
+                            background: `linear-gradient(180deg, ${meta.color}20 0%, ${meta.color}08 100%)`,
+                            borderRadius: "0 0 4px 4px",
+                            border: `1px solid ${meta.color}28`,
+                            borderTop: "none",
+                            boxShadow: `0 6px 20px ${meta.color}25`,
+                          }} />
+                        </div>
+
+                        {/* ── Floor shadow ── */}
                         <div style={{
-                          width: "92%", height: 13, borderRadius: "0 0 10px 10px",
-                          background: `linear-gradient(180deg, ${meta.color}35 0%, ${meta.color}14 100%)`,
-                          border: `1px solid ${meta.color}40`, borderTop: "none",
-                          boxShadow: `0 6px 18px ${meta.color}25`,
-                        }} />
-                        {/* Narrow foot */}
-                        <div style={{
-                          width: "72%", height: 7, borderRadius: "0 0 8px 8px",
-                          background: `linear-gradient(180deg, ${meta.color}22 0%, transparent 100%)`,
-                          border: `1px solid ${meta.color}28`, borderTop: "none",
-                        }} />
-                        {/* Floor shadow */}
-                        <div style={{
-                          width: "55%", height: 5, borderRadius: "50%", marginTop: 3,
-                          background: `radial-gradient(ellipse, ${meta.color}28 0%, transparent 70%)`,
-                          filter: "blur(3px)",
+                          width: "52%", height: 5, marginTop: 5, borderRadius: "50%",
+                          background: `radial-gradient(ellipse, ${meta.color}35 0%, transparent 70%)`,
+                          filter: "blur(5px)",
                         }} />
                       </div>
                     </div>
@@ -441,10 +490,20 @@ export default async function PublicProfilePage({
                         {t("noBadge")}
                       </span>
                     </div>
-                    <div className="profile-badge-stand">
-                      <div style={{ width: 26, height: 16, background: "var(--bg-elevated)", borderLeft: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }} />
-                      <div style={{ width: "92%", height: 13, borderRadius: "0 0 10px 10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
-                      <div style={{ width: "72%", height: 7, borderRadius: "0 0 8px 8px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                    <div className="profile-badge-stand" style={{ width: "100%" }}>
+                      <div style={{ width: 20, height: 14, background: "var(--bg-elevated)", borderLeft: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }} />
+                      <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+                        <div style={{ height: 7, background: "var(--bg-elevated)", borderRadius: "5px 5px 0 0", border: "1px solid var(--border-subtle)", borderBottom: "none" }} />
+                        <div style={{ height: 14, background: "var(--bg-secondary)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                      </div>
+                      <div style={{ width: "78%", display: "flex", flexDirection: "column" }}>
+                        <div style={{ height: 6, background: "var(--bg-elevated)", borderRadius: "4px 4px 0 0", border: "1px solid var(--border-subtle)", borderBottom: "none" }} />
+                        <div style={{ height: 12, background: "var(--bg-secondary)", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                      </div>
+                      <div style={{ width: "58%", display: "flex", flexDirection: "column" }}>
+                        <div style={{ height: 5, background: "var(--bg-elevated)", borderRadius: "3px 3px 0 0", border: "1px solid var(--border-subtle)", borderBottom: "none" }} />
+                        <div style={{ height: 10, background: "var(--bg-card)", borderRadius: "0 0 4px 4px", border: "1px solid var(--border-subtle)", borderTop: "none" }} />
+                      </div>
                     </div>
                   </div>
                 )}

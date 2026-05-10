@@ -227,5 +227,46 @@ export const BADGE_DEFS: Record<string, BadgeDef> = {
     howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship.",
     category: "games", rare: true,
   },
-  
+  BILLIARDS_WIN: {
+    icon: "🎱", label: "Billiards Victor", color: "#10b981", points: 50,
+    description: "Won a game of billiards against the bot",
+    how: "Beat the bot in Billiards (any difficulty)",
+    howToEarn: "Beat the AI opponent in Billiards — any difficulty counts.",
+    category: "games",
+  },
+  BILLIARDS_ONLINE_WIN: {
+    icon: "🏆", label: "Pool Shark", color: "#34d399", points: 100,
+    description: "Won an online 1v1 billiards match",
+    how: "Win a real-time online billiards game",
+    howToEarn: "Win a real-time 1v1 online billiards match against another player.",
+    category: "games",
+  },
+  BILLIARDS_SILVER: {
+    icon: "🥈", label: "Billiards Silver", color: "#c0c0c0", points: 75,
+    description: "Reached Silver rank in rated billiards (700+ ELO)",
+    how: "Reach 700 ELO in rated billiards",
+    howToEarn: "Climb to Silver rank by reaching 700 ELO in rated online billiards.",
+    category: "games",
+  },
+  BILLIARDS_GOLD: {
+    icon: "🥇", label: "Billiards Gold", color: "#ffd700", points: 150,
+    description: "Reached Gold rank in rated billiards (1300+ ELO)",
+    how: "Reach 1300 ELO in rated billiards",
+    howToEarn: "Prove your skill — reach 1300 ELO in rated online billiards.",
+    category: "games", rare: true,
+  },
+  BILLIARDS_PLATINUM: {
+    icon: "💠", label: "Billiards Platinum", color: "#e2e8f0", points: 300,
+    description: "Reached Platinum rank in rated billiards (2200+ ELO)",
+    how: "Reach 2200 ELO in rated billiards",
+    howToEarn: "Elite territory — reach 2200 ELO in rated online billiards.",
+    category: "games", rare: true,
+  },
+  BILLIARDS_DIAMOND: {
+    icon: "💎", label: "Billiards Diamond", color: "#67e8f9", points: 500,
+    description: "Reached Diamond rank in rated billiards (3400+ ELO)",
+    how: "Reach 3400 ELO in rated billiards",
+    howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online billiards.",
+    category: "games", rare: true,
+  },
 };

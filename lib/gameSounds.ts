@@ -26,7 +26,14 @@ export type SoundKey =
   | "bs_explosion"
   | "bs_sunk"
   | "bs_victory"
-  | "bs_defeat";
+  | "bs_defeat"
+  // billiards
+  | "bl_cue_strike"
+  | "bl_ball_hit"
+  | "bl_pocket"
+  | "bl_scratch"
+  | "bl_win"
+  | "bl_defeat";
 
 export const SOUND_META: Record<SoundKey, string> = {
   // matchmaking / lobby
@@ -55,6 +62,13 @@ export const SOUND_META: Record<SoundKey, string> = {
   bs_sunk:        "Ship Sunk (battleship)",
   bs_victory:     "Victory (battleship)",
   bs_defeat:      "Defeat (battleship)",
+  // billiards
+  bl_cue_strike:  "Cue Strike (billiards)",
+  bl_ball_hit:    "Ball Hit (billiards)",
+  bl_pocket:      "Ball Pocketed (billiards)",
+  bl_scratch:     "Scratch / Cue Ball Pocketed (billiards)",
+  bl_win:         "Win (billiards)",
+  bl_defeat:      "Defeat (billiards)",
 };
 
 export const ALL_SOUND_KEYS = Object.keys(SOUND_META) as SoundKey[];
@@ -185,6 +199,30 @@ function synthesize(key: SoundKey): void {
         osc.connect(g); g.connect(ctx.destination);
         osc.start(now); osc.stop(now + 0.1); break;
       }
+
+      case "bl_cue_strike": {
+        const osc = ctx.createOscillator(); osc.type = "triangle";
+        osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.5, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(g); g.connect(ctx.destination); osc.start(now); osc.stop(now + 0.1); break;
+      }
+      case "bl_ball_hit":
+        noise(0.04, 3000, 0.5); break;
+
+      case "bl_pocket": {
+        const osc = ctx.createOscillator(); osc.type = "sine";
+        osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.45, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(g); g.connect(ctx.destination); osc.start(now); osc.stop(now + 0.3); break;
+      }
+      case "bl_scratch":
+        [440, 370, 300].forEach((f, i) => tone(f, "sawtooth", now + i * 0.09, 0.12, 0.2)); break;
+
+      case "bl_win":
+        [330, 392, 523, 659, 784].forEach((f, i) => tone(f, "triangle", now + i * 0.1, 0.18, 0.28)); break;
+
+      case "bl_defeat":
+        [523, 392, 330, 262].forEach((f, i) => tone(f, "sawtooth", now + i * 0.13, 0.18, 0.22)); break;
 
       case "match_start":
       case "opponent_found":

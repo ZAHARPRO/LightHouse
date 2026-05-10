@@ -79,3 +79,16 @@ export async function awardBattleshipEloBadges(prisma: PrismaClient, userId: str
     if (newElo >= threshold) await awardBadge(prisma, userId, type);
   }
 }
+
+const BILLIARDS_ELO_BADGES: [number, string][] = [
+  [700,  "BILLIARDS_SILVER"],
+  [1300, "BILLIARDS_GOLD"],
+  [2200, "BILLIARDS_PLATINUM"],
+  [3400, "BILLIARDS_DIAMOND"],
+];
+
+export async function awardBilliardsEloBadges(prisma: PrismaClient, userId: string, newElo: number) {
+  for (const [threshold, type] of BILLIARDS_ELO_BADGES) {
+    if (newElo >= threshold) await awardBadge(prisma, userId, type);
+  }
+}

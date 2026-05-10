@@ -284,7 +284,14 @@
       "BATTLESHIP_SILVER":      { "label": "Battleship Silver",    "description": "Reached Silver rank in rated battleship (700+ ELO)",           "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online battleship." },
       "BATTLESHIP_GOLD":        { "label": "Battleship Gold",      "description": "Reached Gold rank in rated battleship (1300+ ELO)",            "howToEarn": "Prove your skill — reach 1300 ELO in rated online battleship." },
       "BATTLESHIP_PLATINUM":    { "label": "Battleship Platinum",  "description": "Reached Platinum rank in rated battleship (2200+ ELO)",       "howToEarn": "Elite territory — reach 2200 ELO in rated online battleship." },
-      "BATTLESHIP_DIAMOND":     { "label": "Battleship Diamond",   "description": "Reached Diamond rank in rated battleship (3400+ ELO)",        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship." }
+      "BATTLESHIP_DIAMOND":     { "label": "Battleship Diamond",   "description": "Reached Diamond rank in rated battleship (3400+ ELO)",        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship." },
+
+      "BILLIARDS_WIN":          { "label": "Billiards Victor",    "description": "Won a game of billiards against the bot",                        "howToEarn": "Beat the AI opponent in Billiards — any difficulty counts." },
+      "BILLIARDS_ONLINE_WIN":   { "label": "Pool Shark",          "description": "Won an online 1v1 billiards match",                              "howToEarn": "Win a real-time 1v1 online billiards match against another player." },
+      "BILLIARDS_SILVER":       { "label": "Billiards Silver",    "description": "Reached Silver rank in rated billiards (700+ ELO)",              "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online billiards." },
+      "BILLIARDS_GOLD":         { "label": "Billiards Gold",      "description": "Reached Gold rank in rated billiards (1300+ ELO)",               "howToEarn": "Prove your skill — reach 1300 ELO in rated online billiards." },
+      "BILLIARDS_PLATINUM":     { "label": "Billiards Platinum",  "description": "Reached Platinum rank in rated billiards (2200+ ELO)",           "howToEarn": "Elite territory — reach 2200 ELO in rated online billiards." },
+      "BILLIARDS_DIAMOND":      { "label": "Billiards Diamond",   "description": "Reached Diamond rank in rated billiards (3400+ ELO)",            "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online billiards." }
     }
   },
   "games": {
@@ -310,7 +317,13 @@
     "chessOnline": "Chess Online",
     "chessOnlineDesc": "1 vs 1 with timer",
     "chessRated": "Chess Rated",
-    "chessRatedDesc": "Earn ELO"
+    "chessRatedDesc": "Earn ELO",
+    "billiardsBot": "Billiards vs Bot",
+    "billiardsBotDesc": "8-ball pool, 3 levels",
+    "billiardsOnline": "Billiards Online",
+    "billiardsOnlineDesc": "1 vs 1",
+    "billiardsRated": "Billiards Rated",
+    "billiardsRatedDesc": "Earn ELO"
   },
   "chess": {
     "title": "Chess",
@@ -328,6 +341,43 @@
     "surrender": "Surrender",
     "moveHistory": "Move History",
     "noMoves": "No moves yet"
+  },
+  "billiards": {
+    "title": "Billiards",
+    "subtitle": "8-ball pool — play against the bot",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "start": "Start Game",
+    "newGame": "New Game",
+    "surrender": "Surrender",
+    "yourTurn": "● Your turn",
+    "opponentTurn": "Opponent's turn…",
+    "solids": "Solids (1–7)",
+    "stripes": "Stripes (9–15)",
+    "eightBall": "Eight Ball",
+    "unassigned": "Not assigned yet",
+    "cueBallInHand": "Cue ball in hand — place it",
+    "aimAndShoot": "Aim and shoot",
+    "power": "Power",
+    "shoot": "Shoot",
+    "shotHistory": "Shot History",
+    "noShots": "No shots yet",
+    "win": "You Win!",
+    "lose": "Defeat",
+    "draw": "Draw",
+    "pocketedEight": "Pocketed the 8-ball",
+    "scratchOnEight": "Scratched on 8-ball",
+    "eightBallEarly": "Pocketed 8-ball too early",
+    "resigned": "Resigned",
+    "timeout": "Time out",
+    "scratched": "Scratch!",
+    "foul": "Foul",
+    "ballPocketed": "Ball {id} pocketed",
+    "yourGroup": "Your balls",
+    "oppGroup": "Opponent's balls",
+    "backToLive": "Back to live",
+    "spectating": "Spectating"
   },
   "battleship": {
       "title": "Battleship",

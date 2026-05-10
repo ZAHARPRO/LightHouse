@@ -1,0 +1,39 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { initialState, serializeState } from "@/lib/billiards";
+
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const room = await prisma.billiardsRoom.findUnique({ where: { id } });
+  if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (room.hostId !== session.user.id) return NextResponse.json({ error: "Not the host" }, { status: 403 });
+  if (room.status !== "WAITING") return NextResponse.json({ error: "Already started" }, { status: 400 });
+  if (!room.guestId) return NextResponse.json({ error: "No opponent yet" }, { status: 400 });
+  if (!room.guestReady) return NextResponse.json({ error: "Opponent not ready" }, { status: 400 });
+
+  const state = initialState();
+  const timeSec = room.timeControl !== "none" ? parseInt(room.timeControl) * 1000 : null;
+
+  await prisma.billiardsRoom.update({
+    where: { id },
+    data: {
+      status: "PLAYING",
+      ballsJson: serializeState(state),
+      shotsJson: "[]",
+      currentTurn: "host",
+      phase: "playing",
+      hostGroup: null,
+      guestGroup: null,
+      hostTimeMs: timeSec,
+      guestTimeMs: timeSec,
+      lastMoveAt: new Date(),
+      startedAt: new Date(),
+    },
+  });
+
+  return NextResponse.json({ ok: true });
+}

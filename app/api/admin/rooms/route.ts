@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const [chess, ms, checkers, battleship] = await Promise.all([
+    const [chess, ms, checkers, battleship, billiards] = await Promise.all([
       prisma.chessRoom.findMany({
         where: { rated: true },
         orderBy: { createdAt: "desc" },
@@ -73,6 +73,21 @@ export async function GET() {
           guest: { select: { id: true, name: true, image: true, battleshipElo: true } },
         },
       }),
+      prisma.billiardsRoom.findMany({
+        where: { rated: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true, status: true,
+          hostEloSnapshot: true, guestEloSnapshot: true,
+          hostEloDelta: true, guestEloDelta: true,
+          resultReverted: true,
+          winner: true, winReason: true,
+          startedAt: true, endedAt: true, createdAt: true,
+          host: { select: { id: true, name: true, image: true, billiardsElo: true } },
+          guest: { select: { id: true, name: true, image: true, billiardsElo: true } },
+        },
+      }),
     ]);
 
     const result = [
@@ -97,9 +112,15 @@ export async function GET() {
       ...battleship.map(r => ({
         ...r,
         game: "battleship" as const,
-        resultReverted: false, // BattleshipRoom has no resultReverted field yet
+        resultReverted: false,
         hostCurrentElo: r.host.battleshipElo,
         guestCurrentElo: r.guest?.battleshipElo ?? null,
+      })),
+      ...billiards.map(r => ({
+        ...r,
+        game: "billiards" as const,
+        hostCurrentElo: r.host.billiardsElo,
+        guestCurrentElo: r.guest?.billiardsElo ?? null,
       })),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -118,7 +139,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json() as {
       action: "close" | "revert";
-      game: "chess" | "minesweeper" | "checkers" | "battleship";
+      game: "chess" | "minesweeper" | "checkers" | "battleship" | "billiards";
       id: string;
     };
 
@@ -153,12 +174,21 @@ export async function POST(req: Request) {
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
         });
-      } else {
+      } else if (body.game === "battleship") {
         const room = await prisma.battleshipRoom.findUnique({ where: { id: body.id } });
         if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
         if (room.status === "FINISHED")
           return NextResponse.json({ error: "Already finished" }, { status: 400 });
         await prisma.battleshipRoom.update({
+          where: { id: body.id },
+          data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
+        });
+      } else {
+        const room = await prisma.billiardsRoom.findUnique({ where: { id: body.id } });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status === "FINISHED")
+          return NextResponse.json({ error: "Already finished" }, { status: 400 });
+        await prisma.billiardsRoom.update({
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
         });
@@ -169,6 +199,24 @@ export async function POST(req: Request) {
     if (body.action === "revert") {
       if (body.game === "battleship") {
         return NextResponse.json({ error: "ELO revert not supported for battleship yet" }, { status: 400 });
+      }
+
+      if (body.game === "billiards") {
+        const room = await prisma.billiardsRoom.findUnique({
+          where: { id: body.id }, include: { host: true, guest: true },
+        });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status !== "FINISHED") return NextResponse.json({ error: "Room not finished" }, { status: 400 });
+        if (room.resultReverted) return NextResponse.json({ error: "Already reverted" }, { status: 400 });
+        if (room.hostEloDelta == null) return NextResponse.json({ error: "No ELO to revert" }, { status: 400 });
+        await prisma.$transaction([
+          prisma.billiardsRoom.update({ where: { id: body.id }, data: { resultReverted: true } }),
+          prisma.user.update({ where: { id: room.hostId }, data: { billiardsElo: { decrement: room.hostEloDelta } } }),
+          ...(room.guestId && room.guestEloDelta != null
+            ? [prisma.user.update({ where: { id: room.guestId }, data: { billiardsElo: { decrement: room.guestEloDelta } } })]
+            : []),
+        ]);
+        return NextResponse.json({ ok: true });
       }
 
       if (body.game === "chess") {

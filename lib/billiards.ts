@@ -1,7 +1,7 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 export const TABLE_W   = 700;
 export const TABLE_H   = 350;
-export const BALL_R    = 11;
+export const BALL_R    = 14;
 export const POCKET_R  = 19;
 export const CUSHION   = 30; // inset from outer edge
 
@@ -147,11 +147,16 @@ export function serializeState(state: BilliardsState): string {
 }
 
 export function deserializeState(json: string): BilliardsState {
-  const d = JSON.parse(json);
-  return {
-    ...d,
-    balls: d.balls.map((b: Ball) => ({ ...b, vx: 0, vy: 0 })),
-  };
+  try {
+    const d = JSON.parse(json);
+    if (!d || typeof d !== "object" || !Array.isArray(d.balls)) return initialState();
+    return {
+      ...d,
+      balls: d.balls.map((b: Ball) => ({ ...b, vx: 0, vy: 0 })),
+    };
+  } catch {
+    return initialState();
+  }
 }
 
 // ── Physics helpers ────────────────────────────────────────────────────────────
@@ -448,4 +453,36 @@ export function encodeShots(shots: ShotRecord[]): string {
 
 export function decodeShots(json: string): ShotRecord[] {
   try { return JSON.parse(json); } catch { return []; }
+}
+
+// ── Frame-by-frame animation ───────────────────────────────────────────────────
+// Returns Ball snapshots sampled every stepsPerFrame physics steps.
+// Client plays these back at ~60fps to animate a shot smoothly.
+export function animateShot(
+  state: BilliardsState,
+  shot: BilliardsShot,
+  stepsPerFrame = 1,
+): Ball[][] {
+  const balls = cloneBalls(state.balls);
+
+  let cueBall = balls.find(b => b.id === 0);
+  if (!cueBall) {
+    cueBall = { id: 0, x: shot.cueX ?? TABLE_W * 0.25, y: shot.cueY ?? TABLE_H / 2, vx: 0, vy: 0, pocketed: false };
+    balls.push(cueBall);
+  } else if (state.phase === "cue_in_hand" && shot.cueX !== undefined) {
+    cueBall.x = Math.max(PF_LEFT + BALL_R, Math.min(PF_RIGHT - BALL_R, shot.cueX));
+    cueBall.y = Math.max(PF_TOP + BALL_R, Math.min(PF_BOTTOM - BALL_R, shot.cueY ?? cueBall.y));
+    cueBall.pocketed = false;
+  }
+  cueBall.vx = Math.cos(shot.angle) * shot.power * MAX_SHOT_POWER;
+  cueBall.vy = Math.sin(shot.angle) * shot.power * MAX_SHOT_POWER;
+
+  const frames: Ball[][] = [];
+  for (let step = 0; step < MAX_STEPS; step++) {
+    stepPhysics(balls);
+    if (step % stepsPerFrame === 0) frames.push(cloneBalls(balls));
+    if (allStopped(balls)) break;
+  }
+  frames.push(cloneBalls(balls));
+  return frames;
 }

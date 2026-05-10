@@ -19,6 +19,8 @@ function ChessIcon({ size = 22 }: { size?: number }) {
   );
 }
 
+
+
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { getRank } from "@/lib/elo";
@@ -74,12 +76,51 @@ function PuzzleIcon({ size = 22 }: { size?: number }) {
 
 function BilliardsIcon({ size = 22 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4"/>
-      <circle cx="32" cy="32" r="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4"/>
-      <circle cx="32" cy="32" r="10" fill="currentColor" opacity="0.85"/>
-      <text x="32" y="37" textAnchor="middle" fontSize="12" fontWeight="bold" fill="white" fontFamily="sans-serif">8</text>
-    </svg>
+<svg fill="currentColor" height={size} width={size} version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
+	 viewBox="0 0 463.003 463.003">
+<g transform="translate(0 -540.36)">
+	<g>
+		<g>
+			<path d="M313.995,854.966c0-17.9-14.6-32.5-32.4-32.5c-17.9,0-32.4,14.6-32.4,32.5s14.6,32.5,32.4,32.5
+				S313.895,872.866,313.995,854.966z M281.595,872.466c-9.6,0-17.4-7.9-17.4-17.5c0-9.7,7.8-17.5,17.4-17.5
+				c9.5,0,17.3,7.8,17.4,17.5C298.995,864.666,291.195,872.466,281.595,872.466z"/>
+			<path d="M198.195,753.766c17.9,0,32.5-14.6,32.5-32.5s-14.6-32.5-32.5-32.5c-17.9,0-32.5,14.6-32.5,32.5
+				S180.295,753.766,198.195,753.766z M198.195,703.766c9.7,0,17.5,7.9,17.5,17.5s-7.9,17.5-17.5,17.5c-9.6,0-17.5-7.9-17.5-17.5
+				S188.595,703.766,198.195,703.766z"/>
+			<path d="M206.695,788.766c0,17.9,14.6,32.5,32.5,32.5c17.9,0,32.5-14.6,32.5-32.5s-14.6-32.5-32.5-32.5
+				C221.295,756.266,206.695,770.866,206.695,788.766z M239.195,771.266c9.7,0,17.5,7.8,17.5,17.5c0,9.6-7.9,17.5-17.5,17.5
+				c-9.6,0-17.5-7.9-17.5-17.5S229.595,771.266,239.195,771.266z"/>
+			<path d="M157.195,821.266c17.9,0,32.5-14.6,32.5-32.5s-14.6-32.5-32.5-32.5c-17.9,0-32.5,14.6-32.5,32.5
+				S139.295,821.266,157.195,821.266z M157.195,771.266c9.6,0,17.5,7.8,17.5,17.5c0,9.6-7.9,17.5-17.5,17.5
+				c-9.6,0-17.5-7.9-17.5-17.5S147.595,771.266,157.195,771.266z"/>
+			<path d="M230.795,854.966c0-17.9-14.6-32.5-32.5-32.5c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5
+				C216.195,887.466,230.795,872.866,230.795,854.966z M198.295,872.466c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5
+				c9.6,0,17.5,7.8,17.5,17.5C215.795,864.566,207.895,872.466,198.295,872.466z"/>
+			<path d="M147.495,854.966c0-17.9-14.6-32.5-32.5-32.5c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5
+				C132.895,887.466,147.495,872.866,147.495,854.966z M114.995,872.466c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5
+				c9.7,0,17.5,7.8,17.5,17.5C132.495,864.566,124.595,872.466,114.995,872.466z"/>
+			<path d="M322.495,888.666c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5c17.9,0,32.5-14.6,32.5-32.5
+				S340.395,888.666,322.495,888.666z M322.495,938.666c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5c9.7,0,17.5,7.8,17.5,17.5
+				C339.995,930.766,332.095,938.666,322.495,938.666z"/>
+			<path d="M239.195,888.666c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5c17.9,0,32.5-14.6,32.5-32.5
+				S257.095,888.666,239.195,888.666z M239.195,938.666c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5c9.7,0,17.5,7.8,17.5,17.5
+				C256.695,930.766,248.795,938.666,239.195,938.666z"/>
+			<path d="M157.195,888.666c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5c17.9,0,32.5-14.6,32.5-32.5
+				S175.095,888.666,157.195,888.666z M157.195,938.666c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5c9.6,0,17.5,7.8,17.5,17.5
+				C174.695,930.766,166.795,938.666,157.195,938.666z"/>
+			<path d="M73.895,888.666c-17.9,0-32.5,14.6-32.5,32.5s14.6,32.5,32.5,32.5c17.9,0,32.5-14.6,32.5-32.5
+				S91.795,888.666,73.895,888.666z M73.895,938.666c-9.6,0-17.5-7.9-17.5-17.5s7.9-17.5,17.5-17.5c9.7,0,17.5,7.8,17.5,17.5
+				C91.395,930.766,83.495,938.666,73.895,938.666z"/>
+			<path d="M391.195,924.866l-159.2-266.1c-7.2-12.3-19.8-19.6-33.8-19.6s-26.6,7.4-33.8,19.6l-159.1,266.1l-0.1,0.2
+				c-7.2,13.1-6.9,28.7,0.8,41.8c7.6,12.8,20.9,20.5,35.6,20.5h313.2v0c14.7,0,28.1-7.7,35.7-20.6c7.8-13.1,8-28.7,0.8-41.8
+				L391.195,924.866z M377.495,959.166c-4.8,8.2-13.3,13.1-22.7,13.1h-313.2c-9.4,0-17.8-4.9-22.7-13.1c-5-8.4-5.2-18.4-0.6-26.8
+				l0,0l159-266.1c4.5-7.6,12.3-12.2,20.9-12.2s16.4,4.6,20.9,12.3l159,266C382.695,940.666,382.495,950.766,377.495,959.166z"/>
+			<path d="M461.895,942.266l-232.4-382.3c-2.1-3.5-6.8-4.7-10.3-2.5c-3.5,2.1-4.7,6.8-2.5,10.3l232.4,382.3
+				c1.4,2.3,3.9,3.6,6.4,3.6c1.3,0,2.7-0.4,3.9-1.1C462.895,950.466,464.095,945.766,461.895,942.266z"/>
+		</g>
+	</g>
+</g>
+</svg>
   );
 }
 
@@ -104,8 +145,8 @@ const GAMES = [
   { href: "/games/checkers/online",          title: "Checkers Online",    description: "1 vs 1 in real-time",           icon: CheckersIcon, color: "text-amber-400",  bg: "bg-indigo-500/10 border-indigo-500/20"    },
   { href: "/games/checkers/online/rated",    title: "Checkers Rated",     description: "Earn ELO",                      icon: CheckersIcon, color: "text-orange-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
   { href: "/games/battleship/online/rated",   title: "Battleship Rated",   description: "Earn ELO",                      icon: BattleshipIcon,  color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
-  { href: "/games/billiards",                 title: "Billiards vs Bot",   description: "8-ball pool, 3 levels",         icon: BilliardsIcon,   color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20"    },
-  { href: "/games/billiards/online",          title: "Billiards Online",   description: "1 vs 1 in real-time",           icon: BilliardsIcon,   color: "text-teal-400",   bg: "bg-teal-500/10 border-teal-500/20"      },
+  { href: "/games/billiards",                 title: "Billiards vs Bot",   description: "8-ball pool, 3 levels",         icon: BilliardsIcon,   color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20"    },
+  { href: "/games/billiards/online",          title: "Billiards Online",   description: "1 vs 1 in real-time",           icon: BilliardsIcon,   color: "text-indigo-400",   bg: "bg-indigo-500/10 border-indigo-500/20"      },
   { href: "/games/billiards/online/rated",    title: "Billiards Rated",    description: "Earn ELO",                      icon: BilliardsIcon,   color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
 ];
 
@@ -271,6 +312,7 @@ export default function GamesPage() {
         { label: "♟ Chess",        games: GAMES.filter(g => g.href.includes("chess"))        },
         { label: "⛂ Checkers",    games: GAMES.filter(g => g.href.includes("checkers"))     },
         { label: "🚢 Battleship",  games: GAMES.filter(g => g.href.includes("battleship"))  },
+        { label: "🎱 Billiards",    games: GAMES.filter(g => g.href.includes("billiards"))   },
       ].map(({ label, games }) => (
         <div key={label} className="mb-6">
           <p className="text-xs font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">{label}</p>

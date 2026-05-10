@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Loader2, CheckCircle2, AlertCircle, Music2, Trash2, Play, RotateCcw,
-  Upload, Youtube, X, ArrowRight,
+  Upload, Youtube, X, ArrowRight, Search,
 } from "lucide-react";
 import { ALL_SOUND_KEYS, SOUND_META, type SoundKey } from "@/lib/gameSounds";
 
@@ -22,6 +22,7 @@ const DEFAULT_SLOTS = (): Record<SoundKey, SlotState> =>
 export default function AdminSoundsPage() {
   const [slots, setSlots]           = useState<Record<SoundKey, SlotState>>(DEFAULT_SLOTS());
   const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState("");
   const [uploadingKey, setUpKey]    = useState<SoundKey | null>(null);
   const [uploadErr, setUpErr]       = useState<Partial<Record<SoundKey, string>>>({});
   const [showYt, setShowYt]         = useState<Partial<Record<SoundKey, boolean>>>({});
@@ -170,15 +171,39 @@ export default function AdminSoundsPage() {
     }
   }
 
+  const q = search.trim().toLowerCase();
+  const visibleKeys = ALL_SOUND_KEYS.filter(k =>
+    !q || k.toLowerCase().includes(q) || SOUND_META[k].toLowerCase().includes(q)
+  );
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
-      <div className="flex items-center gap-3 mb-2">
-        <Music2 size={22} className="text-violet-400" />
-        <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)]">Game Sounds</h1>
+    <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+      {/* Header */}
+      <div className="shrink-0">
+        <div className="flex items-center gap-3 mb-1">
+          <Music2 size={22} className="text-violet-400" />
+          <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)]">Game Sounds</h1>
+        </div>
+        <p className="text-[var(--text-muted)] text-sm mb-4">
+          Manage sound effects for online games. Paste a URL, upload an audio file (max 2 MB), or extract audio from a YouTube link.
+        </p>
+
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or key…"
+            className="w-full h-9 pl-8 pr-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)] text-sm text-[var(--text-primary)] outline-none focus:border-violet-500/50 placeholder:text-[var(--text-muted)]"
+          />
+          {q && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.65rem] text-[var(--text-muted)]">
+              {visibleKeys.length} / {ALL_SOUND_KEYS.length}
+            </span>
+          )}
+        </div>
       </div>
-      <p className="text-[var(--text-muted)] text-sm mb-8">
-        Manage sound effects for online games. Paste a URL, upload an audio file (max 2 MB), or extract audio from a YouTube link.
-      </p>
 
       {/* Hidden shared file input */}
       <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChange} />
@@ -186,8 +211,11 @@ export default function AdminSoundsPage() {
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]" /></div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {ALL_SOUND_KEYS.map((key) => {
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 flex flex-col gap-4 pb-4">
+          {visibleKeys.length === 0 && (
+            <p className="text-center py-16 text-[var(--text-muted)] text-sm">No sounds match &ldquo;{search}&rdquo;</p>
+          )}
+          {visibleKeys.map((key) => {
             const slot = slots[key];
             const isUploading = uploadingKey === key;
             const err = uploadErr[key];

@@ -399,15 +399,17 @@ export default function BilliardsBotPage() {
     if (!rec) return;
     let stateBeforeShot = initialState();
     for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, shots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot, 6);
+    const frames = animateShot(stateBeforeShot, rec.shot, 3);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: rec.shot.angle, power: rec.shot.power, cx: cueBallPos?.x ?? TABLE_W * 0.25, cy: cueBallPos?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
-    let i = 0;
+    let i = 0; let skip = false;
     function tick() {
+      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skip = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; return; }
       setAnimBalls(frames[i++]);
@@ -433,15 +435,17 @@ export default function BilliardsBotPage() {
     };
     setShots(prev => [...prev, rec]);
 
-    const frames = animateShot(state, shot, 6);
+    const frames = animateShot(state, shot, 3);
     const cueBallPos = shot.cueX !== undefined
       ? { x: shot.cueX, y: shot.cueY ?? TABLE_H / 2 }
       : state.balls.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: shot.angle, power: shot.power, cx: cueBallPos?.x ?? TABLE_W * 0.25, cy: cueBallPos?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
-    let i = 0;
+    let i = 0; let skip = false;
     function tick() {
+      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skip = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) {
         setAnimBalls(null);

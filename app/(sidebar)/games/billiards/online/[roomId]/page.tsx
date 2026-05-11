@@ -299,8 +299,10 @@ export default function BilliardsOnlineRoom() {
     const cueBallFrame0 = item.frames[0]?.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
-    let i = 0;
+    let i = 0; let skip = false;
     function tick() {
+      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skip = true;
       animFrameIdxRef.current++;
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
@@ -390,7 +392,7 @@ export default function BilliardsOnlineRoom() {
     for (let i = 0; i < lastAnimatedCountRef.current; i++) state = simulateShot(state, shots[i].shot).newState;
     for (let idx = lastAnimatedCountRef.current; idx < shots.length; idx++) {
       const rec = shots[idx];
-      const frames = animateShot(state, rec.shot, 6);
+      const frames = animateShot(state, rec.shot, 3);
       const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0 ? "bl_pocket"
         : rec.foul ? "bl_scratch" : "bl_ball_hit";
       enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power);
@@ -411,7 +413,7 @@ export default function BilliardsOnlineRoom() {
     if (!rec) return;
     let stateBeforeShot = initialState();
     for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, currentShots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot, 6);
+    const frames = animateShot(stateBeforeShot, rec.shot, 3);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
@@ -419,8 +421,10 @@ export default function BilliardsOnlineRoom() {
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
     animatingRef.current = true;
-    let i = 0;
+    let i = 0; let skip = false;
     function tick() {
+      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skip = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; animatingRef.current = false; return; }
       setAnimBalls(frames[i++]);
@@ -597,7 +601,7 @@ export default function BilliardsOnlineRoom() {
       ...(displayState.phase === "cue_in_hand" ? { cueX: cueHandPos?.x ?? TABLE_W * 0.25, cueY: cueHandPos?.y ?? TABLE_H / 2 } : {}),
     };
     setPower(0); setPullback(0); setCueHandPos(null);
-    const frames = animateShot(displayState, shot, 6);
+    const frames = animateShot(displayState, shot, 3);
     lastAnimatedCountRef.current++;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power);
     setSubmitting(true);

@@ -288,6 +288,7 @@ export default function BilliardsOnlineRoom() {
   const initializedAnimRef = useRef(false);
   const shotQueueRef = useRef<Array<{ frames: Ball[][]; sound: SoundKey; angle: number; power: number }>>([]);
   const animatingRef = useRef(false);
+  const animIdRef = useRef(0);
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
 
@@ -299,10 +300,12 @@ export default function BilliardsOnlineRoom() {
     const cueBallFrame0 = item.frames[0]?.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
-    let i = 0; let skip = false;
+    const myId = ++animIdRef.current;
+    let i = 0; let hold = 0;
     function tick() {
-      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skip = true;
+      if (animIdRef.current !== myId) return;
+      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
+      hold = 0;
       animFrameIdxRef.current++;
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
@@ -311,7 +314,7 @@ export default function BilliardsOnlineRoom() {
       setAnimBalls(item.frames[i++]);
       rafRef.current = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    rafRef.current = requestAnimationFrame(tick);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enqueueAnimation = useCallback((frames: Ball[][], sound: SoundKey, angle: number, power: number) => {
@@ -392,7 +395,7 @@ export default function BilliardsOnlineRoom() {
     for (let i = 0; i < lastAnimatedCountRef.current; i++) state = simulateShot(state, shots[i].shot).newState;
     for (let idx = lastAnimatedCountRef.current; idx < shots.length; idx++) {
       const rec = shots[idx];
-      const frames = animateShot(state, rec.shot, 3);
+      const frames = animateShot(state, rec.shot, 1);
       const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0 ? "bl_pocket"
         : rec.foul ? "bl_scratch" : "bl_ball_hit";
       enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power);
@@ -413,24 +416,29 @@ export default function BilliardsOnlineRoom() {
     if (!rec) return;
     let stateBeforeShot = initialState();
     for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, currentShots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot, 3);
+    const frames = animateShot(stateBeforeShot, rec.shot, 1);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: rec.shot.angle, power: rec.shot.power, cx: cueBallPos?.x ?? TABLE_W * 0.25, cy: cueBallPos?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
+    const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
     animatingRef.current = true;
-    let i = 0; let skip = false;
+    let i = 0; let hold = 0;
     function tick() {
-      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skip = true;
+      if (animIdRef.current !== myId) return;
+      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
+      hold = 0;
       animFrameIdxRef.current++;
-      if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; animatingRef.current = false; return; }
+      if (i >= frames.length) {
+        setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
+        processQueue(); return;
+      }
       setAnimBalls(frames[i++]);
       rafRef.current = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    rafRef.current = requestAnimationFrame(tick);
   }, [replayIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const displayState = useMemo<BilliardsState>(() => {
@@ -601,7 +609,7 @@ export default function BilliardsOnlineRoom() {
       ...(displayState.phase === "cue_in_hand" ? { cueX: cueHandPos?.x ?? TABLE_W * 0.25, cueY: cueHandPos?.y ?? TABLE_H / 2 } : {}),
     };
     setPower(0); setPullback(0); setCueHandPos(null);
-    const frames = animateShot(displayState, shot, 3);
+    const frames = animateShot(displayState, shot, 1);
     lastAnimatedCountRef.current++;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power);
     setSubmitting(true);

@@ -266,6 +266,7 @@ export default function BilliardsBotPage() {
   const triggerBotRef = useRef<(state: BilliardsState) => void>(() => {});
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
+  const animIdRef = useRef(0);
   const botAimInfoRef = useRef<{ angle: number; cx: number; cy: number } | null>(null);
   const [botAimPullback, setBotAimPullback] = useState(0);
   const [botAimPower, setBotAimPower] = useState(0);
@@ -399,23 +400,25 @@ export default function BilliardsBotPage() {
     if (!rec) return;
     let stateBeforeShot = initialState();
     for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, shots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot, 3);
+    const frames = animateShot(stateBeforeShot, rec.shot, 1);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: rec.shot.angle, power: rec.shot.power, cx: cueBallPos?.x ?? TABLE_W * 0.25, cy: cueBallPos?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
+    const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
-    let i = 0; let skip = false;
+    let i = 0; let hold = 0;
     function tick() {
-      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skip = true;
+      if (animIdRef.current !== myId) return;
+      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
+      hold = 0;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; return; }
       setAnimBalls(frames[i++]);
       rafRef.current = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    rafRef.current = requestAnimationFrame(tick);
   }, [replayIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startGame() {
@@ -435,40 +438,43 @@ export default function BilliardsBotPage() {
     };
     setShots(prev => [...prev, rec]);
 
-    const frames = animateShot(state, shot, 3);
+    const frames = animateShot(state, shot, 1);
     const cueBallPos = shot.cueX !== undefined
       ? { x: shot.cueX, y: shot.cueY ?? TABLE_H / 2 }
       : state.balls.find(b => b.id === 0 && !b.pocketed);
     animShotRef.current = { angle: shot.angle, power: shot.power, cx: cueBallPos?.x ?? TABLE_W * 0.25, cy: cueBallPos?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
+    const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
-    let i = 0; let skip = false;
-    function tick() {
-      if (skip) { skip = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skip = true;
-      animFrameIdxRef.current++;
-      if (i >= frames.length) {
-        setAnimBalls(null);
-        animShotRef.current = null;
-        setGameState(res.newState);
-        if (res.pocketed.filter(id => id !== 0).length > 0) playSound("bl_pocket");
-        else if (hasFoul) playSound("bl_scratch");
-        else playSound("bl_ball_hit");
-        if (res.winner) {
-          const playerWon = res.winner === "host";
-          setResult(playerWon ? t("win") : t("lose"));
-          setStatus("over");
-          playSound(playerWon ? "bl_win" : "bl_defeat");
-          if (playerWon) awardGameBadge("BILLIARDS_WIN").catch(() => {});
-        } else if (res.newState.turn === "guest") {
-          setTimeout(() => triggerBotRef.current(res.newState), 300);
-        }
-        return;
+    let i = 0; let hold = 0; let done = false;
+    function finish() {
+      if (done) return; done = true;
+      setAnimBalls(null);
+      animShotRef.current = null;
+      setGameState(res.newState);
+      if (res.pocketed.filter(id => id !== 0).length > 0) playSound("bl_pocket");
+      else if (hasFoul) playSound("bl_scratch");
+      else playSound("bl_ball_hit");
+      if (res.winner) {
+        const playerWon = res.winner === "host";
+        setResult(playerWon ? t("win") : t("lose"));
+        setStatus("over");
+        playSound(playerWon ? "bl_win" : "bl_defeat");
+        if (playerWon) awardGameBadge("BILLIARDS_WIN").catch(() => {});
+      } else if (res.newState.turn === "guest") {
+        setTimeout(() => triggerBotRef.current(res.newState), 300);
       }
+    }
+    function tick() {
+      if (animIdRef.current !== myId) { finish(); return; }
+      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
+      hold = 0;
+      animFrameIdxRef.current++;
+      if (i >= frames.length) { finish(); return; }
       setAnimBalls(frames[i++]);
       rafRef.current = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    rafRef.current = requestAnimationFrame(tick);
   }, [t]);
 
   const triggerBot = useCallback((state: BilliardsState) => {

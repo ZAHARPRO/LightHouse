@@ -1,22 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Lock, Loader2 } from "lucide-react";
+import { Download, Music, Lock, Loader2, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { audioBufferToWav } from "@/lib/audioBufferToWav";
 
 type Props = {
   videoId: string;
-  videoTitle: string;
   userTier?: string | null;
 };
 
-export default function DownloadVideoButton({ videoId, videoTitle, userTier }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type VideoInfo = {
+  url: string;
+  title: string;
+  urlType: "youtube" | "gdrive" | "direct";
+  filename: string;
+  canEliteAudio: boolean;
+};
 
-  const canDownload = userTier === "PRO" || userTier === "ELITE";
+type DownloadState = "idle" | "loading" | "done" | "error";
 
-  if (!canDownload) {
+export default function DownloadVideoButton({ videoId, userTier }: Props) {
+  const [videoState, setVideoState] = useState<DownloadState>("idle");
+  const [audioState, setAudioState] = useState<DownloadState>("idle");
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [info, setInfo] = useState<VideoInfo | null>(null);
+
+  const isPro   = userTier === "PRO" || userTier === "ELITE";
+  const isElite = userTier === "ELITE";
+
+  // Not subscribed
+  if (!isPro) {
     return (
       <Link
         href="/subscriptions"
@@ -30,41 +44,130 @@ export default function DownloadVideoButton({ videoId, videoTitle, userTier }: P
     );
   }
 
-  async function handleDownload() {
-    if (loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/videos/${videoId}/download`);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Failed"); return; }
+  async function fetchInfo(): Promise<VideoInfo | null> {
+    if (info) return info;
+    const res  = await fetch(`/api/videos/${videoId}/download`);
+    if (!res.ok) return null;
+    const data = await res.json() as VideoInfo;
+    setInfo(data);
+    return data;
+  }
 
+  async function handleVideoDownload() {
+    if (videoState !== "idle") return;
+    setVideoState("loading");
+    try {
+      const meta = await fetchInfo();
+      if (!meta) { setVideoState("error"); return; }
+
+      if (meta.urlType !== "direct") {
+        // YouTube / GDrive — open original in new tab
+        window.open(meta.url, "_blank", "noopener,noreferrer");
+        setVideoState("done");
+        return;
+      }
+
+      // Direct URL — proxy stream download
       const a = document.createElement("a");
-      a.href = data.url;
-      a.download = `${videoTitle}.mp4`;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
+      a.href = `/api/videos/${videoId}/download?stream=true`;
+      a.download = `${meta.filename}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setVideoState("done");
     } catch {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
+      setVideoState("error");
     }
+    setTimeout(() => setVideoState("idle"), 3000);
   }
 
+  async function handleAudioExtract() {
+    if (audioState !== "idle") return;
+    setAudioState("loading");
+    setAudioProgress(0);
+    try {
+      const meta = await fetchInfo();
+      if (!meta || !meta.canEliteAudio) {
+        setAudioState("error");
+        return;
+      }
+
+      // 1. Fetch video file via proxy
+      setAudioProgress(10);
+      const res = await fetch(`/api/videos/${videoId}/download?stream=true`);
+      if (!res.ok || !res.body) { setAudioState("error"); return; }
+
+      // Read full body (needed for AudioContext.decodeAudioData)
+      setAudioProgress(30);
+      const arrayBuffer = await res.arrayBuffer();
+
+      // 2. Decode audio with Web Audio API
+      setAudioProgress(60);
+      const audioCtx = new AudioContext();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      await audioCtx.close();
+
+      // 3. Convert to WAV
+      setAudioProgress(85);
+      const wavBlob = audioBufferToWav(audioBuffer);
+
+      // 4. Trigger download
+      const url = URL.createObjectURL(wavBlob);
+      const a   = document.createElement("a");
+      a.href     = url;
+      a.download = `${meta.filename}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setAudioProgress(100);
+      setAudioState("done");
+    } catch {
+      setAudioState("error");
+    }
+    setTimeout(() => { setAudioState("idle"); setAudioProgress(0); }, 3000);
+  }
+
+  const videoLabel = () => {
+    if (videoState === "loading") return <><Loader2 size={13} className="animate-spin" /> Preparing…</>;
+    if (videoState === "done")    return <><Download size={13} className="text-green-400" /> Done!</>;
+    if (videoState === "error")   return <><Download size={13} className="text-red-400" /> Error</>;
+    // If YouTube/GDrive, show external icon hint
+    if (info && info.urlType !== "direct") return <><ExternalLink size={13} /> Open video</>;
+    return <><Download size={13} /> MP4</>;
+  };
+
+  const audioLabel = () => {
+    if (audioState === "loading") return <><Loader2 size={13} className="animate-spin" /> {audioProgress}%</>;
+    if (audioState === "done")    return <><Music size={13} className="text-green-400" /> Done!</>;
+    if (audioState === "error")   return <><Music size={13} className="text-red-400" /> Error</>;
+    return <><Music size={13} /> Audio</>;
+  };
+
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex items-center gap-2">
+      {/* Video download — Pro + Elite */}
       <button
-        onClick={handleDownload}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-sm font-display font-semibold hover:text-[var(--text-primary)] hover:border-[var(--accent-orange)] transition-colors disabled:opacity-50"
+        onClick={handleVideoDownload}
+        disabled={videoState === "loading"}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-sm font-display font-semibold hover:text-[var(--text-primary)] hover:border-[#f97316] transition-colors disabled:opacity-50"
       >
-        {loading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-        {loading ? "Preparing…" : "Download"}
+        {videoLabel()}
       </button>
-      {error && <p className="text-red-400 text-xs">{error}</p>}
+
+      {/* Audio extract — Elite only */}
+      {isElite && (
+        <button
+          onClick={handleAudioExtract}
+          disabled={audioState === "loading"}
+          title={info && !info.canEliteAudio ? "Audio extraction only works for direct video URLs" : "Extract audio as WAV"}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-sm font-display font-semibold hover:text-[var(--text-primary)] hover:border-[#fbbf24] transition-colors disabled:opacity-50"
+        >
+          {audioLabel()}
+          <span className="text-[0.65rem] text-[#fbbf24] font-bold">Elite</span>
+        </button>
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ const BALL_COLORS: Record<number, string> = {
   14: "#157a3a", 15: "#8b1a1a",
 };
 
-const MAX_DRAG_PX = 80;
+const MAX_DRAG_PX = 160;
 const CANVAS_PAD  = 80;
 const OVER        = 220; // overlay extends beyond CANVAS_PAD so the cue stick renders over UI
 
@@ -169,8 +169,10 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
 }
 
 function drawAimLine(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number, scale: number) {
-  ctx.save(); ctx.setLineDash([4 * scale, 4 * scale]);
-  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 0.8 * scale;
+  const lw = Math.max(2, 1.4 * scale);
+  const dash = Math.max(6, 4 * scale);
+  ctx.save(); ctx.setLineDash([dash, dash]);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.lineWidth = lw;
   ctx.beginPath(); ctx.moveTo(cx * scale, cy * scale);
   ctx.lineTo(cx * scale + Math.cos(angle) * 200 * scale, cy * scale + Math.sin(angle) * 200 * scale);
   ctx.stroke(); ctx.restore();
@@ -277,14 +279,16 @@ export default function BilliardsBotPage() {
   // Ball positions to render: animBalls during animation, else displayState
   const ballsToDraw = animBalls ?? displayState.balls;
 
-  // Draw canvas
+  // Draw canvas — DPR-scaled for sharp rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const CW = (TABLE_W + 2 * CANVAS_PAD) * scale, CH = (TABLE_H + 2 * CANVAS_PAD) * scale;
-    canvas.width = CW; canvas.height = CH;
+    canvas.width = CW * dpr; canvas.height = CH * dpr;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, CW, CH);
 
     // Translate so game coords map to the padded canvas centre
@@ -338,15 +342,17 @@ export default function BilliardsBotPage() {
     ctx.restore();
   }, [ballsToDraw, scale, aimAngle, pullback, status, botThinking, replayIdx, cueHandPos, hoverCuePos, animBalls, gameState.phase, gameState.turn]);
 
-  // Draw cue stick on overlay canvas so it renders above all HTML elements
+  // Draw cue stick on overlay canvas — DPR-scaled
   useEffect(() => {
     const canvas = cueCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const OW = (TABLE_W + 2 * (CANVAS_PAD + OVER)) * scale;
     const OH = (TABLE_H + 2 * (CANVAS_PAD + OVER)) * scale;
-    canvas.width = OW; canvas.height = OH;
+    canvas.width = OW * dpr; canvas.height = OH * dpr;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, OW, OH);
     ctx.save();
     ctx.translate((CANVAS_PAD + OVER) * scale, (CANVAS_PAD + OVER) * scale);
@@ -389,7 +395,10 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
     let i = 0;
+    let skipFrame = false;
     function tick() {
+      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; return; }
       setAnimBalls(frames[i++]);
@@ -423,7 +432,10 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
     let i = 0;
+    let skipFrame = false; // 30fps: hold each physics frame for 2 RAF ticks
     function tick() {
+      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) {
         setAnimBalls(null);
@@ -513,8 +525,11 @@ export default function BilliardsBotPage() {
     const dx = mx - dragOriginRef.current.x;
     const dy = my - dragOriginRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
+    // Cancel drag when pullback returns to near-zero — lets player restart cleanly
+    if (dist < 5 && power > 0) {
+      dragOriginRef.current = null; setPullback(0); setPower(0); return;
+    }
     if (dist > 1) {
-      // Drag direction = pull cue back → shot direction is opposite
       setAimAngle(Math.atan2(-dy, -dx));
       const clamped = Math.min(dist, MAX_DRAG_PX);
       setPullback(clamped * scale);

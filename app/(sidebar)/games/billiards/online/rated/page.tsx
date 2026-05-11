@@ -19,15 +19,15 @@ type RoomItem = {
 };
 
 const TC_LABELS: Record<string, string> = {
-  "300": "🔥 5 min",
-  "600": "⏱ 10 min",
-  "1500": "🕐 25 min",
+  pm30: "⚡ 30s/move", pm60: "⚡ 1min/move", pm180: "⏱ 3min/move",
+  // legacy
+  "300": "🔥 5 min", "600": "⏱ 10 min", "1500": "🕐 25 min",
 };
 
 const TIME_OPTIONS = [
-  { value: "300",  label: "5 min",  icon: "🔥" },
-  { value: "600",  label: "10 min", icon: "⏱" },
-  { value: "1500", label: "25 min", icon: "🕐" },
+  { value: "pm180", label: "3 min/move", icon: "⏱" },
+  { value: "pm60",  label: "1 min/move", icon: "⚡" },
+  { value: "pm30",  label: "30s/move",   icon: "⚡" },
 ];
 
 type Phase = "idle" | "searching";
@@ -36,7 +36,7 @@ export default function RatedBilliardsLobby() {
   const router = useRouter();
   const { data: session } = useSession();
   const [playing, setPlaying]         = useState<RoomItem[]>([]);
-  const [timeControl, setTimeControl] = useState("600");
+  const [timeControl, setTimeControl] = useState("pm180");
   const [phase, setPhase]             = useState<Phase>("idle");
   const [elapsed, setElapsed]         = useState(0);
   const [starting, setStarting]       = useState(false);

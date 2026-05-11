@@ -18,20 +18,17 @@ type RoomItem = {
 
 const TC_LABELS: Record<string, string> = {
   none: "∞ Infinite",
-  "60": "⚡ 1 min",
-  "300": "🔥 5 min",
-  "600": "⏱ 10 min",
-  "1500": "🕐 25 min",
-  "3600": "🕐 1 hour",
+  pm30: "⚡ 30s/move", pm60: "⚡ 1min/move", pm180: "⏱ 3min/move", pm300: "🔥 5min/move",
+  // legacy labels for existing rooms
+  "60": "⚡ 1 min", "300": "🔥 5 min", "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1hr",
 };
 
 const TIME_OPTIONS = [
-  { value: "none",  label: "Infinite",   icon: "∞"  },
-  { value: "60",    label: "1 minute",   icon: "⚡" },
-  { value: "300",   label: "5 minutes",  icon: "🔥" },
-  { value: "600",   label: "10 minutes", icon: "⏱" },
-  { value: "1500",  label: "25 minutes", icon: "🕐" },
-  { value: "3600",  label: "1 hour",     icon: "🕐" },
+  { value: "none",  label: "Infinite",    icon: "∞"  },
+  { value: "pm300", label: "5 min/move",  icon: "🔥" },
+  { value: "pm180", label: "3 min/move",  icon: "⏱" },
+  { value: "pm60",  label: "1 min/move",  icon: "⚡" },
+  { value: "pm30",  label: "30s/move",    icon: "⚡" },
 ];
 
 export default function BilliardsOnlineLobby() {
@@ -103,7 +100,7 @@ export default function BilliardsOnlineLobby() {
       {/* Create room */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5 mb-6">
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Create Room</p>
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
           {TIME_OPTIONS.map(opt => (
             <button key={opt.value} onClick={() => setTimeControl(opt.value)}
               className={["px-3 py-2 rounded-lg text-sm font-display font-semibold border transition-all text-left",

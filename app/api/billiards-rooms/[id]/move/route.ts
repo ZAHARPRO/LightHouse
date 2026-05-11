@@ -54,7 +54,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   };
 
   // Time control
-  if (room.timeControl !== "none" && room.lastMoveAt) {
+  if (room.timeControl.startsWith("pm")) {
+    // Per-move: reset both players to full budget after each move
+    const budget = parseInt(room.timeControl.slice(2)) * 1000;
+    update.hostTimeMs = budget;
+    update.guestTimeMs = budget;
+  } else if (room.timeControl !== "none" && room.lastMoveAt) {
     const elapsed = Date.now() - new Date(room.lastMoveAt).getTime();
     const field = isHost ? "hostTimeMs" : "guestTimeMs";
     const current = (isHost ? room.hostTimeMs : room.guestTimeMs) ?? 0;

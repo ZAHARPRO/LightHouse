@@ -289,7 +289,6 @@ export default async function WatchPage({
             />
             <DownloadVideoButton
               videoId={id}
-              videoTitle={video.title}
               userTier={viewerTier}
             />
           </div>

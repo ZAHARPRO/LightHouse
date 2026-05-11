@@ -17,9 +17,7 @@ import {
   PF_LEFT, PF_RIGHT, PF_TOP, PF_BOTTOM,
   remainingBalls,
 } from "@/lib/billiards";
-import WaitingLobby from "@/components/WaitingLobby";
 
-// ── Types ────────────────────────────────────────────────────────────────────
 type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 type RoomData = {
   id: string; status: RoomStatus; timeControl: string;
@@ -39,14 +37,20 @@ type RoomData = {
   chat: ChatMsg[]; spectatorCount: number;
 };
 
-// ── Canvas helpers ───────────────────────────────────────────────────────────
 const BALL_COLORS: Record<number, string> = {
   1: "#f7d000", 2: "#1a5cdb", 3: "#e03030", 4: "#6a1a8a", 5: "#e07020",
   6: "#157a3a", 7: "#8b1a1a", 8: "#222222",
   9: "#f7d000", 10: "#1a5cdb", 11: "#e03030", 12: "#6a1a8a", 13: "#e07020",
   14: "#157a3a", 15: "#8b1a1a",
 };
-const MAX_DRAG_PX = 80;
+
+const TC_LABELS: Record<string, string> = {
+  none: "∞", pm30: "30s/move", pm60: "1min/move", pm180: "3min/move", pm300: "5min/move",
+  "60": "1 min", "300": "5 min", "600": "10 min", "1500": "25 min", "3600": "1hr",
+};
+
+// Increased for smoother/slower pullback feel
+const MAX_DRAG_PX = 160;
 const CANVAS_PAD  = 80;
 const OVER        = 220;
 
@@ -81,8 +85,7 @@ function drawBall(ctx: CanvasRenderingContext2D, id: number, x: number, y: numbe
     ctx.fillStyle = "#111"; ctx.font = `bold ${Math.round(r * 0.6)}px sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 1.5;
-    ctx.fillText(String(id), cx, cy + 0.5);
-    ctx.shadowBlur = 0;
+    ctx.fillText(String(id), cx, cy + 0.5); ctx.shadowBlur = 0;
   }
   const grad = ctx.createRadialGradient(cx - r * 0.28, cy - r * 0.3, r * 0.04, cx, cy, r);
   grad.addColorStop(0, "rgba(255,255,255,0.38)"); grad.addColorStop(0.45, "rgba(255,255,255,0)"); grad.addColorStop(1, "rgba(0,0,0,0.12)");
@@ -90,6 +93,42 @@ function drawBall(ctx: CanvasRenderingContext2D, id: number, x: number, y: numbe
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 0.8 * scale; ctx.stroke();
 }
+
+// Aim line — thicker on small screens for visibility
+function drawAimLine(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number, scale: number) {
+  const lw = Math.max(2, 1.4 * scale);
+  const dash = Math.max(6, 4 * scale);
+  ctx.save(); ctx.setLineDash([dash, dash]);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(cx * scale, cy * scale);
+  ctx.lineTo(cx * scale + Math.cos(angle) * 200 * scale, cy * scale + Math.sin(angle) * 200 * scale);
+  ctx.stroke(); ctx.restore();
+}
+
+function drawCueStick(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number, scale: number, pullback = 0, power = 0) {
+  const r = BALL_R * scale, startDist = r + 8 * scale + pullback, len = 200 * scale;
+  const sx = cx * scale - Math.cos(angle) * startDist, sy = cy * scale - Math.sin(angle) * startDist;
+  const ex = cx * scale - Math.cos(angle) * (startDist + len), ey = cy * scale - Math.sin(angle) * (startDist + len);
+  const grad = ctx.createLinearGradient(sx, sy, ex, ey);
+  grad.addColorStop(0, "#c8a96e"); grad.addColorStop(0.2, "#a0784a"); grad.addColorStop(1, "#5c3d20");
+  ctx.save(); ctx.lineCap = "round";
+  if (power > 0.05) {
+    const g = Math.round(180 * (1 - power));
+    const glowColor = `rgb(255,${g},0)`;
+    ctx.globalAlpha = 0.25 + 0.35 * power;
+    ctx.shadowColor = glowColor; ctx.shadowBlur = (28 + 36 * power) * scale;
+    ctx.strokeStyle = glowColor; ctx.lineWidth = Math.max(9 * scale, 6);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalAlpha = 0.75 + 0.25 * power;
+    ctx.shadowBlur = (6 + 10 * power) * scale; ctx.lineWidth = Math.max(5 * scale, 3);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+  ctx.lineWidth = Math.max(5 * scale, 3);
+  ctx.strokeStyle = grad; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.restore();
+}
+
 function HintBar({ hint }: { hint: string | null }) {
   if (!hint) return <div className="min-h-[1.75rem]" />;
   return (
@@ -151,39 +190,6 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
   );
 }
 
-function drawAimLine(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number, scale: number) {
-  ctx.save(); ctx.setLineDash([4 * scale, 4 * scale]);
-  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 0.8 * scale;
-  ctx.beginPath(); ctx.moveTo(cx * scale, cy * scale);
-  ctx.lineTo(cx * scale + Math.cos(angle) * 200 * scale, cy * scale + Math.sin(angle) * 200 * scale);
-  ctx.stroke(); ctx.restore();
-}
-function drawCueStick(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number, scale: number, pullback = 0, power = 0) {
-  const r = BALL_R * scale, startDist = r + 8 * scale + pullback, len = 200 * scale;
-  const sx = cx * scale - Math.cos(angle) * startDist, sy = cy * scale - Math.sin(angle) * startDist;
-  const ex = cx * scale - Math.cos(angle) * (startDist + len), ey = cy * scale - Math.sin(angle) * (startDist + len);
-  const grad = ctx.createLinearGradient(sx, sy, ex, ey);
-  grad.addColorStop(0, "#c8a96e"); grad.addColorStop(0.2, "#a0784a"); grad.addColorStop(1, "#5c3d20");
-  ctx.save(); ctx.lineCap = "round";
-  if (power > 0.05) {
-    const g = Math.round(180 * (1 - power));
-    const glowColor = `rgb(255,${g},0)`;
-    // wide soft outer glow
-    ctx.globalAlpha = 0.25 + 0.35 * power;
-    ctx.shadowColor = glowColor; ctx.shadowBlur = (28 + 36 * power) * scale;
-    ctx.strokeStyle = glowColor; ctx.lineWidth = Math.max(9 * scale, 6);
-    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-    // tight bright inner glow
-    ctx.globalAlpha = 0.75 + 0.25 * power;
-    ctx.shadowBlur = (6 + 10 * power) * scale; ctx.lineWidth = Math.max(5 * scale, 3);
-    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-  }
-  ctx.lineWidth = Math.max(5 * scale, 3);
-  ctx.strokeStyle = grad; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-  ctx.restore();
-}
-
 function useScale() {
   const [scale, setScale] = useState(0.8);
   useEffect(() => {
@@ -205,9 +211,6 @@ function fmtMs(ms: number | null) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-
-
-// ── Replay panel ─────────────────────────────────────────────────────────────
 function ReplayShotPanel({ shots, replayIdx, onReplay }: {
   shots: ShotRecord[]; replayIdx: number | null; onReplay: (i: number | null) => void;
 }) {
@@ -250,7 +253,6 @@ function ReplayShotPanel({ shots, replayIdx, onReplay }: {
   );
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
 export default function BilliardsOnlineRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
@@ -267,13 +269,17 @@ export default function BilliardsOnlineRoom() {
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const [animBalls, setAnimBalls] = useState<Ball[] | null>(null);
   const [copied, setCopied] = useState(false);
+  // Live countdown state — synced from server, ticks between polls
+  const [liveHostMs, setLiveHostMs] = useState<number | null>(null);
+  const [liveGuestMs, setLiveGuestMs] = useState<number | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cueCanvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
-  // Track how many shots we've animated so far (to animate new opponent shots)
   const lastAnimatedCountRef = useRef(0);
-  // Queue of { frames, sound } to animate in sequence
+  // Prevents replaying existing shots when first joining a room
+  const initializedAnimRef = useRef(false);
   const shotQueueRef = useRef<Array<{ frames: Ball[][]; sound: SoundKey; angle: number; power: number }>>([]);
   const animatingRef = useRef(false);
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
@@ -288,14 +294,14 @@ export default function BilliardsOnlineRoom() {
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     let i = 0;
+    let skipFrame = false; // 30fps: show each physics frame for 2 RAF ticks
     function tick() {
+      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= item.frames.length) {
-        setAnimBalls(null);
-        animShotRef.current = null;
-        animatingRef.current = false;
-        processQueue();
-        return;
+        setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
+        processQueue(); return;
       }
       setAnimBalls(item.frames[i++]);
       rafRef.current = requestAnimationFrame(tick);
@@ -324,13 +330,9 @@ export default function BilliardsOnlineRoom() {
   }, [roomId]);
 
   useEffect(() => { preloadSounds(); fetchRoom(); }, [fetchRoom]);
-  useEffect(() => {
-    const t = setInterval(fetchRoom, 400);
-    return () => clearInterval(t);
-  }, [fetchRoom]);
+  useEffect(() => { const t = setInterval(fetchRoom, 400); return () => clearInterval(t); }, [fetchRoom]);
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); }, []);
 
-  // Ping
   useEffect(() => {
     const t = setInterval(() => {
       fetch(`/api/billiards-rooms/${roomId}/ping`, { method: "POST" }).catch(() => {});
@@ -338,7 +340,6 @@ export default function BilliardsOnlineRoom() {
     return () => clearInterval(t);
   }, [roomId]);
 
-  // Spectate heartbeat
   useEffect(() => {
     if (room?.myRole !== "spectator") return;
     fetch(`/api/billiards-rooms/${roomId}/spectate`, { method: "POST" }).catch(() => {});
@@ -348,33 +349,50 @@ export default function BilliardsOnlineRoom() {
     return () => clearInterval(t);
   }, [roomId, room?.myRole]);
 
+  // Sync countdown from server
+  useEffect(() => {
+    if (!room) return;
+    setLiveHostMs(room.hostTimeMs);
+    setLiveGuestMs(room.guestTimeMs);
+  }, [room?.hostTimeMs, room?.guestTimeMs]);
+
+  // Tick the active player's clock at 100ms between server polls
+  useEffect(() => {
+    if (!room || room.status !== "PLAYING" || room.timeControl === "none") return;
+    const t = setInterval(() => {
+      if (room.currentTurn === "host") setLiveHostMs(p => p !== null ? Math.max(0, p - 100) : null);
+      else setLiveGuestMs(p => p !== null ? Math.max(0, p - 100) : null);
+    }, 100);
+    return () => clearInterval(t);
+  }, [room?.status, room?.currentTurn, room?.timeControl]);
+
   const shots: ShotRecord[] = room?.shotsJson ? decodeShots(room.shotsJson) : [];
 
-  // Animate new shots that arrived from server (opponent's shots)
+  // Animate shots that arrived from the server (opponent moves)
   useEffect(() => {
     if (!room || room.status !== "PLAYING" || replayIdx !== null) return;
+    // On first load skip existing shots — only animate new ones going forward
+    if (!initializedAnimRef.current) {
+      initializedAnimRef.current = true;
+      lastAnimatedCountRef.current = shots.length;
+      return;
+    }
     if (shots.length <= lastAnimatedCountRef.current) return;
 
-    // Build state before the earliest unanimated shot
-    let stateBeforeNew = initialState();
-    for (let i = 0; i < lastAnimatedCountRef.current; i++) {
-      stateBeforeNew = simulateShot(stateBeforeNew, shots[i].shot).newState;
-    }
-
-    // Queue all unanimated shots
+    let state = initialState();
+    for (let i = 0; i < lastAnimatedCountRef.current; i++) state = simulateShot(state, shots[i].shot).newState;
     for (let idx = lastAnimatedCountRef.current; idx < shots.length; idx++) {
       const rec = shots[idx];
-      const frames = animateShot(stateBeforeNew, rec.shot);
-      const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0
-        ? "bl_pocket"
+      const frames = animateShot(state, rec.shot);
+      const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0 ? "bl_pocket"
         : rec.foul ? "bl_scratch" : "bl_ball_hit";
       enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power);
-      stateBeforeNew = simulateShot(stateBeforeNew, rec.shot).newState;
+      state = simulateShot(state, rec.shot).newState;
     }
     lastAnimatedCountRef.current = shots.length;
   }, [room?.shotsJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Trigger replay animation when replayIdx changes
+  // Replay animation
   useEffect(() => {
     if (replayIdx === null) return;
     const rec = shots[replayIdx];
@@ -390,7 +408,10 @@ export default function BilliardsOnlineRoom() {
     cancelAnimationFrame(rafRef.current);
     animatingRef.current = true;
     let i = 0;
+    let skipFrame = false;
     function tick() {
+      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
+      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; animatingRef.current = false; return; }
       setAnimBalls(frames[i++]);
@@ -399,7 +420,6 @@ export default function BilliardsOnlineRoom() {
     requestAnimationFrame(tick);
   }, [replayIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Display state
   const displayState: BilliardsState = (() => {
     if (replayIdx !== null && shots.length > 0) {
       let s = initialState();
@@ -411,16 +431,15 @@ export default function BilliardsOnlineRoom() {
   })();
   const ballsToDraw = animBalls ?? displayState.balls;
 
-  // Draw canvas
+  // Main table canvas — DPR-scaled for sharp rendering
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const CW = (TABLE_W + 2 * CANVAS_PAD) * scale, CH = (TABLE_H + 2 * CANVAS_PAD) * scale;
-    canvas.width = CW; canvas.height = CH;
+    canvas.width = CW * dpr; canvas.height = CH * dpr;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, CW, CH);
-
     ctx.save();
     ctx.translate(CANVAS_PAD * scale, CANVAS_PAD * scale);
     drawTable(ctx, scale); drawPockets(ctx, scale);
@@ -429,69 +448,48 @@ export default function BilliardsOnlineRoom() {
       && room?.status === "PLAYING" && replayIdx === null && !animBalls;
     const cueBall = ballsToDraw.find(b => b.id === 0 && !b.pocketed);
 
-    // Cue-in-hand: placement zone + ghost ball before placement
     if (isMyTurn && displayState.phase === "cue_in_hand") {
       ctx.save();
-      ctx.strokeStyle = "rgba(255,220,0,0.3)";
-      ctx.setLineDash([5 * scale, 4 * scale]);
+      ctx.strokeStyle = "rgba(255,220,0,0.3)"; ctx.setLineDash([5 * scale, 4 * scale]);
       ctx.lineWidth = 1.5 * scale;
       ctx.strokeRect(PF_LEFT * scale, PF_TOP * scale, (PF_RIGHT - PF_LEFT) * scale, (PF_BOTTOM - PF_TOP) * scale);
-      ctx.setLineDash([]);
-      ctx.restore();
-      if (!cueHandPos && hoverCuePos) {
-        ctx.globalAlpha = 0.45; drawBall(ctx, 0, hoverCuePos.x, hoverCuePos.y, scale); ctx.globalAlpha = 1;
-      }
+      ctx.setLineDash([]); ctx.restore();
+      if (!cueHandPos && hoverCuePos) { ctx.globalAlpha = 0.45; drawBall(ctx, 0, hoverCuePos.x, hoverCuePos.y, scale); ctx.globalAlpha = 1; }
     }
-
-    if (isMyTurn && cueBall && displayState.phase !== "cue_in_hand") {
-      drawAimLine(ctx, cueBall.x, cueBall.y, aimAngle, scale);
-    }
-    if (isMyTurn && displayState.phase === "cue_in_hand" && cueHandPos) {
-      drawAimLine(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale);
-    }
+    if (isMyTurn && cueBall && displayState.phase !== "cue_in_hand") drawAimLine(ctx, cueBall.x, cueBall.y, aimAngle, scale);
+    if (isMyTurn && displayState.phase === "cue_in_hand" && cueHandPos) drawAimLine(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale);
 
     for (const b of ballsToDraw) { if (!b.pocketed) drawBall(ctx, b.id, b.x, b.y, scale); }
 
     if (isMyTurn && displayState.phase === "cue_in_hand" && cueHandPos && !ballsToDraw.find(b => b.id === 0 && !b.pocketed)) {
       drawBall(ctx, 0, cueHandPos.x, cueHandPos.y, scale);
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(cueHandPos.x * scale, cueHandPos.y * scale, (BALL_R + 5) * scale, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255,220,0,0.7)";
-      ctx.lineWidth = 1.5 * scale;
-      ctx.setLineDash([3 * scale, 3 * scale]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+      ctx.beginPath(); ctx.arc(cueHandPos.x * scale, cueHandPos.y * scale, (BALL_R + 5) * scale, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,220,0,0.7)"; ctx.lineWidth = 1.5 * scale; ctx.setLineDash([3 * scale, 3 * scale]);
+      ctx.stroke(); ctx.setLineDash([]); ctx.restore();
     }
     ctx.restore();
   }, [ballsToDraw, scale, aimAngle, pullback, room, replayIdx, cueHandPos, hoverCuePos, animBalls, displayState.phase]);
 
-  // Draw cue stick on overlay canvas so it renders above all HTML elements
+  // Cue stick overlay canvas — DPR-scaled
   useEffect(() => {
-    const canvas = cueCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const canvas = cueCanvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const OW = (TABLE_W + 2 * (CANVAS_PAD + OVER)) * scale;
     const OH = (TABLE_H + 2 * (CANVAS_PAD + OVER)) * scale;
-    canvas.width = OW; canvas.height = OH;
+    canvas.width = OW * dpr; canvas.height = OH * dpr;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, OW, OH);
     ctx.save();
     ctx.translate((CANVAS_PAD + OVER) * scale, (CANVAS_PAD + OVER) * scale);
-    // Player's own aim stick (idle)
     const isMyTurn = room?.myRole !== "spectator" && room?.currentTurn === room?.myRole
       && room?.status === "PLAYING" && replayIdx === null && !animBalls;
     if (isMyTurn) {
       const cueBall = displayState.balls.find(b => b.id === 0 && !b.pocketed);
-      if (cueBall && displayState.phase !== "cue_in_hand") {
-        drawCueStick(ctx, cueBall.x, cueBall.y, aimAngle, scale, pullback * scale, power);
-      }
-      if (displayState.phase === "cue_in_hand" && cueHandPos) {
-        drawCueStick(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale, pullback * scale, power);
-      }
+      if (cueBall && displayState.phase !== "cue_in_hand") drawCueStick(ctx, cueBall.x, cueBall.y, aimAngle, scale, pullback * scale, power);
+      if (displayState.phase === "cue_in_hand" && cueHandPos) drawCueStick(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale, pullback * scale, power);
     }
-    // Animated strike stick (any player) — visible for first 30 frames
     if (animBalls !== null && animShotRef.current && animFrameIdxRef.current < 30) {
       const stick = animShotRef.current;
       const progress = animFrameIdxRef.current / 30;
@@ -505,10 +503,7 @@ export default function BilliardsOnlineRoom() {
 
   function getCanvasXY(e: React.PointerEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return {
-      mx: (e.clientX - rect.left) / scale - CANVAS_PAD,
-      my: (e.clientY - rect.top)  / scale - CANVAS_PAD,
-    };
+    return { mx: (e.clientX - rect.left) / scale - CANVAS_PAD, my: (e.clientY - rect.top) / scale - CANVAS_PAD };
   }
 
   const isMyTurnNow = room?.myRole !== "spectator" && room?.currentTurn === room?.myRole
@@ -517,16 +512,12 @@ export default function BilliardsOnlineRoom() {
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isMyTurnNow) return;
     const { mx, my } = getCanvasXY(e);
-
     if (displayState.phase === "cue_in_hand") {
       const cx = Math.max(PF_LEFT + BALL_R, Math.min(PF_RIGHT - BALL_R, mx));
       const cy = Math.max(PF_TOP + BALL_R, Math.min(PF_BOTTOM - BALL_R, my));
-      setCueHandPos({ x: cx, y: cy });
-      setHoverCuePos(null);
+      setCueHandPos({ x: cx, y: cy }); setHoverCuePos(null);
       canvasRef.current?.setPointerCapture(e.pointerId);
-      dragOriginRef.current = { x: mx, y: my };
-      setAimAngle(Math.PI);
-      return;
+      dragOriginRef.current = { x: mx, y: my }; setAimAngle(Math.PI); return;
     }
     const cue = displayState.balls.find(b => b.id === 0 && !b.pocketed);
     if (!cue) return;
@@ -538,7 +529,6 @@ export default function BilliardsOnlineRoom() {
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isMyTurnNow) return;
     const { mx, my } = getCanvasXY(e);
-
     if (!dragOriginRef.current) {
       if (displayState.phase === "cue_in_hand") {
         if (!cueHandPos) {
@@ -555,11 +545,14 @@ export default function BilliardsOnlineRoom() {
     }
     const dx = mx - dragOriginRef.current.x, dy = my - dragOriginRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
+    // Cancel drag when pullback returns to near-zero — lets player restart cleanly
+    if (dist < 5 && power > 0) {
+      dragOriginRef.current = null; setPullback(0); setPower(0); return;
+    }
     if (dist > 1) {
       setAimAngle(Math.atan2(-dy, -dx));
       const clamped = Math.min(dist, MAX_DRAG_PX);
-      setPullback(clamped * scale);
-      setPower(clamped / MAX_DRAG_PX);
+      setPullback(clamped * scale); setPower(clamped / MAX_DRAG_PX);
     }
   }
 
@@ -568,8 +561,7 @@ export default function BilliardsOnlineRoom() {
     const { mx, my } = getCanvasXY(e);
     const dx = mx - dragOriginRef.current.x, dy = my - dragOriginRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    dragOriginRef.current = null;
-    setPullback(0);
+    dragOriginRef.current = null; setPullback(0);
     if (dist >= 5 && power >= 0.04) handleShoot();
     else setPower(0);
   }
@@ -579,42 +571,26 @@ export default function BilliardsOnlineRoom() {
     const shotPower = Math.max(0.05, power);
     const shot: BilliardsShot = {
       angle: aimAngle, power: shotPower,
-      ...(displayState.phase === "cue_in_hand" ? {
-        cueX: cueHandPos?.x ?? TABLE_W * 0.25,
-        cueY: cueHandPos?.y ?? TABLE_H / 2,
-      } : {}),
+      ...(displayState.phase === "cue_in_hand" ? { cueX: cueHandPos?.x ?? TABLE_W * 0.25, cueY: cueHandPos?.y ?? TABLE_H / 2 } : {}),
     };
     setPower(0); setPullback(0); setCueHandPos(null);
-
-    // Animate locally immediately (before server response)
     const frames = animateShot(displayState, shot);
     lastAnimatedCountRef.current++;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power);
-
     setSubmitting(true);
     try {
       const res = await fetch(`/api/billiards-rooms/${roomId}/move`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(shot),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(shot),
       });
       if (res.ok) await fetchRoom();
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   }
 
-  async function handleReady() {
-    await fetch(`/api/billiards-rooms/${roomId}/ready`, { method: "POST" });
-    fetchRoom();
-  }
-  async function handleStart() {
-    await fetch(`/api/billiards-rooms/${roomId}/start`, { method: "POST" });
-    fetchRoom();
-  }
+  async function handleReady() { await fetch(`/api/billiards-rooms/${roomId}/ready`, { method: "POST" }); fetchRoom(); }
+  async function handleStart() { await fetch(`/api/billiards-rooms/${roomId}/start`, { method: "POST" }); fetchRoom(); }
   async function handleResign() {
     if (!confirm("Resign this game?")) return;
-    await fetch(`/api/billiards-rooms/${roomId}/resign`, { method: "POST" });
-    fetchRoom();
+    await fetch(`/api/billiards-rooms/${roomId}/resign`, { method: "POST" }); fetchRoom();
   }
 
   if (!room) {
@@ -628,66 +604,101 @@ export default function BilliardsOnlineRoom() {
   const isHost = room.myRole === "host", isGuest = room.myRole === "guest";
   const isPlayer = isHost || isGuest;
   const isMyTurn = isPlayer && room.currentTurn === room.myRole && room.status === "PLAYING" && replayIdx === null;
-  const myName   = isHost ? room.hostName  : isGuest ? room.guestName  : null;
-  const oppName  = isHost ? room.guestName : isGuest ? room.hostName   : null;
-  const myElo    = isHost ? room.hostElo   : room.guestElo;
-  const oppElo   = isHost ? room.guestElo  : room.hostElo;
-  const myEloDelta  = isHost ? room.hostEloDelta  : room.guestEloDelta;
-  const myGroup     = isHost ? room.hostGroup     : room.guestGroup;
-  const oppGroup    = isHost ? room.guestGroup    : room.hostGroup;
-  const myTimeMs    = isHost ? room.hostTimeMs    : room.guestTimeMs;
-  const oppTimeMs   = isHost ? room.guestTimeMs   : room.hostTimeMs;
-  const myRank   = myElo  ? getRank(myElo)  : null;
-  const oppRank  = oppElo ? getRank(oppElo) : null;
+  const myName  = isHost ? room.hostName  : isGuest ? room.guestName  : null;
+  const oppName = isHost ? room.guestName : isGuest ? room.hostName   : null;
+  const myElo   = isHost ? room.hostElo   : room.guestElo;
+  const oppElo  = isHost ? room.guestElo  : room.hostElo;
+  const myEloDelta = isHost ? room.hostEloDelta : room.guestEloDelta;
+  const myGroup    = isHost ? room.hostGroup    : room.guestGroup;
+  const oppGroup   = isHost ? room.guestGroup   : room.hostGroup;
+  const myTimeMs   = isHost ? liveHostMs  : liveGuestMs;
+  const oppTimeMs  = isHost ? liveGuestMs : liveHostMs;
+  const myRank  = myElo  ? getRank(myElo)  : null;
+  const oppRank = oppElo ? getRank(oppElo) : null;
   const myRemaining  = myGroup  ? remainingBalls(displayState, myGroup)  : [];
   const oppRemaining = oppGroup ? remainingBalls(displayState, oppGroup) : [];
+  const isPerMove = room.timeControl.startsWith("pm");
 
-  // ── WAITING lobby ─────────────────────────────────────────────────────────
+  const roomUrl = typeof window !== "undefined" ? window.location.href : "";
+  async function handleCopy() {
+    try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  }
+  async function handleCancelRoom() {
+    await fetch(`/api/billiards-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
+    router.push("/games/billiards/online");
+  }
 
-if (room.status === "WAITING") {
-  const TC_LABELS: Record<string,string> = {
-    none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min",
-    "600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
-  };
-
-  const hostRank = room.hostElo ? getRank(room.hostElo) : null;
-  const guestRank = room.guestElo ? getRank(room.guestElo) : null;
-
-  return (
-    <WaitingLobby
-      gameName="Billiards Room"
-      subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
-      rated={room.rated}
-      isHost={room.myRole === "host"}
-      myRole={room.myRole as "host" | "guest"}
-      host={{
-        name: room.hostName,
-        image: room.hostImage,
-        elo: room.hostElo,
-        rankEmoji: hostRank?.emoji,
-        rankLabel: hostRank?.label,
-        rankColor: hostRank?.color,
-      }}
-      guest={room.guestId ? {
-        name: room.guestName,
-        image: room.guestImage,
-        elo: room.guestElo,
-        ready: room.guestReady,
-        rankEmoji: guestRank?.emoji,
-        rankLabel: guestRank?.label,
-        rankColor: guestRank?.color,
-      } : null}
-      guestReady={room.guestReady}
-      onLeave={room.myRole === "host"
-        ? async () => { await fetch(`/api/billiards-rooms/${roomId}`, { method: "DELETE" }); router.push("/games/billiards/online"); }
-        : () => router.push("/games/billiards/online")}
-      onReady={() => {handleReady()}}
-      onStart={() => {handleStart()}}
-      startDisabled={!room.guestId || !room.guestReady}
-      startLabel={!room.guestId ? "Waiting for opponent…" : "Opponent not ready"}
-    />
-  );
-}
+  // ── WAITING ────────────────────────────────────────────────────────────────
+  if (room.status === "WAITING") {
+    return (
+      <main className="max-w-lg mx-auto px-4 py-12">
+        <div className="flex items-center gap-3 mb-6">
+          {room.myRole === "host"
+            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave</button>
+            : <button onClick={() => router.push("/games/billiards/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
+        </div>
+        <div className="bg-[var(--bg-elevated)] border mb-6 border-[var(--border-subtle)] rounded-2xl p-6">
+          <h1 className="text-xl font-display font-extrabold text-[var(--text-primary)] mb-1">🎱 Billiards Room</h1>
+          {room.timeControl !== "none" && (
+            <p className="text-xs text-[var(--text-muted)] mb-4">{TC_LABELS[room.timeControl] ?? room.timeControl}</p>
+          )}
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-secondary)]">
+              {room.hostImage ? <Image src={room.hostImage} alt="" width={36} height={36} className="rounded-full" />
+                : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold">{room.hostName?.[0] ?? "?"}</div>}
+              <div className="flex-1">
+                <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Host"}</p>
+                <p className="text-xs text-[var(--text-muted)]">Host {room.hostElo ? `· ELO ${room.hostElo}` : ""}</p>
+              </div>
+              <CheckCircle2 size={18} className="text-green-400" />
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-secondary)]">
+              {room.guestId ? (<>
+                {room.guestImage ? <Image src={room.guestImage} alt="" width={36} height={36} className="rounded-full" />
+                  : <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold">{room.guestName?.[0] ?? "?"}</div>}
+                <div className="flex-1">
+                  <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Guest"}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Guest {room.guestElo ? `· ELO ${room.guestElo}` : ""}</p>
+                </div>
+                {room.guestReady ? <CheckCircle2 size={18} className="text-green-400" /> : <span className="text-xs text-[var(--text-muted)]">Not ready</span>}
+              </>) : (<>
+                <div className="w-9 h-9 rounded-full bg-[var(--bg-tertiary)] border-2 border-dashed border-[var(--border-subtle)] flex items-center justify-center">
+                  <span className="text-[var(--text-muted)] text-lg">?</span>
+                </div>
+                <p className="text-[var(--text-muted)] text-sm">Waiting for opponent…</p>
+                <Loader2 size={16} className="animate-spin text-[var(--text-muted)] ml-auto" />
+              </>)}
+            </div>
+          </div>
+          {isGuest && (
+            <button onClick={handleReady}
+              className={["flex items-center gap-2 px-5 py-2.5 rounded-xl font-display font-bold text-sm transition-all",
+                room.guestReady ? "bg-green-500/20 border border-green-500/40 text-green-400 hover:bg-green-500/10"
+                  : "bg-[var(--accent-orange)] text-white hover:opacity-90"].join(" ")}>
+              <CheckCircle2 size={15} />{room.guestReady ? "Cancel Ready" : "Ready!"}
+            </button>
+          )}
+          {isHost && (
+            <button onClick={handleStart} disabled={!room.guestId || !room.guestReady}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-40">
+              Start Game
+            </button>
+          )}
+        </div>
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
+          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
+              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // ── FINISHED ────────────────────────────────────────────────────────────────
   if (room.status === "FINISHED") {
@@ -739,28 +750,30 @@ if (room.status === "WAITING") {
       <div className="flex flex-col xl:flex-row gap-3 p-3 xl:h-full items-center justify-center">
 
         {/* Table column */}
-        <div className="flex flex-col items-center gap-2 shrink-0">
-          {/* Opponent */}
+        <div className="flex flex-col items-center gap-2 shrink-0 w-full xl:w-auto">
+          {/* Opponent row */}
           <div className="flex items-center justify-between w-full px-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {(isHost ? room.guestImage : room.hostImage)
-                ? <Image src={(isHost ? room.guestImage : room.hostImage)!} alt="" width={28} height={28} className="rounded-full" />
-                : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">{oppName?.[0] ?? "?"}</div>}
-              <span className="text-sm font-display font-semibold text-[var(--text-secondary)]">{oppName ?? "Opponent"}</span>
-              {oppRank && <span className="text-[0.6rem] font-bold px-1 rounded-full" style={{ background: `${oppRank.color}22`, color: oppRank.color }}>{oppRank.label}</span>}
-              {oppGroup && <span className="text-xs text-[var(--text-muted)]">{oppGroup} ({oppRemaining.length})</span>}
-              {opponentAnimating && <span className="text-xs text-blue-400 animate-pulse font-bold">● shooting…</span>}
+                ? <Image src={(isHost ? room.guestImage : room.hostImage)!} alt="" width={28} height={28} className="rounded-full shrink-0" />
+                : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0">{oppName?.[0] ?? "?"}</div>}
+              <span className="text-sm font-display font-semibold text-[var(--text-secondary)] truncate">{oppName ?? "Opponent"}</span>
+              {oppRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${oppRank.color}22`, color: oppRank.color }}>{oppRank.label}</span>}
+              {oppGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{oppGroup} ({oppRemaining.length})</span>}
+              {opponentAnimating && <span className="text-xs text-blue-400 animate-pulse font-bold shrink-0">● shooting…</span>}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {room.timeControl !== "none" && (
-                <span className={["font-mono text-sm font-bold", room.currentTurn !== room.myRole ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)]"].join(" ")}>{fmtMs(oppTimeMs)}</span>
+                <span className={["font-mono text-sm font-bold tabular-nums",
+                  room.currentTurn !== room.myRole ? (isPerMove && (oppTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
+                ].join(" ")}>{fmtMs(oppTimeMs)}</span>
               )}
               {room.currentTurn !== room.myRole && !opponentAnimating && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
             </div>
           </div>
 
           {/* Canvas */}
-          <div style={{ position: "relative", width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale }}>
+          <div style={{ position: "relative", width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale, maxWidth: "100%" }}>
             <canvas
               ref={canvasRef}
               style={{ width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale, cursor: isMyTurnNow ? "crosshair" : "default", touchAction: "none", display: "block" }}
@@ -783,24 +796,26 @@ if (room.status === "WAITING") {
 
           {/* My row */}
           <div className="flex items-center justify-between w-full px-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-display font-semibold text-[var(--text-primary)]">{myName ?? "You"}</span>
-              {myRank && <span className="text-[0.6rem] font-bold px-1 rounded-full" style={{ background: `${myRank.color}22`, color: myRank.color }}>{myRank.label}</span>}
-              {myGroup && <span className="text-xs text-[var(--text-muted)]">{myGroup} ({myRemaining.length})</span>}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{myName ?? "You"}</span>
+              {myRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${myRank.color}22`, color: myRank.color }}>{myRank.label}</span>}
+              {myGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{myGroup} ({myRemaining.length})</span>}
               {isMyTurnNow && displayState.phase === "cue_in_hand" && !cueHandPos && (
-                <span className="text-xs text-yellow-400 font-bold">Click to place cue ball</span>
+                <span className="text-xs text-yellow-400 font-bold shrink-0">Place cue ball</span>
               )}
               {isMyTurnNow && displayState.phase !== "cue_in_hand" && power > 0 && (
-                <span className={["text-xs font-bold", power >= 0.85 ? "text-red-400" : power >= 0.6 ? "text-orange-400" : power >= 0.3 ? "text-yellow-400" : "text-green-400"].join(" ")}>
-                  Power: {Math.round(power * 100)}%
+                <span className={["text-xs font-bold shrink-0", power >= 0.85 ? "text-red-400" : power >= 0.6 ? "text-orange-400" : power >= 0.3 ? "text-yellow-400" : "text-green-400"].join(" ")}>
+                  {Math.round(power * 100)}%
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {room.timeControl !== "none" && (
-                <span className={["font-mono text-sm font-bold", isMyTurn ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)]"].join(" ")}>{fmtMs(myTimeMs)}</span>
+                <span className={["font-mono text-sm font-bold tabular-nums",
+                  isMyTurn ? (isPerMove && (myTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
+                ].join(" ")}>{fmtMs(myTimeMs)}</span>
               )}
-              {isMyTurnNow && power === 0 && <span className="text-xs text-green-400 font-bold">● Your turn — drag to shoot</span>}
+              {isMyTurnNow && power === 0 && <span className="text-xs text-green-400 font-bold">● Your turn</span>}
               {submitting && <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />}
             </div>
           </div>
@@ -825,9 +840,12 @@ if (room.status === "WAITING") {
 
         {/* Side panel */}
         <div className="flex flex-col gap-3 w-full max-w-xs xl:w-64 xl:self-stretch py-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ConnectionBadge status={connStatus} />
             {room.spectatorCount > 0 && <SpectatorBadge count={room.spectatorCount} />}
+            {room.timeControl !== "none" && (
+              <span className="text-[0.65rem] text-[var(--text-muted)] font-mono">{TC_LABELS[room.timeControl] ?? room.timeControl}</span>
+            )}
             <Link href="/games/billiards/online" className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs">← Lobby</Link>
           </div>
 

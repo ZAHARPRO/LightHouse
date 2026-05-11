@@ -16,7 +16,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!room.guestReady) return NextResponse.json({ error: "Opponent not ready" }, { status: 400 });
 
   const state = initialState();
-  const timeSec = room.timeControl !== "none" ? parseInt(room.timeControl) * 1000 : null;
+  const isPerMove = room.timeControl.startsWith("pm");
+  const budget = isPerMove
+    ? parseInt(room.timeControl.slice(2)) * 1000
+    : room.timeControl !== "none" ? parseInt(room.timeControl) * 1000 : null;
 
   await prisma.billiardsRoom.update({
     where: { id },
@@ -28,8 +31,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       phase: "playing",
       hostGroup: null,
       guestGroup: null,
-      hostTimeMs: timeSec,
-      guestTimeMs: timeSec,
+      hostTimeMs: budget,
+      guestTimeMs: budget,
       lastMoveAt: new Date(),
       startedAt: new Date(),
     },

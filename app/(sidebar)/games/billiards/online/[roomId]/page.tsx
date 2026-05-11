@@ -277,6 +277,7 @@ export default function BilliardsOnlineRoom() {
   const cueCanvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const didPullBackRef = useRef(false);
   const lastAnimatedCountRef = useRef(0);
   // Prevents replaying existing shots when first joining a room
   const initializedAnimRef = useRef(false);
@@ -517,11 +518,13 @@ export default function BilliardsOnlineRoom() {
       const cy = Math.max(PF_TOP + BALL_R, Math.min(PF_BOTTOM - BALL_R, my));
       setCueHandPos({ x: cx, y: cy }); setHoverCuePos(null);
       canvasRef.current?.setPointerCapture(e.pointerId);
+      didPullBackRef.current = false;
       dragOriginRef.current = { x: mx, y: my }; setAimAngle(Math.PI); return;
     }
     const cue = displayState.balls.find(b => b.id === 0 && !b.pocketed);
     if (!cue) return;
     canvasRef.current?.setPointerCapture(e.pointerId);
+    didPullBackRef.current = false;
     dragOriginRef.current = { x: mx, y: my };
     setAimAngle(Math.atan2(my - cue.y, mx - cue.x) + Math.PI);
   }
@@ -545,9 +548,12 @@ export default function BilliardsOnlineRoom() {
     }
     const dx = mx - dragOriginRef.current.x, dy = my - dragOriginRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // Cancel drag when pullback returns to near-zero — lets player restart cleanly
-    if (dist < 5 && power > 0) {
-      dragOriginRef.current = null; setPullback(0); setPower(0); return;
+    if (dist >= 20) didPullBackRef.current = true;
+    if (dist < 5 && didPullBackRef.current) {
+      dragOriginRef.current = null;
+      didPullBackRef.current = false;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+      setPullback(0); setPower(0); return;
     }
     if (dist > 1) {
       setAimAngle(Math.atan2(-dy, -dx));

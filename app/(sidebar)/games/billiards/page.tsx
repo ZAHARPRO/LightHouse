@@ -259,6 +259,7 @@ export default function BilliardsBotPage() {
   const cueCanvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const didPullBackRef = useRef(false);
   const triggerBotRef = useRef<(state: BilliardsState) => void>(() => {});
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
@@ -492,6 +493,7 @@ export default function BilliardsBotPage() {
       // Capture so the player can immediately drag to aim in one gesture
       canvasRef.current?.setPointerCapture(e.pointerId);
       dragOriginRef.current = { x: mx, y: my };
+      didPullBackRef.current = false;
       setAimAngle(Math.PI);
       return;
     }
@@ -500,6 +502,7 @@ export default function BilliardsBotPage() {
     if (!cue) return;
     canvasRef.current?.setPointerCapture(e.pointerId);
     dragOriginRef.current = { x: mx, y: my };
+    didPullBackRef.current = false;
     setAimAngle(Math.atan2(my - cue.y, mx - cue.x) + Math.PI);
   }
 
@@ -525,9 +528,13 @@ export default function BilliardsBotPage() {
     const dx = mx - dragOriginRef.current.x;
     const dy = my - dragOriginRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // Cancel drag when pullback returns to near-zero — lets player restart cleanly
-    if (dist < 5 && power > 0) {
-      dragOriginRef.current = null; setPullback(0); setPower(0); return;
+    if (dist >= 20) didPullBackRef.current = true;
+    // Release cue when pullback returns to near-zero after a real pull
+    if (dist < 5 && didPullBackRef.current) {
+      dragOriginRef.current = null;
+      didPullBackRef.current = false;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+      setPullback(0); setPower(0); return;
     }
     if (dist > 1) {
       setAimAngle(Math.atan2(-dy, -dx));

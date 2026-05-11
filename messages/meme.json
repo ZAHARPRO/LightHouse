@@ -44,7 +44,12 @@
     "invalidCredentials": "невірна пошта або пароль лол",
     "errorTitle": "щось зламалось 💀",
     "errorMessage": "щось пішло не так під час входу. спробуй ще раз.",
-    "backToSignIn": "назад до входу"
+    "backToSignIn": "назад до входу",
+    "requiredTitle": "ти хто такий 👀",
+    "requiredDesc": "ця сторінка тільки для своїх. тебе перекинуть на вхід через",
+    "requiredSec": "сек",
+    "requiredBtn": "зайти зараз",
+    "requiredBack": "← назад"
   },
   "feed": {
     "title": "мем стрічка",

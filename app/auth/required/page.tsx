@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { LogIn, Lock } from "lucide-react";
 
 export default function AuthRequired() {
+  const t = useTranslations("auth");
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
@@ -15,9 +17,13 @@ export default function AuthRequired() {
       router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       return;
     }
-    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSeconds(s => s - 1), 1000);
+    return () => clearTimeout(timer);
   }, [seconds, router, callbackUrl]);
+
+  function goSignIn() {
+    router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
@@ -27,16 +33,16 @@ export default function AuthRequired() {
         </div>
 
         <h1 className="text-xl font-display font-extrabold text-[var(--text-primary)] mb-2">
-          Требуется авторизация
+          {t("requiredTitle")}
         </h1>
         <p className="text-sm text-[var(--text-muted)] mb-6">
-          Эта страница доступна только зарегистрированным пользователям.
-          Вы будете перенаправлены на страницу входа через{" "}
-          <span className="font-bold text-[var(--accent-orange)]">{seconds}</span> сек.
+          {t("requiredDesc")}{" "}
+          <span className="font-bold text-[var(--accent-orange)]">{seconds}</span>{" "}
+          {t("requiredSec")}.
         </p>
 
         {/* Countdown ring */}
-        <div className="flex justify-center mb-6">
+        <div className="relative flex justify-center mb-6">
           <svg width="56" height="56" className="-rotate-90">
             <circle cx="28" cy="28" r="24" fill="none" stroke="var(--border-subtle)" strokeWidth="4" />
             <circle
@@ -48,23 +54,23 @@ export default function AuthRequired() {
               className="transition-all duration-1000"
             />
           </svg>
-          <span className="absolute mt-3.5 text-lg font-bold font-mono text-[var(--accent-orange)]">
+          <span className="absolute top-1/2 -translate-y-1/2 text-lg font-bold font-mono text-[var(--accent-orange)]">
             {seconds}
           </span>
         </div>
 
         <button
-          onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`)}
+          onClick={goSignIn}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 transition-opacity"
         >
-          <LogIn size={16} /> Войти сейчас
+          <LogIn size={16} /> {t("requiredBtn")}
         </button>
 
         <button
           onClick={() => router.back()}
           className="mt-3 w-full py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] font-display text-sm hover:text-[var(--text-primary)] transition-colors"
         >
-          ← Назад
+          {t("requiredBack")}
         </button>
       </div>
     </main>

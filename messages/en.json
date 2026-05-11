@@ -44,7 +44,12 @@
     "invalidCredentials": "Invalid email or password.",
     "errorTitle": "Authentication Error",
     "errorMessage": "Something went wrong during sign in. Please try again.",
-    "backToSignIn": "Back to Sign In"
+    "backToSignIn": "Back to Sign In",
+    "requiredTitle": "Sign in required",
+    "requiredDesc": "This page is only available to registered users. You will be redirected to the sign in page in",
+    "requiredSec": "sec",
+    "requiredBtn": "Sign in now",
+    "requiredBack": "← Go back"
   },
   "feed": {
     "title": "Feed",

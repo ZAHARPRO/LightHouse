@@ -102,6 +102,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     shotsJson: room.shotsJson,
     hostTimeMs,
     guestTimeMs,
+    hostDraftPower: room.hostDraftPower,
+    guestDraftPower: room.guestDraftPower,
     winner: liveWinner,
     winReason: liveWinReason,
     startedAt: room.startedAt,

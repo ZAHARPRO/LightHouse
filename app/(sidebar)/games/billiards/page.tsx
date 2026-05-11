@@ -42,6 +42,8 @@ function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   ctx.beginPath(); ctx.moveTo(TABLE_W * 0.25 * scale, PF_TOP * scale);
   ctx.lineTo(TABLE_W * 0.25 * scale, PF_BOTTOM * scale); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.strokeStyle = "#f97316"; ctx.lineWidth = 2.5 * scale;
+  ctx.strokeRect(PF_LEFT * scale, PF_TOP * scale, (PF_RIGHT - PF_LEFT) * scale, (PF_BOTTOM - PF_TOP) * scale);
 }
 
 function drawPockets(ctx: CanvasRenderingContext2D, scale: number) {
@@ -144,7 +146,7 @@ function BallTypeIndicator({ myGroup }: { myGroup: "solids" | "stripes" | null }
   );
 }
 
-function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; remaining: number; scale: number }) {
+function GroupBadge({ group, remainingIds, scale }: { group: "solids" | "stripes"; remainingIds: number[]; scale: number }) {
   const ids = group === "solids" ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
   const sz = Math.max(8, Math.round(11 * scale));
   return (
@@ -153,9 +155,10 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
         {ids.map(id => {
           const color = BALL_COLORS[id] ?? "#888";
           const isStripe = id >= 9;
+          const pocketed = !remainingIds.includes(id);
           return (
-            <div key={id} style={{ width: sz, height: sz, borderRadius: "50%", background: isStripe ? "#f0f0f0" : color, position: "relative", overflow: "hidden", border: "1px solid rgba(0,0,0,0.4)", flexShrink: 0 }}>
-              {isStripe && <div style={{ position: "absolute", top: "27%", left: 0, right: 0, height: "46%", background: color }} />}
+            <div key={id} style={{ width: sz, height: sz, borderRadius: "50%", background: isStripe ? (pocketed ? "#333" : "#f0f0f0") : (pocketed ? "#333" : color), position: "relative", overflow: "hidden", border: "1px solid rgba(0,0,0,0.4)", flexShrink: 0, opacity: pocketed ? 0.25 : 1, transition: "opacity 0.3s, background 0.3s" }}>
+              {isStripe && !pocketed && <div style={{ position: "absolute", top: "27%", left: 0, right: 0, height: "46%", background: color }} />}
             </div>
           );
         })}
@@ -163,7 +166,7 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
       <span className="text-[0.6rem] font-bold uppercase tracking-wide leading-none" style={{ color: "rgba(255,255,255,0.75)" }}>
         {group === "solids" ? "Solids" : "Stripes"}
       </span>
-      <span className={["text-xs font-bold tabular-nums leading-none", remaining === 0 ? "text-green-400" : "text-white"].join(" ")}>{remaining}</span>
+      <span className={["text-xs font-bold tabular-nums leading-none", remainingIds.length === 0 ? "text-green-400" : "text-white"].join(" ")}>{remainingIds.length}</span>
     </div>
   );
 }
@@ -263,6 +266,9 @@ export default function BilliardsBotPage() {
   const triggerBotRef = useRef<(state: BilliardsState) => void>(() => {});
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
+  const botAimInfoRef = useRef<{ angle: number; cx: number; cy: number } | null>(null);
+  const [botAimPullback, setBotAimPullback] = useState(0);
+  const [botAimPower, setBotAimPower] = useState(0);
 
   useEffect(() => { preloadSounds(); }, []);
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); }, []);
@@ -369,6 +375,11 @@ export default function BilliardsBotPage() {
         drawCueStick(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale, pullback * scale, power);
       }
     }
+    // Bot aiming pull-back (before shot)
+    if (botAimInfoRef.current && botAimPullback > 0) {
+      const aim = botAimInfoRef.current;
+      drawCueStick(ctx, aim.cx, aim.cy, aim.angle, scale, botAimPullback * scale, botAimPower);
+    }
     // Animated strike stick (player or opponent) — visible for first 30 frames
     if (animBalls !== null && animShotRef.current && animFrameIdxRef.current < 30) {
       const stick = animShotRef.current;
@@ -379,7 +390,7 @@ export default function BilliardsBotPage() {
       ctx.globalAlpha = 1;
     }
     ctx.restore();
-  }, [scale, aimAngle, pullback, power, status, botThinking, replayIdx, cueHandPos, animBalls, gameState.phase, gameState.turn, gameState.balls]);
+  }, [scale, aimAngle, pullback, power, status, botThinking, replayIdx, cueHandPos, animBalls, gameState.phase, gameState.turn, gameState.balls, botAimPullback, botAimPower]);
 
   // Trigger replay animation when replayIdx changes
   useEffect(() => {
@@ -388,7 +399,7 @@ export default function BilliardsBotPage() {
     if (!rec) return;
     let stateBeforeShot = initialState();
     for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, shots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot);
+    const frames = animateShot(stateBeforeShot, rec.shot, 6);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
@@ -396,10 +407,7 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
     let i = 0;
-    let skipFrame = false;
     function tick() {
-      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; return; }
       setAnimBalls(frames[i++]);
@@ -425,7 +433,7 @@ export default function BilliardsBotPage() {
     };
     setShots(prev => [...prev, rec]);
 
-    const frames = animateShot(state, shot);
+    const frames = animateShot(state, shot, 6);
     const cueBallPos = shot.cueX !== undefined
       ? { x: shot.cueX, y: shot.cueY ?? TABLE_H / 2 }
       : state.balls.find(b => b.id === 0 && !b.pocketed);
@@ -433,10 +441,7 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     cancelAnimationFrame(rafRef.current);
     let i = 0;
-    let skipFrame = false; // 30fps: hold each physics frame for 2 RAF ticks
     function tick() {
-      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) {
         setAnimBalls(null);
@@ -467,7 +472,26 @@ export default function BilliardsBotPage() {
     setTimeout(() => {
       setBotThinking(false);
       const shot = getBotShot(state, difficulty);
-      applyShot(state, shot, "guest");
+      const cueBall = state.balls.find(b => b.id === 0 && !b.pocketed);
+      const cx = shot.cueX ?? cueBall?.x ?? TABLE_W * 0.25;
+      const cy = shot.cueY ?? cueBall?.y ?? TABLE_H / 2;
+      botAimInfoRef.current = { angle: shot.angle, cx, cy };
+      const AIM_MS = 750;
+      const startedAt = Date.now();
+      function aimTick() {
+        const progress = Math.min(1, (Date.now() - startedAt) / AIM_MS);
+        setBotAimPullback(progress * shot.power * MAX_DRAG_PX);
+        setBotAimPower(progress * shot.power);
+        if (progress < 1) {
+          rafRef.current = requestAnimationFrame(aimTick);
+        } else {
+          botAimInfoRef.current = null;
+          setBotAimPullback(0);
+          setBotAimPower(0);
+          applyShot(state, shot, "guest");
+        }
+      }
+      requestAnimationFrame(aimTick);
     }, 500);
   }, [difficulty, applyShot]);
 
@@ -664,7 +688,7 @@ export default function BilliardsBotPage() {
             />
             {myGroup && (
               <div style={{ position: "absolute", top: 6, right: 6, zIndex: 45, pointerEvents: "none" }}>
-                <GroupBadge group={myGroup} remaining={remaining.length} scale={scale} />
+                <GroupBadge group={myGroup} remainingIds={remaining} scale={scale} />
               </div>
             )}
           </div>

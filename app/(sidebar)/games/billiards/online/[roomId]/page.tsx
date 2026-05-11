@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, Flag, CheckCircle2, ChevronLeft, ChevronRight, Trophy, Check, Copy } from "lucide-react";
 import Image from "next/image";
@@ -30,6 +30,7 @@ type RoomData = {
   phase: "playing" | "cue_in_hand";
   ballsJson: string | null; shotsJson: string | null;
   hostTimeMs: number | null; guestTimeMs: number | null;
+  hostDraftPower: number | null; guestDraftPower: number | null;
   winner: string | null; winReason: string | null;
   startedAt: string | null; endedAt: string | null;
   rated: boolean; hostElo: number | null; guestElo: number | null;
@@ -64,6 +65,8 @@ function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 0.7 * scale;
   ctx.beginPath(); ctx.moveTo(TABLE_W * 0.25 * scale, PF_TOP * scale); ctx.lineTo(TABLE_W * 0.25 * scale, PF_BOTTOM * scale); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.strokeStyle = "#f97316"; ctx.lineWidth = 2.5 * scale;
+  ctx.strokeRect(PF_LEFT * scale, PF_TOP * scale, (PF_RIGHT - PF_LEFT) * scale, (PF_BOTTOM - PF_TOP) * scale);
 }
 function drawPockets(ctx: CanvasRenderingContext2D, scale: number) {
   ctx.fillStyle = "#0a0a0a";
@@ -166,7 +169,7 @@ function BallTypeIndicator({ myGroup }: { myGroup: "solids" | "stripes" | null }
   );
 }
 
-function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; remaining: number; scale: number }) {
+function GroupBadge({ group, remainingIds, scale }: { group: "solids" | "stripes"; remainingIds: number[]; scale: number }) {
   const ids = group === "solids" ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
   const sz = Math.max(8, Math.round(11 * scale));
   return (
@@ -175,9 +178,10 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
         {ids.map(id => {
           const color = BALL_COLORS[id] ?? "#888";
           const isStripe = id >= 9;
+          const pocketed = !remainingIds.includes(id);
           return (
-            <div key={id} style={{ width: sz, height: sz, borderRadius: "50%", background: isStripe ? "#f0f0f0" : color, position: "relative", overflow: "hidden", border: "1px solid rgba(0,0,0,0.4)", flexShrink: 0 }}>
-              {isStripe && <div style={{ position: "absolute", top: "27%", left: 0, right: 0, height: "46%", background: color }} />}
+            <div key={id} style={{ width: sz, height: sz, borderRadius: "50%", background: isStripe ? (pocketed ? "#333" : "#f0f0f0") : (pocketed ? "#333" : color), position: "relative", overflow: "hidden", border: "1px solid rgba(0,0,0,0.4)", flexShrink: 0, opacity: pocketed ? 0.25 : 1, transition: "opacity 0.3s, background 0.3s" }}>
+              {isStripe && !pocketed && <div style={{ position: "absolute", top: "27%", left: 0, right: 0, height: "46%", background: color }} />}
             </div>
           );
         })}
@@ -185,7 +189,7 @@ function GroupBadge({ group, remaining, scale }: { group: "solids" | "stripes"; 
       <span className="text-[0.6rem] font-bold uppercase tracking-wide leading-none" style={{ color: "rgba(255,255,255,0.75)" }}>
         {group === "solids" ? "Solids" : "Stripes"}
       </span>
-      <span className={["text-xs font-bold tabular-nums leading-none", remaining === 0 ? "text-green-400" : "text-white"].join(" ")}>{remaining}</span>
+      <span className={["text-xs font-bold tabular-nums leading-none", remainingIds.length === 0 ? "text-green-400" : "text-white"].join(" ")}>{remainingIds.length}</span>
     </div>
   );
 }
@@ -278,6 +282,7 @@ export default function BilliardsOnlineRoom() {
   const rafRef = useRef<number>(0);
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
   const didPullBackRef = useRef(false);
+  const tensionThrottleRef = useRef(0);
   const lastAnimatedCountRef = useRef(0);
   // Prevents replaying existing shots when first joining a room
   const initializedAnimRef = useRef(false);
@@ -295,10 +300,7 @@ export default function BilliardsOnlineRoom() {
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     let i = 0;
-    let skipFrame = false; // 30fps: show each physics frame for 2 RAF ticks
     function tick() {
-      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
@@ -361,13 +363,17 @@ export default function BilliardsOnlineRoom() {
   useEffect(() => {
     if (!room || room.status !== "PLAYING" || room.timeControl === "none") return;
     const t = setInterval(() => {
+      if (animatingRef.current) return; // wait for opponent animation to finish
       if (room.currentTurn === "host") setLiveHostMs(p => p !== null ? Math.max(0, p - 100) : null);
       else setLiveGuestMs(p => p !== null ? Math.max(0, p - 100) : null);
     }, 100);
     return () => clearInterval(t);
   }, [room?.status, room?.currentTurn, room?.timeControl]);
 
-  const shots: ShotRecord[] = room?.shotsJson ? decodeShots(room.shotsJson) : [];
+  const shots = useMemo<ShotRecord[]>(
+    () => (room?.shotsJson ? decodeShots(room.shotsJson) : []),
+    [room?.shotsJson],
+  );
 
   // Animate shots that arrived from the server (opponent moves)
   useEffect(() => {
@@ -384,7 +390,7 @@ export default function BilliardsOnlineRoom() {
     for (let i = 0; i < lastAnimatedCountRef.current; i++) state = simulateShot(state, shots[i].shot).newState;
     for (let idx = lastAnimatedCountRef.current; idx < shots.length; idx++) {
       const rec = shots[idx];
-      const frames = animateShot(state, rec.shot);
+      const frames = animateShot(state, rec.shot, 6);
       const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0 ? "bl_pocket"
         : rec.foul ? "bl_scratch" : "bl_ball_hit";
       enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power);
@@ -393,14 +399,19 @@ export default function BilliardsOnlineRoom() {
     lastAnimatedCountRef.current = shots.length;
   }, [room?.shotsJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep a ref to shots so replay effect always sees the latest value without re-running
+  const shotsRef = useRef(shots);
+  useEffect(() => { shotsRef.current = shots; }, [shots]);
+
   // Replay animation
   useEffect(() => {
     if (replayIdx === null) return;
-    const rec = shots[replayIdx];
+    const currentShots = shotsRef.current;
+    const rec = currentShots[replayIdx];
     if (!rec) return;
     let stateBeforeShot = initialState();
-    for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, shots[i].shot).newState;
-    const frames = animateShot(stateBeforeShot, rec.shot);
+    for (let i = 0; i < replayIdx; i++) stateBeforeShot = simulateShot(stateBeforeShot, currentShots[i].shot).newState;
+    const frames = animateShot(stateBeforeShot, rec.shot, 6);
     const cueBallPos = rec.shot.cueX !== undefined
       ? { x: rec.shot.cueX, y: rec.shot.cueY ?? TABLE_H / 2 }
       : stateBeforeShot.balls.find(b => b.id === 0 && !b.pocketed);
@@ -409,10 +420,7 @@ export default function BilliardsOnlineRoom() {
     cancelAnimationFrame(rafRef.current);
     animatingRef.current = true;
     let i = 0;
-    let skipFrame = false;
     function tick() {
-      if (skipFrame) { skipFrame = false; rafRef.current = requestAnimationFrame(tick); return; }
-      skipFrame = true;
       animFrameIdxRef.current++;
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; animatingRef.current = false; return; }
       setAnimBalls(frames[i++]);
@@ -421,7 +429,7 @@ export default function BilliardsOnlineRoom() {
     requestAnimationFrame(tick);
   }, [replayIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const displayState: BilliardsState = (() => {
+  const displayState = useMemo<BilliardsState>(() => {
     if (replayIdx !== null && shots.length > 0) {
       let s = initialState();
       for (let i = 0; i <= replayIdx && i < shots.length; i++) s = simulateShot(s, shots[i].shot).newState;
@@ -429,7 +437,7 @@ export default function BilliardsOnlineRoom() {
     }
     if (room?.ballsJson) return deserializeState(room.ballsJson);
     return initialState();
-  })();
+  }, [replayIdx, room?.ballsJson, shots]);
   const ballsToDraw = animBalls ?? displayState.balls;
 
   // Main table canvas — DPR-scaled for sharp rendering
@@ -447,7 +455,7 @@ export default function BilliardsOnlineRoom() {
 
     const isMyTurn = room?.myRole !== "spectator" && room?.currentTurn === room?.myRole
       && room?.status === "PLAYING" && replayIdx === null && !animBalls;
-    const cueBall = ballsToDraw.find(b => b.id === 0 && !b.pocketed);
+    const cueBall = ballsToDraw.find((b: Ball) => b.id === 0 && !b.pocketed);
 
     if (isMyTurn && displayState.phase === "cue_in_hand") {
       ctx.save();
@@ -462,7 +470,7 @@ export default function BilliardsOnlineRoom() {
 
     for (const b of ballsToDraw) { if (!b.pocketed) drawBall(ctx, b.id, b.x, b.y, scale); }
 
-    if (isMyTurn && displayState.phase === "cue_in_hand" && cueHandPos && !ballsToDraw.find(b => b.id === 0 && !b.pocketed)) {
+    if (isMyTurn && displayState.phase === "cue_in_hand" && cueHandPos && !ballsToDraw.find((b: Ball) => b.id === 0 && !b.pocketed)) {
       drawBall(ctx, 0, cueHandPos.x, cueHandPos.y, scale);
       ctx.save();
       ctx.beginPath(); ctx.arc(cueHandPos.x * scale, cueHandPos.y * scale, (BALL_R + 5) * scale, 0, Math.PI * 2);
@@ -487,7 +495,7 @@ export default function BilliardsOnlineRoom() {
     const isMyTurn = room?.myRole !== "spectator" && room?.currentTurn === room?.myRole
       && room?.status === "PLAYING" && replayIdx === null && !animBalls;
     if (isMyTurn) {
-      const cueBall = displayState.balls.find(b => b.id === 0 && !b.pocketed);
+      const cueBall = displayState.balls.find((b: Ball) => b.id === 0 && !b.pocketed);
       if (cueBall && displayState.phase !== "cue_in_hand") drawCueStick(ctx, cueBall.x, cueBall.y, aimAngle, scale, pullback * scale, power);
       if (displayState.phase === "cue_in_hand" && cueHandPos) drawCueStick(ctx, cueHandPos.x, cueHandPos.y, aimAngle, scale, pullback * scale, power);
     }
@@ -521,7 +529,7 @@ export default function BilliardsOnlineRoom() {
       didPullBackRef.current = false;
       dragOriginRef.current = { x: mx, y: my }; setAimAngle(Math.PI); return;
     }
-    const cue = displayState.balls.find(b => b.id === 0 && !b.pocketed);
+    const cue = displayState.balls.find((b: Ball) => b.id === 0 && !b.pocketed);
     if (!cue) return;
     canvasRef.current?.setPointerCapture(e.pointerId);
     didPullBackRef.current = false;
@@ -541,7 +549,7 @@ export default function BilliardsOnlineRoom() {
         }
         return;
       }
-      const cue = displayState.balls.find(b => b.id === 0 && !b.pocketed);
+      const cue = displayState.balls.find((b: Ball) => b.id === 0 && !b.pocketed);
       if (!cue) return;
       setAimAngle(Math.atan2(my - cue.y, mx - cue.x) + Math.PI);
       return;
@@ -558,7 +566,16 @@ export default function BilliardsOnlineRoom() {
     if (dist > 1) {
       setAimAngle(Math.atan2(-dy, -dx));
       const clamped = Math.min(dist, MAX_DRAG_PX);
-      setPullback(clamped * scale); setPower(clamped / MAX_DRAG_PX);
+      const p = clamped / MAX_DRAG_PX;
+      setPullback(clamped * scale); setPower(p);
+      const now = Date.now();
+      if (now - tensionThrottleRef.current > 150) {
+        tensionThrottleRef.current = now;
+        fetch(`/api/billiards-rooms/${roomId}/tension`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ power: p }),
+        }).catch(() => {});
+      }
     }
   }
 
@@ -580,7 +597,7 @@ export default function BilliardsOnlineRoom() {
       ...(displayState.phase === "cue_in_hand" ? { cueX: cueHandPos?.x ?? TABLE_W * 0.25, cueY: cueHandPos?.y ?? TABLE_H / 2 } : {}),
     };
     setPower(0); setPullback(0); setCueHandPos(null);
-    const frames = animateShot(displayState, shot);
+    const frames = animateShot(displayState, shot, 6);
     lastAnimatedCountRef.current++;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power);
     setSubmitting(true);
@@ -617,8 +634,9 @@ export default function BilliardsOnlineRoom() {
   const myEloDelta = isHost ? room.hostEloDelta : room.guestEloDelta;
   const myGroup    = isHost ? room.hostGroup    : room.guestGroup;
   const oppGroup   = isHost ? room.guestGroup   : room.hostGroup;
-  const myTimeMs   = isHost ? liveHostMs  : liveGuestMs;
-  const oppTimeMs  = isHost ? liveGuestMs : liveHostMs;
+  const myTimeMs      = isHost ? liveHostMs  : liveGuestMs;
+  const oppTimeMs     = isHost ? liveGuestMs : liveHostMs;
+  const oppDraftPower = isHost ? room.guestDraftPower : room.hostDraftPower;
   const myRank  = myElo  ? getRank(myElo)  : null;
   const oppRank = oppElo ? getRank(oppElo) : null;
   const myRemaining  = myGroup  ? remainingBalls(displayState, myGroup)  : [];
@@ -777,6 +795,20 @@ export default function BilliardsOnlineRoom() {
               {room.currentTurn !== room.myRole && !opponentAnimating && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
             </div>
           </div>
+          {/* Opponent tension bar */}
+          {oppDraftPower !== null && oppDraftPower > 0 && room.currentTurn !== room.myRole && !opponentAnimating && (
+            <div className="flex items-center gap-2 w-full px-1">
+              <span className="text-[0.65rem] text-[var(--text-muted)] shrink-0">tension</span>
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--bg-secondary)] overflow-hidden">
+                <div className="h-full rounded-full transition-[width] duration-100"
+                  style={{ width: `${oppDraftPower * 100}%`, background: oppDraftPower >= 0.85 ? "#f87171" : oppDraftPower >= 0.6 ? "#fb923c" : oppDraftPower >= 0.3 ? "#facc15" : "#4ade80" }} />
+              </div>
+              <span className="text-[0.65rem] font-mono font-bold w-7 text-right shrink-0"
+                style={{ color: oppDraftPower >= 0.85 ? "#f87171" : oppDraftPower >= 0.6 ? "#fb923c" : oppDraftPower >= 0.3 ? "#facc15" : "#4ade80" }}>
+                {Math.round(oppDraftPower * 100)}%
+              </span>
+            </div>
+          )}
 
           {/* Canvas */}
           <div style={{ position: "relative", width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale, maxWidth: "100%" }}>
@@ -795,7 +827,7 @@ export default function BilliardsOnlineRoom() {
             />
             {myGroup && (
               <div style={{ position: "absolute", top: 6, right: 6, zIndex: 45, pointerEvents: "none" }}>
-                <GroupBadge group={myGroup} remaining={myRemaining.length} scale={scale} />
+                <GroupBadge group={myGroup} remainingIds={myRemaining} scale={scale} />
               </div>
             )}
           </div>

@@ -2,7 +2,7 @@
 export const TABLE_W   = 700;
 export const TABLE_H   = 350;
 export const BALL_R    = 14;
-export const POCKET_R  = 19;
+export const POCKET_R  = 26;
 export const CUSHION   = 30; // inset from outer edge
 
 // Playfield bounds (inside cushions)
@@ -268,6 +268,13 @@ function stepPhysics(balls: Ball[]): void {
       b.vx *= f;
       b.vy *= f;
     }
+  }
+
+  // Hard-clamp: ball-ball collisions after the wall check can push a ball through the boundary
+  for (const b of balls) {
+    if (b.pocketed || nearCorner(b.x, b.y)) continue;
+    b.x = Math.max(PF_LEFT + BALL_R, Math.min(PF_RIGHT - BALL_R, b.x));
+    b.y = Math.max(PF_TOP + BALL_R, Math.min(PF_BOTTOM - BALL_R, b.y));
   }
 }
 

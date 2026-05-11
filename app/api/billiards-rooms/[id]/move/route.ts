@@ -51,6 +51,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     guestGroup: result.newState.guestGroup,
     phase: result.newState.phase,
     lastMoveAt: new Date(),
+    hostDraftPower: null,
+    guestDraftPower: null,
   };
 
   // Time control

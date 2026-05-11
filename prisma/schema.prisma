@@ -824,6 +824,8 @@ model BilliardsRoom {
   hostTimeMs Int?
   guestTimeMs Int?
   lastMoveAt DateTime?
+  hostDraftPower Float?
+  guestDraftPower Float?
 
   startedAt DateTime?
   endedAt   DateTime?

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PROTECTED = [
-  "/profile", "/feed", "/chat","/dm","/music", "/upload",
+  "/profile", "/chat","/dm","/music", "/upload",
   "/games/chess/online",
   "/games/checkers/online",
   "/games/billiards/online",
@@ -21,7 +21,9 @@ export default function middleware(req: NextRequest) {
       req.cookies.get("__Secure-authjs.session-token");
 
     if (!token) {
-      return NextResponse.redirect(new URL("/auth/signin", req.url));
+      const url = new URL("/auth/required", req.url);
+      url.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(url);
     }
   }
 

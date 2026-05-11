@@ -2,7 +2,7 @@
 export const TABLE_W   = 700;
 export const TABLE_H   = 350;
 export const BALL_R    = 14;
-export const POCKET_R  = 26;
+export const POCKET_R  = 28;
 export const CUSHION   = 30; // inset from outer edge
 
 // Playfield bounds (inside cushions)

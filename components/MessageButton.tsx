@@ -2,12 +2,44 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Lock } from "lucide-react";
 import { getOrCreateDMConversation } from "@/actions/dm";
+import Link from "next/link";
 
-export default function MessageButton({ targetId }: { targetId: string }) {
+type Props = {
+  targetId: string;
+  myTier?: string;
+};
+
+export default function MessageButton({ targetId, myTier }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+
+  const isElite = myTier === "ELITE";
+
+  if (!isElite) {
+    return (
+      <Link
+        href="/subscriptions"
+        title="Elite plan required"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: "0.4rem",
+          padding: "0.45rem 1.1rem", borderRadius: 8,
+          fontSize: "0.875rem", fontFamily: "var(--font-display)", fontWeight: 600,
+          background: "var(--bg-elevated)", color: "var(--text-muted)",
+          border: "1px solid var(--border-subtle)",
+          textDecoration: "none", cursor: "pointer",
+          opacity: 0.7,
+        }}
+      >
+        <Lock size={13} />
+        Message
+        <span style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 700, marginLeft: 2 }}>
+          Elite
+        </span>
+      </Link>
+    );
+  }
 
   async function handleClick() {
     if (loading) return;

@@ -20,7 +20,8 @@ const GAMES = [
   { key: "chess",       label: "♟ Chess" },
   { key: "minesweeper", label: "💣 Minesweeper" },
   { key: "checkers",    label: "⛳ Checkers" },
-  { key: "battleship", label: "⚓ Battleship" }
+  { key: "battleship", label: "⚓ Battleship" },
+  { key: "billiards",   label: "🎱 Billiards" },
 ] as const;
 
 type GameKey = typeof GAMES[number]["key"];

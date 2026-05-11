@@ -20,6 +20,14 @@ export async function getOrCreateDMConversation(otherUserId: string) {
   const me = session.user.id;
   if (me === otherUserId) return { error: "Cannot message yourself" };
 
+  const sender = await prisma.user.findUnique({
+    where: { id: me },
+    select: { tier: true },
+  });
+  if (!sender || sender.tier !== "ELITE") {
+    return { error: "Elite plan required to send direct messages" };
+  }
+
   const [user1Id, user2Id] = sortIds(me, otherUserId);
 
   const conv = await prisma.directConversation.upsert({

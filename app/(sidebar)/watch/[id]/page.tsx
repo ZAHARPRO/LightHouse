@@ -14,6 +14,7 @@ import LikeButtons from "@/components/LikeButtons";
 import CommentsSection from "@/components/CommentsSection";
 import ReportButton from "@/components/ReportButton";
 import UserAvatar from "@/components/UserAvatar";
+import DownloadVideoButton from "@/components/DownloadVideoButton";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -76,6 +77,15 @@ export default async function WatchPage({
   if (!video) notFound();
 
   const isLocked = video.isPremium && (!session);
+
+  let viewerTier: string | null = null;
+  if (session?.user?.id) {
+    const viewer = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { tier: true },
+    });
+    viewerTier = viewer?.tier ?? null;
+  }
 
   let isFollowing = false;
   const isMe = session?.user?.id === video.author.id;
@@ -276,6 +286,11 @@ export default async function WatchPage({
               initialUserReaction={userReaction}
               isOwner={isMe}
               isLoggedIn={!!session?.user}
+            />
+            <DownloadVideoButton
+              videoId={id}
+              videoTitle={video.title}
+              userTier={viewerTier}
             />
           </div>
 

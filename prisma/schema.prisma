@@ -32,8 +32,9 @@ model User {
   banReason       String?
   bannedAt        DateTime?
   hintPoints      Int       @default(5)
-  lastAdWatchedAt DateTime?
-  createdAt       DateTime  @default(now())
+  lastAdWatchedAt          DateTime?
+  lastMonthlyPointsClaim   DateTime?
+  createdAt                DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   accounts      Account[]
@@ -479,6 +480,7 @@ enum RewardType {
   BILLIARDS_GOLD
   BILLIARDS_PLATINUM
   BILLIARDS_DIAMOND
+  MONTHLY_REWARD
 }
 
 enum ContactStatus {

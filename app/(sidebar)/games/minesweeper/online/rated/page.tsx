@@ -154,7 +154,7 @@ export default function RatedMinesweeperLobby() {
             ))}
           </div>
           <button onClick={startSearch} disabled={starting}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-yellow-500 text-black font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-pink-500 text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
             {starting ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             Find Match
           </button>

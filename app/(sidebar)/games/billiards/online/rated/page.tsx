@@ -8,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getRank } from "@/lib/elo";
 import { preloadSounds, playSound } from "@/lib/gameSounds";
+import MatchHistoryButton from "@/components/MatchHistory";
 
 type RoomItem = {
   id: string;
@@ -134,6 +135,7 @@ export default function RatedBilliardsLobby() {
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">🎱 Rated Billiards</h1>
       </div>
       <p className="text-[var(--text-muted)] mb-8">Win to gain ELO · Lose to drop ELO</p>
+      {session?.user?.id && <div className="mb-6"><MatchHistoryButton userId={session.user.id} label="My History" /></div>}
       {session?.user && (
         <div className="mb-6 text-sm text-[var(--text-muted)]">
           Signed in as <span className="text-[var(--text-primary)] font-semibold">{session.user.name}</span>

@@ -13,8 +13,9 @@ import GameChat, { type ChatMsg } from "@/components/GameChat";
 import SpectatorBadge from "@/components/SpectatorBadge";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
 import { playBattleshipSound } from "@/lib/gameSounds";
+import WaitingLobby from "@/components/WaitingLobby";
+import { getRank } from "@/lib/elo";
 
-// ─── Константы сетки ─────────────────────────────────────────────────────────
 const CELL = 36;
 const LABEL_W = 32;
 
@@ -81,11 +82,11 @@ function BattleBoard({
 
         {/* Оверлеи кораблей: живые z:1, потопленные (_broke) z:2 */}
         {ships?.map((ship, i) => {
-          const rot    = shipRotations?.[i];
+          const rot = shipRotations?.[i];
           const sorted = [...ship.cells].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
           const [sr, sc] = sorted[0];
-          const isH   = rot ? rot.isH : (ship.size === 1 ? true : sorted[0][0] === sorted[1][0]);
-          const flip  = rot?.flip ?? false;
+          const isH = rot ? rot.isH : (ship.size === 1 ? true : sorted[0][0] === sorted[1][0]);
+          const flip = rot?.flip ?? false;
           const isSunk = ship.cells.every(([r, c]) => board[r][c] === "sunk");
           if (onlySunk && !isSunk) return null;
           const suffix = isSunk ? "_broke" : "";
@@ -95,8 +96,8 @@ function BattleBoard({
             <div key={i} style={{
               position: "absolute",
               left: LABEL_W + sc * CELL,
-              top:  sr * CELL,
-              width:  isH ? ship.size * CELL : CELL,
+              top: sr * CELL,
+              width: isH ? ship.size * CELL : CELL,
               height: isH ? CELL : ship.size * CELL,
               pointerEvents: "none",
               zIndex: isSunk ? 2 : 1,
@@ -260,26 +261,26 @@ export default function BattleshipOnlineRoom() {
 
   const router = useRouter();
 
-  const [room, setRoom]             = useState<any>(null);
-  const [loading, setLoading]       = useState(true);
+  const [room, setRoom] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
-  const connFailsRef                = useRef(0);
+  const connFailsRef = useRef(0);
 
   // Placement
-  const [myBoard, setMyBoard]             = useState<Board>(emptyBoard());
-  const [myShips, setMyShips]             = useState<Ship[]>([]);
+  const [myBoard, setMyBoard] = useState<Board>(emptyBoard());
+  const [myShips, setMyShips] = useState<Ship[]>([]);
   const [shipRotations, setShipRotations] = useState<ShipRot[]>([]);
-  const [placed, setPlaced]               = useState(false);
-  const [submitting, setSubmitting]       = useState(false);
+  const [placed, setPlaced] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Battle
-  const [shooting, setShooting]   = useState(false);
+  const [shooting, setShooting] = useState(false);
   const [resigning, setResigning] = useState(false);
   const [replayIndex, setReplayIndex] = useState<number | null>(null);
 
   // Waiting lobby
-  const [leaving, setLeaving]   = useState(false);
-  const [copied, setCopied]     = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ─── Fetch room ────────────────────────────────────────────────────────────
   const fetchRoom = useCallback(async () => {
@@ -315,9 +316,9 @@ export default function BattleshipOnlineRoom() {
   useEffect(() => {
     if (!room || !session?.user?.id) return;
     const myRole = session.user.id === room.hostId ? "host"
-                 : session.user.id === room.guestId ? "guest" : "spectator";
+      : session.user.id === room.guestId ? "guest" : "spectator";
     if (myRole === "spectator") return;
-    const ping = () => fetch(`/api/battleship-rooms/${roomId}/ping`, { method: "POST" }).catch(() => {});
+    const ping = () => fetch(`/api/battleship-rooms/${roomId}/ping`, { method: "POST" }).catch(() => { });
     ping();
     const interval = setInterval(ping, 10_000);
     return () => clearInterval(interval);
@@ -327,9 +328,9 @@ export default function BattleshipOnlineRoom() {
   useEffect(() => {
     if (!room || room.status !== "PLAYING") return;
     const myRole = session?.user?.id === room.hostId ? "host"
-                 : session?.user?.id === room.guestId ? "guest" : "spectator";
+      : session?.user?.id === room.guestId ? "guest" : "spectator";
     if (myRole !== "spectator") return;
-    const fn = () => fetch(`/api/battleship-rooms/${roomId}/spectate`, { method: "POST" }).catch(() => {});
+    const fn = () => fetch(`/api/battleship-rooms/${roomId}/spectate`, { method: "POST" }).catch(() => { });
     fn();
     const interval = setInterval(fn, 25_000);
     return () => clearInterval(interval);
@@ -377,7 +378,7 @@ export default function BattleshipOnlineRoom() {
       if (res.ok) {
         const data = await res.json();
         if (data.result?.hit) playBattleshipSound("bs_explosion");
-        else                  playBattleshipSound("bs_splash");
+        else playBattleshipSound("bs_splash");
         if (data.result?.sunk) playBattleshipSound("bs_sunk");
       }
       await fetchRoom();
@@ -390,28 +391,38 @@ export default function BattleshipOnlineRoom() {
   async function handleResign() {
     if (!confirm("Resign this game?")) return;
     setResigning(true);
-    await fetch(`/api/battleship-rooms/${roomId}/resign`, { method: "POST" }).catch(() => {});
+    await fetch(`/api/battleship-rooms/${roomId}/resign`, { method: "POST" }).catch(() => { });
     await fetchRoom();
     setResigning(false);
+  }
+
+  async function handleReady() {
+    await fetch(`/api/battleship-rooms/${roomId}/ready`, { method: "POST" }).catch(() => { });
+    await fetchRoom();
+  }
+
+  async function handleStart() {
+    await fetch(`/api/battleship-rooms/${roomId}/start`, { method: "POST" }).catch(() => { });
+    await fetchRoom();
   }
 
   // ─── Derived state ───────────────────────────────────────────────────────────
   const userId = session?.user?.id;
   const myRole = userId === room?.hostId ? "host"
-               : userId === room?.guestId ? "guest" : "spectator";
+    : userId === room?.guestId ? "guest" : "spectator";
   const isMyTurn = room?.currentTurn === myRole;
 
-  const moves: MoveEntry[]    = room?.movesJson ? JSON.parse(room.movesJson) : [];
-  const parsedMyShips: Ship[] = room?.myShips   ? JSON.parse(room.myShips)   : myShips;
+  const moves: MoveEntry[] = room?.movesJson ? JSON.parse(room.movesJson) : [];
+  const parsedMyShips: Ship[] = room?.myShips ? JSON.parse(room.myShips) : myShips;
 
-  const currentMyBoard: Board       = room?.myBoard       ? JSON.parse(room.myBoard)       : myBoard;
+  const currentMyBoard: Board = room?.myBoard ? JSON.parse(room.myBoard) : myBoard;
   const currentOpponentBoard: Board = room?.opponentBoard ? JSON.parse(room.opponentBoard) : emptyBoard();
 
   const replayBoards = replayIndex !== null && parsedMyShips.length > 0
     ? getBoardsAtIndex(moves, parsedMyShips, myRole as "host" | "guest", replayIndex)
     : null;
 
-  const displayMyBoard       = replayBoards?.myBoard       ?? currentMyBoard;
+  const displayMyBoard = replayBoards?.myBoard ?? currentMyBoard;
   const displayOpponentBoard = replayBoards?.opponentBoard ?? currentOpponentBoard;
 
   const chatMsgs: ChatMsg[] = room?.chatJson ? JSON.parse(room.chatJson) : [];
@@ -438,81 +449,50 @@ export default function BattleshipOnlineRoom() {
 
   // ─── WAITING lobby ───────────────────────────────────────────────────────────
   if (room.status === "WAITING") {
-    const isHost = myRole === "host";
-    const roomUrl = typeof window !== "undefined" ? window.location.href : "";
     const TC_LABELS: Record<string, string> = {
-      none: "∞ Infinite", "60": "⚡ 1 min", "300": "🔥 5 min",
+      none: "∞ No time limit", "60": "⚡ 1 min", "300": "🔥 5 min",
       "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1 hour",
     };
 
-    async function handleCancelRoom() {
-      await fetch(`/api/battleship-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
-      router.push("/games/battleship/online");
-    }
+    const hostRank = room.host?.battleshipElo ? getRank(room.host.battleshipElo) : null;
+    const guestRank = room.guest?.battleshipElo ? getRank(room.guest.battleshipElo) : null;
 
-
-    async function handleCopy() {
-      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
 
     return (
-      <main className="max-w-lg mx-auto px-4 py-12">
-        <div className="flex items-center gap-3 mb-6">
-          {myRole === "host"
-            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave room</button>
-            : <button onClick={() => router.push("/games/battleship/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
-        </div>
-
-        <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Battleship Room</h1>
-        <p className="text-[var(--text-muted)] text-sm mb-8">
-          {TC_LABELS[room.timeControl] ?? room.timeControl}
-          {room.rated && <span className="ml-2 text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Rated</span>}
-        </p>
-
-        <div className="flex flex-col gap-3 mb-6">
-          {/* Host */}
-          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
-            {room.host?.image
-              ? <Image src={room.host.image} alt="" width={36} height={36} className="rounded-full shrink-0" />
-              : <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.host?.name?.[0] ?? "?"}</div>}
-            <div className="flex-1 min-w-0">
-              <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.host?.name ?? "Anonymous"}</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[0.6rem] text-green-400">Host</span>
-                <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.host?.battleshipElo}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Waiting slot */}
-          <div className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--border-subtle)] px-4 py-3">
-            <div className="relative w-9 h-9 shrink-0">
-              <span className="absolute inset-0 rounded-full bg-[var(--text-muted)]/10 animate-ping" />
-              <div className="w-9 h-9 rounded-full border-2 border-dashed border-[var(--border-subtle)] flex items-center justify-center relative z-10">
-                <Users size={14} className="text-[var(--text-muted)]" />
-              </div>
-            </div>
-            <p className="text-[var(--text-muted)] text-sm italic">Waiting for opponent…</p>
-          </div>
-        </div>
-
-        {/* Share link */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
-          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
-            <button onClick={handleCopy}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
-              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
-            </button>
-          </div>
-        </div>
-      </main>
+      <WaitingLobby
+        gameName="Battleship Room"
+        subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
+        rated={room.rated}
+        isHost={room.myRole === "host"}
+        myRole={room.myRole as "host" | "guest"}
+        host={{
+          name: room.host?.name,
+          image: room.host?.image,
+          elo: room.host?.battleshipElo,
+          rankEmoji: hostRank?.emoji,
+          rankLabel: hostRank?.label,
+          rankColor: hostRank?.color,
+        }}
+        guest={room.guestId ? {
+          name: room.guest?.name,
+          image: room.guest?.image,
+          elo: room.guest?.battleshipElo,
+          ready: room.guestReady,
+          rankEmoji: guestRank?.emoji,
+          rankLabel: guestRank?.label,
+          rankColor: guestRank?.color,
+        } : null}
+        guestReady={room.guestReady}
+        onLeave={room.myRole === "host"
+          ? async () => { await fetch(`/api/battleship-rooms/${roomId}`, { method: "DELETE" }); router.push("/games/battleship/online"); }
+          : () => router.push("/games/battleship/online")}
+        onReady={() => { handleReady() }}
+        onStart={() => { handleStart() }}
+        startDisabled={!room.guestId || !room.guestReady}
+        startLabel={!room.guestId ? "Waiting for opponent…" : "Opponent not ready"}
+      />
     );
   }
-
   // ─── PLACEMENT ───────────────────────────────────────────────────────────────
   if (room.status === "PLACEMENT" && !placed) {
     return (
@@ -543,7 +523,7 @@ export default function BattleshipOnlineRoom() {
 
   // ─── PLAYING / FINISHED ───────────────────────────────────────────────────────
   const isFinished = room.status === "FINISHED";
-  const iWon       = isFinished && room.winner === myRole;
+  const iWon = isFinished && room.winner === myRole;
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">

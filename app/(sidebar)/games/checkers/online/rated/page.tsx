@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Star, X } from "lucide-react";
 import Link from "next/link";
+import MatchHistoryButton from "@/components/MatchHistory";
+import { useSession } from "next-auth/react";
 
 const TIME_OPTIONS = [
   { value: "300",  label: "5 min",  icon: "🔥" },
@@ -21,6 +23,7 @@ type Phase = "idle" | "searching";
 
 export default function CheckersRatedPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [timeControl, setTimeControl] = useState("600");
   const [phase, setPhase]   = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -99,6 +102,7 @@ export default function CheckersRatedPage() {
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">Rated Checkers</h1>
       </div>
       <p className="text-[var(--text-muted)] mb-8">Win to gain ELO · Lose to drop ELO</p>
+            {session?.user?.id && <div className="mb-6"><MatchHistoryButton userId={session.user.id} label="My History" /></div>}
 
       {/* ── Matchmaking card ── */}
       {phase === "idle" ? (

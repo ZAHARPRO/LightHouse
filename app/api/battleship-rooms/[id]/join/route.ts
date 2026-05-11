@@ -20,13 +20,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     select: { battleshipElo: true },
   });
 
-  const updated = await prisma.battleshipRoom.update({
-    where: { id },
-    data: {
-      guestId: userId,
-      status: "PLACEMENT", // Переходим в фазу расстановки
-      guestEloSnapshot: room.rated ? user?.battleshipElo : undefined,
-    },
+const updated = await prisma.battleshipRoom.update({
+  where: { id },
+  data: {
+    guestId: userId,
+    guestReady: false,          // добавить
+    status: "WAITING",           // статус не меняем, ждем готовности игроков
+    guestEloSnapshot: room.rated ? user?.battleshipElo : undefined,
+  },
     include: {
       host: { select: { id: true, name: true, image: true, battleshipElo: true } },
       guest: { select: { id: true, name: true, image: true, battleshipElo: true } },

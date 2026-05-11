@@ -21,6 +21,7 @@ import SpectatorBadge from "@/components/SpectatorBadge";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat from "@/components/GameChat";
 import { preloadSounds, playSound } from "@/lib/gameSounds";
+import WaitingLobby from "@/components/WaitingLobby";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const LIGHT_SQ = "#fef3c7";
@@ -516,101 +517,50 @@ export default function CheckersRoomPage() {
   
 
   // ── WAITING lobby ────────────────────────────────────────────────────────
-  if (room.status === "WAITING") {
-    const TC: Record<string, string> = {
-      none: "∞ No time limit", "60": "⚡ 1 min", "300": "🔥 5 min",
-      "600": "⏱ 10 min", "1500": "🕐 25 min", "3600": "🕐 1 hour",
-    };
-    const hostRank  = getRank(room.hostElo);
-    const guestRank = room.guestElo ? getRank(room.guestElo) : null;
-    return (
-      <main className="max-w-lg mx-auto px-4 py-12">
-        <div className="flex items-center gap-3 mb-6">
-          {room.myRole === "host"
-            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave room</button>
-            : <button onClick={() => router.push("/games/checkers/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
-        </div>
-        <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Checkers Room</h1>
-        <p className="text-[var(--text-muted)] text-sm mb-8">
-          {TC[room.timeControl] ?? room.timeControl}
-          {room.rated && <span className="ml-2 text-xs font-bold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2 py-0.5 rounded-full">Rated</span>}
-        </p>
-        <div className="flex flex-col gap-3 mb-8">
-          {/* Host */}
-          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
-            {room.hostImage
-              ? <Image src={room.hostImage} alt="" width={36} height={36} className="rounded-full shrink-0" />
-              : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
-            <div className="flex-1 min-w-0">
-              <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Anonymous"}</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[0.6rem] text-green-400">Host</span>
-                {hostRank && <span className="text-[0.6rem] font-bold" style={{ color: hostRank.color }}>{hostRank.emoji} {hostRank.label}</span>}
-                <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.hostElo}</span>
-              </div>
-            </div>
-            <CheckCircle2 size={18} className="text-green-400 shrink-0" />
-          </div>
-          {/* Guest */}
-          {room.guestId ? (
-            <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
-              {room.guestImage
-                ? <Image src={room.guestImage} alt="" width={36} height={36} className="rounded-full shrink-0" />
-                : <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold shrink-0">{room.guestName?.[0] ?? "?"}</div>}
-              <div className="flex-1 min-w-0">
-                <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Anonymous"}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[0.6rem] text-[var(--text-muted)]">Guest</span>
-                  {guestRank && <span className="text-[0.6rem] font-bold" style={{ color: guestRank.color }}>{guestRank.emoji} {guestRank.label}</span>}
-                  {room.guestElo && <span className="text-[0.55rem] text-[var(--text-muted)]">ELO {room.guestElo}</span>}
-                </div>
-              </div>
-              {room.guestReady
-                ? <CheckCircle2 size={18} className="text-green-400 shrink-0" />
-                : <Clock size={18} className="text-[var(--text-muted)] shrink-0" />}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 justify-center p-6 rounded-xl border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-sm">
-              <div className="w-8 h-8 rounded-full border-2 border-dashed border-[var(--border-subtle)]" />
-              <p className="italic">Waiting for player…</p>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 mb-6">
-          <div className="flex gap-3">
-            {myRole === "guest" && (
-              <button onClick={toggleReady} disabled={readying}
-                className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
-                  room.guestReady
-                    ? "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    : "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25",
-                ].join(" ")}>
-                {readying && <Loader2 size={14} className="animate-spin inline mr-1" />}
-                {room.guestReady ? "Cancel Ready" : "Ready!"}
-              </button>
-            )}
-            {myRole === "host" && (
-              <button onClick={startGame} disabled={!room.guestId || !room.guestReady || starting}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity">
-                {starting && <Loader2 size={14} className="animate-spin inline mr-1" />}
-                {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
-          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
-            <button onClick={handleCopy}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
-              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
+if (room.status === "WAITING") {
+  const TC_LABELS: Record<string,string> = {
+    none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min",
+    "600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
+  };
+
+  const hostRank = room.hostElo ? getRank(room.hostElo) : null;
+  const guestRank = room.guestElo ? getRank(room.guestElo) : null;
+
+  return (
+    <WaitingLobby
+      gameName="Checkers Room"
+      subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
+      rated={room.rated}
+      isHost={room.myRole === "host"}
+      myRole={room.myRole as "host" | "guest"}
+      host={{
+        name: room.hostName,
+        image: room.hostImage,
+        elo: room.hostElo,
+        rankEmoji: hostRank?.emoji,
+        rankLabel: hostRank?.label,
+        rankColor: hostRank?.color,
+      }}
+      guest={room.guestId ? {
+        name: room.guestName,
+        image: room.guestImage,
+        elo: room.guestElo,
+        ready: room.guestReady,
+        rankEmoji: guestRank?.emoji,
+        rankLabel: guestRank?.label,
+        rankColor: guestRank?.color,
+      } : null}
+      guestReady={room.guestReady}
+      onLeave={room.myRole === "host"
+        ? async () => { await fetch(`/api/checkers-rooms/${roomId}`, { method: "DELETE" }); router.push("/games/checkers/online"); }
+        : () => router.push("/games/checkers/online")}
+      onReady={() => toggleReady()}
+      onStart={() => startGame()}
+      startDisabled={!room.guestId || !room.guestReady}
+      startLabel={!room.guestId ? "Waiting for opponent…" : "Opponent not ready"}
+    />
+  );
+}
 
   // ── PLAYING / FINISHED ───────────────────────────────────────────────────
   return (

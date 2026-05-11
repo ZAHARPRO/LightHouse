@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PROTECTED = ["/profile", "/feed", "/chat"];
+const PROTECTED = [
+  "/profile", "/feed", "/chat","/dm","/music", "/upload",
+  "/games/chess/online",
+  "/games/checkers/online",
+  "/games/billiards/online",
+  "/games/battleship/online",
+  "/games/minesweeper/online",
+];
 
-export function proxy(req: NextRequest) {
+export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const isProtected = PROTECTED.some((path) => pathname.startsWith(path));

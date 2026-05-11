@@ -7,6 +7,7 @@ import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, ChevronLeft, LogOut, 
 import Image from "next/image";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, type GameState, type Move, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
+import WaitingLobby from "@/components/WaitingLobby";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import SpectatorBadge from "@/components/SpectatorBadge";
@@ -562,96 +563,50 @@ export default function ChessOnlineRoom() {
   if (!room) return <main className="flex items-center justify-center py-40"><Loader2 size={28} className="animate-spin text-[var(--text-muted)]" /></main>;
 
   // ── WAITING ────────────────────────────────────────────────────────────────
-  if (room.status === "WAITING") {
-    const TC_LABELS: Record<string,string> = {
-      none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min","600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
-    };
+if (room.status === "WAITING") {
+  const TC_LABELS: Record<string,string> = {
+    none:"∞ No time limit","60":"⚡ 1 min","300":"🔥 5 min",
+    "600":"⏱ 10 min","1500":"🕐 25 min","3600":"🕐 1 hour",
+  };
 
-   const roomUrl = typeof window !== "undefined" ? window.location.href : "";
-   async function handleCopy() {
-      try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const hostRank = room.hostElo ? getRank(room.hostElo) : null;
+  const guestRank = room.guestElo ? getRank(room.guestElo) : null;
 
-    async function handleCancelRoom() {
-      await fetch(`/api/chess-rooms/${roomId}`, { method: "DELETE" }).catch(() => {});
-      router.push("/games/chess/online");
-    }
-
-    return (
-      <main className="max-w-lg mx-auto px-4 py-12">
-        <div className="flex items-center gap-3 mb-6">
-          {room.myRole === "host"
-            ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave</button>
-            : <button onClick={() => router.push("/games/chess/online")} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">← Leave Room</button>}
-        </div>
-        <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)] mb-1">Room</h1>
-        <p className="text-[var(--text-muted)] text-sm mb-8">{TC_LABELS[room.timeControl] ?? room.timeControl} · Colors assigned randomly</p>
-
-        <div className="flex flex-col gap-3 mb-8">
-          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
-            <Avatar name={room.hostName} image={room.hostImage} />
-            <div className="flex-1">
-              <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Anonymous"}</p>
-              <p className="text-[0.7rem] text-[var(--text-muted)]">Host</p>
-            </div>
-            <CheckCircle2 size={18} className="text-green-400" />
-          </div>
-          <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3">
-            {room.guestId ? (
-              <>
-                <Avatar name={room.guestName} image={room.guestImage} />
-                <div className="flex-1">
-                  <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Anonymous"}</p>
-                  <p className="text-[0.7rem] text-[var(--text-muted)]">Guest</p>
-                </div>
-                {room.guestReady ? <CheckCircle2 size={18} className="text-green-400" /> : <Clock size={18} className="text-[var(--text-muted)]" />}
-              </>
-            ) : (
-              <>
-                <div className="w-8 h-8 rounded-full border-2 border-dashed border-[var(--border-subtle)]" />
-                <p className="text-[var(--text-muted)] text-sm italic">Waiting for player…</p>
-              </>
-            )}
-          </div>
-
-
-        </div>
-
-        <div className="flex gap-2 mb-6">
-          {room.myRole === "guest" && (
-            <button onClick={() => doAction("ready")}
-              className={["flex-1 py-2.5 rounded-xl font-display font-bold text-sm border transition-colors",
-                room.guestReady
-                  ? "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  : "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25"
-              ].join(" ")}>
-              {room.guestReady ? "Cancel Ready" : "Ready!"}
-            </button>
-          )}
-          {room.myRole === "host" && (
-            <button onClick={() => doAction("start")} disabled={!room.guestId || !room.guestReady}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity">
-              {!room.guestId ? "Waiting for opponent…" : !room.guestReady ? "Opponent not ready" : "Start!"}
-            </button>
-          )}
-        </div>
-
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 mb-6">
-          <p className="text-[0.7rem] text-[var(--text-muted)] font-display font-semibold uppercase tracking-wider mb-2">Invite link</p>
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-xs font-mono text-[var(--text-secondary)] truncate">{roomUrl}</p>
-            <button onClick={handleCopy}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[0.7rem] font-display font-semibold transition-colors hover:text-[var(--text-primary)] shrink-0">
-              {copied ? <><Check size={11} className="text-green-400" /> Copied</> : <><Copy size={11} /> Copy</>}
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
+  return (
+    <WaitingLobby
+      gameName="Chess Room"
+      subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
+      rated={room.rated}
+      isHost={room.myRole === "host"}
+      myRole={room.myRole as "host" | "guest"}
+      host={{
+        name: room.hostName,
+        image: room.hostImage,
+        elo: room.hostElo,
+        rankEmoji: hostRank?.emoji,
+        rankLabel: hostRank?.label,
+        rankColor: hostRank?.color,
+      }}
+      guest={room.guestId ? {
+        name: room.guestName,
+        image: room.guestImage,
+        elo: room.guestElo,
+        ready: room.guestReady,
+        rankEmoji: guestRank?.emoji,
+        rankLabel: guestRank?.label,
+        rankColor: guestRank?.color,
+      } : null}
+      guestReady={room.guestReady}
+      onLeave={room.myRole === "host"
+        ? async () => { await fetch(`/api/chess-rooms/${roomId}`, { method: "DELETE" }); router.push("/games/chess/online"); }
+        : () => router.push("/games/chess/online")}
+      onReady={() => doAction("ready")}
+      onStart={() => doAction("start")}
+      startDisabled={!room.guestId || !room.guestReady}
+      startLabel={!room.guestId ? "Waiting for opponent…" : "Opponent not ready"}
+    />
+  );
+}
   // ── FINISHED ───────────────────────────────────────────────────────────────
   if (room.status === "FINISHED") {
     const myColor = getMyColor(room);

@@ -9,8 +9,8 @@ export default async function HistoryPage() {
   const session = await auth();
 
   if (!session?.user?.id) {
-    return{}
-  } 
+    redirect("/");
+  }
 
   const uid = session.user.id;
 

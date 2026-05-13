@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, History } from "lucide-react";
 import { useTranslations } from "next-intl";
+
+
 
 type Sub = { id: string; name: string; initials: string; color: string; image?: string | null };
 
@@ -133,6 +135,43 @@ export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpand
           </div>
         </div>
       )}
+      {/* History button */}
+      <Link
+        href="/history"
+        className="flex flex-col items-center cursor-pointer overflow-hidden w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] transition-[border-color,background] duration-200"
+        style={{
+          gap: expanded ? "0.5rem" : 0,
+          padding: expanded ? "0.75rem 0.5rem" : "0.5rem",
+          transition: "padding 0.3s ease, gap 0.3s ease",
+        }}
+      >
+        <div
+          className="rounded-full flex items-center justify-center shrink-0"
+          style={{
+            width: expanded ? 52 : 34,
+            height: expanded ? 52 : 34,
+            background: "rgba(99,102,241,0.12)",
+            transition: "width 0.3s ease, height 0.3s ease",
+          }}
+        >
+          {/* История = часы с обратной стрелкой */}
+          <History
+            size={expanded ? 22 : 15}
+            className="text-indigo-400"
+          />
+        </div>
+        <span
+          className="font-display font-bold text-xs tracking-[0.05em] uppercase overflow-hidden whitespace-nowrap text-[var(--text-secondary)]"
+          style={{
+            maxHeight: expanded ? 24 : 0,
+            opacity: expanded ? 1 : 0,
+            transition: "max-height 0.3s ease, opacity 0.3s ease",
+          }}
+        >
+          {t("history")}
+        </span>
+      </Link>
+
     </aside>
   );
 }

@@ -15,6 +15,7 @@ import CommentsSection from "@/components/CommentsSection";
 import ReportButton from "@/components/ReportButton";
 import UserAvatar from "@/components/UserAvatar";
 import DownloadVideoButton from "@/components/DownloadVideoButton";
+import SaveVideoButton from "@/components/SaveVideoButton";
 
 const THUMB_COLORS = [
   ["#1a1a2e", "#f97316"],
@@ -87,6 +88,15 @@ export default async function WatchPage({
     viewerTier = viewer?.tier ?? null;
   }
 
+  let isSaved = false;
+  if (session?.user?.id) {
+    const savedRow = await prisma.savedVideo.findUnique({
+      where: { userId_videoId: { userId: session.user.id, videoId: id } },
+    });
+    isSaved = !!savedRow;
+  }
+
+
   let isFollowing = false;
   const isMe = session?.user?.id === video.author.id;
   if (session?.user?.id && !isMe) {
@@ -108,10 +118,19 @@ export default async function WatchPage({
       where: { id },
       data: { views: { increment: 1 } },
     });
-    // Update daily watch streak and potentially award WATCH_STREAK badge
+
+    // Записываем в историю просмотров (только для авторизованных)
+    if (session?.user?.id) {
+      await prisma.watchHistory.upsert({
+        where: { userId_videoId: { userId: session.user.id, videoId: id } },
+        update: { watchedAt: new Date() },
+        create: { userId: session.user.id, videoId: id },
+      });
+    }
   }
 
-  const likesCount    = await prisma.like.count({ where: { videoId: id, type: "LIKE" } });
+
+  const likesCount = await prisma.like.count({ where: { videoId: id, type: "LIKE" } });
   const dislikesCount = await prisma.like.count({ where: { videoId: id, type: "DISLIKE" } });
   let userReaction: "LIKE" | "DISLIKE" | null = null;
   if (session?.user?.id) {
@@ -125,11 +144,11 @@ export default async function WatchPage({
     where: { videoId: id, parentId: null },
     include: {
       author: { select: { id: true, name: true, image: true, tier: true } },
-      likes:  { select: { userId: true } },
+      likes: { select: { userId: true } },
       replies: {
         include: {
-          author: { select: { id: true, name: true , image: true, tier: true } },
-          likes:  { select: { userId: true } },
+          author: { select: { id: true, name: true, image: true, tier: true } },
+          likes: { select: { userId: true } },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -287,6 +306,12 @@ export default async function WatchPage({
               isOwner={isMe}
               isLoggedIn={!!session?.user}
             />
+            <SaveVideoButton
+              videoId={id}
+              initialSaved={isSaved}
+              isLoggedIn={!!session?.user}
+            />
+
             <DownloadVideoButton
               videoId={id}
               userTier={viewerTier}
@@ -300,7 +325,7 @@ export default async function WatchPage({
           <div className="flex items-center justify-between flex-wrap gap-4">
             <Link href={`/profile/${video.author.id}`} className="flex items-center gap-3.5 no-underline">
               <div
-                
+
                 className="w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center"
               >
                 <UserAvatar name={video.author.name ?? "?"} image={video.author.image} tier={video.author.tier} size="md" />

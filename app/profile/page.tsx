@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink } from "lucide-react";
+import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink, History } from "lucide-react";
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
 import MatchHistoryButton from "@/components/MatchHistory";
@@ -103,12 +103,32 @@ export default async function ProfilePage() {
                 <ExternalLink size={13} />
                 {t("publicProfile")}
               </Link>
+              <Link
+                href="/subscriptions"
+                className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
+              >
+                <TrendingUp size={13} />
+                {t("subscriptions")}
+              </Link>
+                            <Link
+                href="/history"
+                className="inline-flex items-center gap-1.5 no-underline text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] py-[0.25rem] px-[0.75rem] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-colors"
+              >
+                <History size={13} />
+                {t("history")}
+              </Link>
+            </div>
+
+            {/* Match history button, favorite song playlists */}
+            <div className="flex items-center gap-4 mb-3">
+              
               <MatchHistoryButton userId={user.id} />
               <ProfilePlaylists
                 initialFavSong={user.favoriteSong ? (() => { try { return JSON.parse(user.favoriteSong!); } catch { return null; } })() : null}
               />
             </div>
 
+            
             <p className="text-[var(--text-muted)] text-sm mb-2">{user.email}</p>
 
             {/* Username (with tooltip) */}

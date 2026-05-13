@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X, MessageSquare, Maximize2, Users, Newspaper } from "lucide-react";
+import { X, MessageSquare, Maximize2, Users, Newspaper, History } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Sub = { id: string; name: string; tier: string; image: string | null; initials: string; color: string };
 
@@ -22,10 +23,11 @@ interface Props {
 }
 
 export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
-  const [subs, setSubs]       = useState<Sub[]>([]);
+  const [subs, setSubs] = useState<Sub[]>([]);
   const [loading, setLoading] = useState(true);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const drawerRef  = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations("history");
 
   useEffect(() => {
     fetch("/api/my-subscriptions")
@@ -47,8 +49,8 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
   }, [onClose]);
 
   function handleMouseLeave(e: React.MouseEvent<HTMLDivElement>) {
-    const 
-    rect = e.currentTarget.getBoundingClientRect();
+    const
+      rect = e.currentTarget.getBoundingClientRect();
     if (e.clientX <= rect.right + 5) return;
     leaveTimer.current = setTimeout(onClose, 150);
   }
@@ -179,20 +181,20 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
                 onClick={onClose}
                 className="sidebar-sub-link flex items-center gap-[0.625rem] px-1 py-[0.375rem] rounded-lg no-underline transition-colors duration-150"
               >
-<div
-  className="w-[30px] h-[30px] rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[0.6875rem] font-bold font-display"
-  style={
-    sub.image
-      ? { border: `1.5px solid ${color}50` }
-      : { background: `${color}22`, border: `1.5px solid ${color}50`, color: color }
-  }
->
-  {sub.image ? (
-    <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
-  ) : (
-    initials
-  )}
-</div>
+                <div
+                  className="w-[30px] h-[30px] rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[0.6875rem] font-bold font-display"
+                  style={
+                    sub.image
+                      ? { border: `1.5px solid ${color}50` }
+                      : { background: `${color}22`, border: `1.5px solid ${color}50`, color: color }
+                  }
+                >
+                  {sub.image ? (
+                    <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                  ) : (
+                    initials
+                  )}
+                </div>
                 <div className="min-w-0">
                   <p className="font-body text-[0.8125rem] text-[var(--text-primary)] truncate">
                     {sub.name}
@@ -204,7 +206,32 @@ export default function SideDrawer({ onClose, isClosing, onOpenChat }: Props) {
               </Link>
             );
           })}
+                  <Link
+          href="/history"
+          className="flex flex-col items-center cursor-pointer overflow-hidden w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] transition-[border-color,background] duration-200">
+          <div
+            className="rounded-full flex items-center justify-center shrink-0"
+
+          >
+            {/* История = часы с обратной стрелкой */}
+            <History
+
+              className="text-indigo-400"
+            />
+          </div>
+          <span
+            className="font-display font-bold text-xs tracking-[0.05em] uppercase overflow-hidden whitespace-nowrap text-[var(--text-secondary)]"
+            style={{
+
+
+            }}
+          >
+            {t("history")}
+          </span>
+        </Link>
         </div>
+
+
       </div>
     </>
   );

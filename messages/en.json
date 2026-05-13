@@ -68,7 +68,34 @@
     "recently": "recently",
     "viewsLabel": "views",
     "likesLabel": "likes",
-    "commentsLabel": "comments"
+    "commentsLabel": "comments",
+    "history": "History"
+  },
+  "history": {
+    "title": "History",
+    "tabHistory": "Watch history",
+    "tabLiked": "Liked",
+    "tabSaved": "Saved",
+    "recently": "recently",
+    "minutesLabel": "minutes ago",
+    "hoursLabel": "hours ago",
+    "daysLabel": "days ago",
+    "history": "History",
+    "liked": "Liked videos",
+    "saved": "Saved videos",
+    "noHistory": "You haven't watched any videos yet.",
+    "noLiked": "You haven't liked any videos yet.",
+    "removeLike": "Remove like",
+    "noSaved": "You haven't saved any videos yet.",
+    "removeSave": "Remove from saved"
+  },
+  "saveButton": {
+    "save": "Save",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "unsave": "Unsave",
+    "unsaving": "Unsaving…",
+    "signInToSave": "Sign in to save videos"
   },
   "community": {
     "title": "Community",
@@ -236,7 +263,9 @@
     "noBadge": "No badge",
     "statsVideos": "Videos",
     "statsSubscribers": "Subscribers",
-    "totalViews": "Total Views"
+    "totalViews": "Total Views",
+    "subscriptions": "Subscriptions",
+    "history": "History"
   },
   "badges": {
     "title": "Badge Catalog",

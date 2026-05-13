@@ -68,7 +68,26 @@
     "recently": "щойно",
     "viewsLabel": "переглядів",
     "likesLabel": "лайків",
-    "commentsLabel": "коментів"
+    "commentsLabel": "коментів",
+    "history": "історія"
+  },
+  "history": {
+    "title": "Архів переглядів",
+    "tabHistory": "Переглянуті",
+    "tabLiked": "Вподобані",
+    "tabSaved": "Збережені",
+    "recently": "щойно",
+    "minutesLabel": "мінут тому",
+    "hoursLabel": "годин тому",
+    "daysLabel": "днів тому",
+    "history": "Історія",
+    "liked": "Подобається",
+    "saved": "Збережено",
+    "noHistory": "Ти ще не дивився жодного відео.",
+    "noLiked": "Ти ще не лайкав жодного відео.",
+    "removeLike": "Видалити лайк",
+    "noSaved": "Ти ще не зберігав жодного відео.",
+    "removeSave": "Видалити зі збережених"
   },
   "community": {
     "title": "спільнота",
@@ -236,7 +255,9 @@
     "noBadge": "без значочка",
     "statsVideos": "відосики",
     "statsSubscribers": "підписники",
-    "totalViews": "всього переглядів"
+    "totalViews": "всього переглядів",
+    "subscriptions": "підписки",
+    "history": "Історія"
   },
   "badges": {
     "title": "каталог значочків",

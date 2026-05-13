@@ -29,6 +29,15 @@ const MAX_DRAG_PX = 160;
 const CANVAS_PAD  = 80;
 const OVER        = 220; // overlay extends beyond CANVAS_PAD so the cue stick renders over UI
 
+function interpFrames(a: Ball[], b: Ball[], t: number): Ball[] {
+  return a.map((ba, idx) => {
+    const bb = b[idx];
+    if (!bb || ba.pocketed) return ba;
+    if (bb.pocketed) return t >= 0.5 ? bb : ba;
+    return { ...ba, x: ba.x + (bb.x - ba.x) * t, y: ba.y + (bb.y - ba.y) * t };
+  });
+}
+
 function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   const W = TABLE_W * scale, H = TABLE_H * scale;
   ctx.fillStyle = "#1a7a3c"; ctx.fillRect(0, 0, W, H);
@@ -408,14 +417,21 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
-    let i = 0; let hold = 0;
-    function tick() {
+    let i = 0; let lastFrameTime = -1;
+    function tick(now: number) {
       if (animIdRef.current !== myId) return;
-      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
-      hold = 0;
-      animFrameIdxRef.current++;
+      if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
+      const elapsed = now - lastFrameTime;
+      if (elapsed >= 50) {
+        const steps = Math.floor(elapsed / 50);
+        i = Math.min(i + steps, frames.length);
+        lastFrameTime += steps * 50;
+        animFrameIdxRef.current = i;
+      }
       if (i >= frames.length) { setAnimBalls(null); animShotRef.current = null; return; }
-      setAnimBalls(frames[i++]);
+      const t = Math.min(1, (now - lastFrameTime) / 50);
+      const next = frames[i + 1];
+      setAnimBalls(next ? interpFrames(frames[i], next, t) : frames[i]);
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -446,7 +462,7 @@ export default function BilliardsBotPage() {
     animFrameIdxRef.current = 0;
     const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
-    let i = 0; let hold = 0; let done = false;
+    let i = 0; let lastFrameTime = -1; let done = false;
     function finish() {
       if (done) return; done = true;
       setAnimBalls(null);
@@ -465,13 +481,20 @@ export default function BilliardsBotPage() {
         setTimeout(() => triggerBotRef.current(res.newState), 300);
       }
     }
-    function tick() {
+    function tick(now: number) {
       if (animIdRef.current !== myId) { finish(); return; }
-      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
-      hold = 0;
-      animFrameIdxRef.current++;
+      if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
+      const elapsed = now - lastFrameTime;
+      if (elapsed >= 50) {
+        const steps = Math.floor(elapsed / 50);
+        i = Math.min(i + steps, frames.length);
+        lastFrameTime += steps * 50;
+        animFrameIdxRef.current = i;
+      }
       if (i >= frames.length) { finish(); return; }
-      setAnimBalls(frames[i++]);
+      const t2 = Math.min(1, (now - lastFrameTime) / 50);
+      const next = frames[i + 1];
+      setAnimBalls(next ? interpFrames(frames[i], next, t2) : frames[i]);
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -672,7 +695,7 @@ export default function BilliardsBotPage() {
             ) : botThinking ? (
               <span className="text-[var(--text-muted)] animate-pulse">{t("opponentTurn")}</span>
             ) : isMyTurn ? (
-              gameState.phase === "cue_in_hand"
+              gameState.phase === "cue_in_hand" && !cueHandPos && power === 0
                 ? <span className="text-yellow-400">{t("cueBallInHand")}</span>
                 : power > 0
                   ? <span className={power >= 0.85 ? "text-red-400" : power >= 0.6 ? "text-orange-400" : power >= 0.3 ? "text-yellow-400" : "text-green-400"}>

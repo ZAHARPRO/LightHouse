@@ -55,6 +55,15 @@ const MAX_DRAG_PX = 160;
 const CANVAS_PAD  = 80;
 const OVER        = 220;
 
+function interpFrames(a: Ball[], b: Ball[], t: number): Ball[] {
+  return a.map((ba, idx) => {
+    const bb = b[idx];
+    if (!bb || ba.pocketed) return ba;
+    if (bb.pocketed) return t >= 0.5 ? bb : ba;
+    return { ...ba, x: ba.x + (bb.x - ba.x) * t, y: ba.y + (bb.y - ba.y) * t };
+  });
+}
+
 function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   const W = TABLE_W * scale, H = TABLE_H * scale;
   ctx.fillStyle = "#1a7a3c"; ctx.fillRect(0, 0, W, H);
@@ -301,17 +310,24 @@ export default function BilliardsOnlineRoom() {
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     const myId = ++animIdRef.current;
-    let i = 0; let hold = 0;
-    function tick() {
+    let i = 0; let lastFrameTime = -1;
+    function tick(now: number) {
       if (animIdRef.current !== myId) return;
-      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
-      hold = 0;
-      animFrameIdxRef.current++;
+      if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
+      const elapsed = now - lastFrameTime;
+      if (elapsed >= 50) {
+        const steps = Math.floor(elapsed / 50);
+        i = Math.min(i + steps, item.frames.length);
+        lastFrameTime += steps * 50;
+        animFrameIdxRef.current = i;
+      }
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         processQueue(); return;
       }
-      setAnimBalls(item.frames[i++]);
+      const t = Math.min(1, (now - lastFrameTime) / 50);
+      const next = item.frames[i + 1];
+      setAnimBalls(next ? interpFrames(item.frames[i], next, t) : item.frames[i]);
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -425,17 +441,24 @@ export default function BilliardsOnlineRoom() {
     const myId = ++animIdRef.current;
     cancelAnimationFrame(rafRef.current);
     animatingRef.current = true;
-    let i = 0; let hold = 0;
-    function tick() {
+    let i = 0; let lastFrameTime = -1;
+    function tick(now: number) {
       if (animIdRef.current !== myId) return;
-      if (hold < 2) { hold++; rafRef.current = requestAnimationFrame(tick); return; }
-      hold = 0;
-      animFrameIdxRef.current++;
+      if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
+      const elapsed = now - lastFrameTime;
+      if (elapsed >= 50) {
+        const steps = Math.floor(elapsed / 50);
+        i = Math.min(i + steps, frames.length);
+        lastFrameTime += steps * 50;
+        animFrameIdxRef.current = i;
+      }
       if (i >= frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         processQueue(); return;
       }
-      setAnimBalls(frames[i++]);
+      const t = Math.min(1, (now - lastFrameTime) / 50);
+      const next = frames[i + 1];
+      setAnimBalls(next ? interpFrames(frames[i], next, t) : frames[i]);
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -850,10 +873,10 @@ export default function BilliardsOnlineRoom() {
               <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{myName ?? "You"}</span>
               {myRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${myRank.color}22`, color: myRank.color }}>{myRank.label}</span>}
               {myGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{myGroup} ({myRemaining.length})</span>}
-              {isMyTurnNow && displayState.phase === "cue_in_hand" && !cueHandPos && (
+              {isMyTurnNow && displayState.phase === "cue_in_hand" && !cueHandPos && power === 0 && (
                 <span className="text-xs text-yellow-400 font-bold shrink-0">Place cue ball</span>
               )}
-              {isMyTurnNow && displayState.phase !== "cue_in_hand" && power > 0 && (
+              {isMyTurnNow && power > 0 && (displayState.phase !== "cue_in_hand" || cueHandPos !== null) && (
                 <span className={["text-xs font-bold shrink-0", power >= 0.85 ? "text-red-400" : power >= 0.6 ? "text-orange-400" : power >= 0.3 ? "text-yellow-400" : "text-green-400"].join(" ")}>
                   {Math.round(power * 100)}%
                 </span>

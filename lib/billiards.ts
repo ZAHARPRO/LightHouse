@@ -390,7 +390,8 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
   // Eight ball pocketed
   if (eightPocketed) {
     const myGroupBalls = myGroup === "solids" ? [1,2,3,4,5,6,7] : myGroup === "stripes" ? [9,10,11,12,13,14,15] : [];
-    const allMyGroupCleared = myGroupBalls.every(id => nowPocketed.includes(id) || prePocketed.has(id));
+    // myGroup === null means no group balls were ever pocketed → 8-ball is early
+    const allMyGroupCleared = myGroup !== null && myGroupBalls.every(id => nowPocketed.includes(id) || prePocketed.has(id));
 
     if (scratched || hasFoul || !allMyGroupCleared) {
       // Loss: pocketed 8 before clearing group, or scratched while pocketing 8

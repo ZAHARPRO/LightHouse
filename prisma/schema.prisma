@@ -494,6 +494,10 @@ enum RewardType {
   MINE_GOLD
   MINE_PLATINUM
   MINE_DIAMOND
+  PUZZLE_FIRST
+  PUZZLE_10
+  PUZZLE_50
+  PUZZLE_100
   PUZZLE_MASTER
   CHECKERS_WIN
   CHECKERS_ONLINE_WIN
@@ -779,10 +783,13 @@ model Playlist {
 
 model ChessPuzzle {
   id         String   @id @default(cuid())
+  lichessId  String?  @unique
   title      String
   fen        String   @db.Text
   solution   String?  @db.Text
-  difficulty String   // "mate1" | "mate2"
+  difficulty String   // "mate1" | "mate2" | "tactical" | etc.
+  themes     String[] @default([])
+  source     String   @default("manual") // "manual" | "lichess"
   rating     Int      @default(1200)
   solveCount Int      @default(0)
   createdAt  DateTime @default(now())
@@ -806,6 +813,13 @@ model GameSound {
   url       String   @db.Text
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model PuzzleCronConfig {
+  id           Int       @id @default(1)
+  count        Int       @default(1)
+  intervalDays Int       @default(7)
+  lastRunAt    DateTime?
 }
 
 model UserPuzzleSolve {

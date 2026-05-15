@@ -88,27 +88,42 @@ function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDr
   const [ghost, setGhost] = useState<{ key: string; x: number; y: number } | null>(null);
   const dragSrc = useRef<[number,number]|null>(null);
 
-  function startDrag(e: React.PointerEvent, r: number, c: number, key: string) {
+  function startPress(e: React.PointerEvent, r: number, c: number, key: string) {
     if (disabled) return;
     e.preventDefault();
-    onSquare?.(r, c); // select piece so legal dots appear
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const isTouch = e.pointerType === "touch";
+    let dragging = false;
     dragSrc.current = [r, c];
-    setGhost({ key, x: e.clientX, y: e.clientY });
 
     const onMove = (ev: PointerEvent) => {
-      setGhost(g => g ? { ...g, x: ev.clientX, y: ev.clientY } : null);
+      if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) {
+        dragging = true;
+        onSquare?.(r, c); // select to show legal dots only when drag starts
+      }
+      if (dragging) {
+        const gy = isTouch ? ev.clientY - sz * 1.4 : ev.clientY;
+        setGhost({ key, x: ev.clientX, y: gy });
+      }
     };
+
     const onUp = (ev: PointerEvent) => {
       document.removeEventListener("pointermove", onMove);
       setGhost(null);
       const src = dragSrc.current;
       dragSrc.current = null;
-      if (!src) return;
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
-      if (sq) {
-        const [tr, tc] = sq.split("-").map(Number);
-        if (tr !== src[0] || tc !== src[1]) onDrop?.(src, [tr, tc]);
+      if (dragging && src) {
+        const checkY = isTouch ? ev.clientY - sz * 1.4 : ev.clientY;
+        const el = document.elementFromPoint(ev.clientX, checkY);
+        const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
+        if (sq) {
+          const [tr, tc] = sq.split("-").map(Number);
+          if (tr !== src[0] || tc !== src[1]) onDrop?.(src, [tr, tc]);
+          else onSquare?.(r, c);
+        }
+      } else {
+        onSquare?.(r, c); // tap = select/move
       }
     };
     document.addEventListener("pointermove", onMove);
@@ -117,7 +132,7 @@ function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDr
 
   return (
     <>
-      <div className="inline-block select-none" style={{ border:"2px solid #8f7a5a" }}>
+      <div className="inline-block select-none" style={{ border:"2px solid #8f7a5a", touchAction:"none" }}>
         {displayRows.map(r=>(
           <div key={r} className="flex">
             <div className="flex items-center justify-center font-mono" style={{ width:18, color:"#8f7a5a", fontSize:10 }}>
@@ -135,9 +150,14 @@ function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDr
               return (
                 <div key={c}
                   data-sq={`${r}-${c}`}
-                  className="relative flex items-center justify-center cursor-pointer"
-                  style={{ width:sz, height:sz, background:bg, flexShrink:0 }}
-                  onClick={()=>!disabled&&onSquare?.(r,c)}
+                  className="relative flex items-center justify-center"
+                  style={{ width:sz, height:sz, background:bg, flexShrink:0,
+                    cursor: disabled ? "default" : "pointer", touchAction:"none" }}
+                  onPointerDown={e=>{
+                    if (disabled || piece) return;
+                    e.preventDefault();
+                    onSquare?.(r,c);
+                  }}
                 >
                   {isDot&&(
                     <div className={["absolute rounded-full pointer-events-none",
@@ -155,8 +175,9 @@ function ChessBoard({ state, flip, selected, legalDots, lastMove, onSquare, onDr
                           :"0 1px 2px rgba(255,255,255,0.25)",
                         opacity: isDragging ? 0.3 : 1,
                         cursor: disabled ? "default" : "grab",
+                        touchAction: "none",
                       }}
-                      onPointerDown={e => startDrag(e, r, c, piece.color+piece.type)}
+                      onPointerDown={e => startPress(e, r, c, piece.color+piece.type)}
                     >
                       {PIECE_U[piece.color+piece.type]}
                     </span>

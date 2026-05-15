@@ -11,6 +11,7 @@
     "logout": "Sign out",
     "searchPlaceholder": "Search videos, creators…",
     "searchFor": "Search for \"{query}\"",
+    "chat": "Chat",
     "games": "Games",
     "plans": "Plans",
     "contact": "Contact",
@@ -18,7 +19,14 @@
     "signIn": "Sign In",
     "joinFree": "Join Free",
     "uploadVideo": "Upload Video",
-    "writePost": "Write Post"
+    "writePost": "Write Post",
+    "settings": "Settings"
+  },
+  "settings": {
+    "title": "Site Settings",
+    "subtitle": "Customize your LightHouse experience",
+    "language": "Language",
+    "languageDesc": "Choose the interface language"
   },
   "auth": {
     "welcomeBack": "Welcome back",

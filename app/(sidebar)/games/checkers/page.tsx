@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { RotateCcw, Flag, Crown, ChevronLeft, ChevronRight, Link } from "lucide-react";
 import {
   initialBoard, getLegalMoves, applyMove, canContinueJump, isGameOver, countPieces,
@@ -92,24 +93,42 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
   const [ghost, setGhost] = useState<{ cell: Cell; x: number; y: number } | null>(null);
   const dragSrc = useRef<[number, number] | null>(null);
 
-  function startDrag(e: React.PointerEvent, r: number, c: number, cell: Cell) {
+  function startPress(e: React.PointerEvent, r: number, c: number, cell: Cell) {
     if (disabled || !cell) return;
     e.preventDefault();
-    onSquare(r, c);
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const isTouch = e.pointerType === "touch";
+    let dragging = false;
     dragSrc.current = [r, c];
-    setGhost({ cell, x: e.clientX, y: e.clientY });
-    const onMove = (ev: PointerEvent) => setGhost(g => g ? { ...g, x: ev.clientX, y: ev.clientY } : null);
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) {
+        dragging = true;
+        onSquare(r, c); // select to show legal dots only when drag starts
+      }
+      if (dragging) {
+        const gy = isTouch ? ev.clientY - cellPx * 1.4 : ev.clientY;
+        setGhost({ cell, x: ev.clientX, y: gy });
+      }
+    };
+
     const onUp = (ev: PointerEvent) => {
       document.removeEventListener("pointermove", onMove);
       setGhost(null);
       const src = dragSrc.current;
       dragSrc.current = null;
-      if (!src) return;
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
-      if (sq) {
-        const [tr, tc] = sq.split("-").map(Number);
-        if (tr !== src[0] || tc !== src[1]) onDrop(src, [tr, tc]);
+      if (dragging && src) {
+        const checkY = isTouch ? ev.clientY - cellPx * 1.4 : ev.clientY;
+        const el = document.elementFromPoint(ev.clientX, checkY);
+        const sq = el?.closest("[data-sq]")?.getAttribute("data-sq");
+        if (sq) {
+          const [tr, tc] = sq.split("-").map(Number);
+          if (tr !== src[0] || tc !== src[1]) onDrop(src, [tr, tc]);
+          else onSquare(r, c);
+        }
+      } else {
+        onSquare(r, c); // tap = select/move
       }
     };
     document.addEventListener("pointermove", onMove);
@@ -118,7 +137,7 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
 
   return (
     <>
-      <div className="inline-block select-none" style={{ border: "2px solid #92400e" }}>
+      <div className="inline-block select-none" style={{ border: "2px solid #92400e", touchAction: "none" }}>
         {[7,6,5,4,3,2,1,0].map(r => (
           <div key={r} className="flex">
             <div className="flex items-center justify-center font-mono shrink-0"
@@ -140,9 +159,14 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
               const isDragging = dragSrc.current?.[0] === r && dragSrc.current?.[1] === c;
               return (
                 <div key={c} data-sq={`${r}-${c}`}
-                  className="relative flex items-center justify-center cursor-pointer"
-                  style={{ width: cellPx, height: cellPx, background: bg, flexShrink: 0 }}
-                  onClick={() => !disabled && onSquare(r, c)}
+                  className="relative flex items-center justify-center"
+                  style={{ width: cellPx, height: cellPx, background: bg, flexShrink: 0,
+                    cursor: disabled ? "default" : "pointer", touchAction: "none" }}
+                  onPointerDown={e => {
+                    if (disabled || cell) return;
+                    e.preventDefault();
+                    onSquare(r, c);
+                  }}
                 >
                   {isDot && isDark && (
                     <div className={["absolute rounded-full pointer-events-none z-10",
@@ -154,7 +178,10 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
                     <div className="absolute inset-0 rounded-none border-[3px] border-red-400 animate-pulse pointer-events-none z-20" />
                   )}
                   {cell && (
-                    <div onPointerDown={e => startDrag(e, r, c, cell)} style={{ cursor: disabled ? "default" : "grab" }}>
+                    <div
+                      style={{ cursor: disabled ? "default" : "grab", touchAction: "none" }}
+                      onPointerDown={e => startPress(e, r, c, cell)}
+                    >
                       <Piece cell={cell} cellPx={cellPx} dragging={isDragging} />
                     </div>
                   )}
@@ -172,13 +199,14 @@ function CheckersBoard({ board, cellPx, selected, legalDots, lastMove, mustJumpF
         </div>
       </div>
 
-      {ghost && typeof document !== "undefined" && (
+      {ghost && typeof document !== "undefined" && createPortal(
         <div className="fixed pointer-events-none z-[9999] select-none flex items-center justify-center"
           style={{ left: ghost.x - cellPx / 2, top: ghost.y - cellPx / 2, width: cellPx, height: cellPx }}>
-          <div style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.55))", transform: "scale(1.18)" }}>
+          <div style={{ filter: "drop-shadow(0 4px 20px rgba(0,0,0,0.6))", transform: "scale(1.22)" }}>
             <Piece cell={ghost.cell} cellPx={cellPx} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

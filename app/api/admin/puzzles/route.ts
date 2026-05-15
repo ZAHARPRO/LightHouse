@@ -18,7 +18,8 @@ export async function GET() {
   const puzzles = await prisma.chessPuzzle.findMany({
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, title: true, difficulty: true, rating: true, solveCount: true, createdAt: true, fen: true, solution: true,
+      id: true, title: true, difficulty: true, rating: true, solveCount: true,
+      createdAt: true, fen: true, solution: true, themes: true, source: true,
     },
   });
 

@@ -11,6 +11,7 @@
     "logout": "Вийти",
     "searchPlaceholder": "Пошук відео, авторів…",
     "searchFor": "Пошук \"{query}\"",
+    "chat": "Чат",
     "games": "Ігри",
     "plans": "Тарифи",
     "contact": "Контакти",
@@ -18,7 +19,14 @@
     "signIn": "Увійти",
     "joinFree": "Приєднатись",
     "uploadVideo": "Завантажити відео",
-    "writePost": "Написати пост"
+    "writePost": "Написати пост",
+    "settings": "Налаштування"
+  },
+  "settings": {
+    "title": "Налаштування сайту",
+    "subtitle": "Налаштуйте свій досвід у LightHouse",
+    "language": "Мова",
+    "languageDesc": "Виберіть мову інтерфейсу"
   },
   "auth": {
     "welcomeBack": "З поверненням",

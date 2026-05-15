@@ -6,32 +6,32 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Zap, Bell, User, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2,
+  Zap, Bell, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2, Settings, ChevronDown, Gamepad2, CreditCard, Mail, Rss, MessageCircle,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
-import LanguageSwitcher from "./LanguageSwitcher";
-import { useLocale } from "next-intl";
-import type { Locale } from "@/i18n/config";
+import { useRawLocale } from "@/components/LocaleProvider";
 import ChatPopup from "./ChatPopup";
 import SupportInbox from "./SupportInbox";
 import MusicPlayer from "./MusicPlayer";
 import { useTranslations } from "next-intl";
+import UserAvatar from "./UserAvatar";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 const STAFF_ROLES = ["ADMIN", "OPERATOR", "STAFF"];
 
 export default function Navbar() {
   const { data: session } = useSession();
   const isStaff = session?.user?.role && STAFF_ROLES.includes(session.user.role);
-  const locale = useLocale() as Locale;
+  const locale = useRawLocale();
   const t = useTranslations("nav");
 
   const router = useRouter();
-  const [searchQ, setSearchQ]       = useState("");
+  const [searchQ, setSearchQ] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [activeIdx, setActiveIdx]     = useState(-1);
-  const searchRef  = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   type Suggestion = {
@@ -69,8 +69,8 @@ export default function Navbar() {
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!suggestOpen) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); }
-    if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); }
-    if (e.key === "Escape")    { closeSuggest(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); }
+    if (e.key === "Escape") { closeSuggest(); }
   }
 
   useEffect(() => {
@@ -83,19 +83,17 @@ export default function Navbar() {
   }, [suggestOpen]);
 
   const TYPE_ICON: Record<string, React.ReactNode> = {
-    video:   <Play size={13} className="shrink-0 text-[var(--accent-orange)]" />,
+    video: <Play size={13} className="shrink-0 text-[var(--accent-orange)]" />,
     creator: <Users size={13} className="shrink-0 text-[#6366f1]" />,
-    post:    <FileText size={13} className="shrink-0 text-[#10b981]" />,
+    post: <FileText size={13} className="shrink-0 text-[#10b981]" />,
   };
   const TYPE_LABEL: Record<string, string> = { video: "Video", creator: "Creator", post: "Post" };
 
-  const [mobileOpen, setMobileOpen] = useState(false);
-
   // Side drawer
-  const [drawerOpen, setDrawerOpen]       = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
 
-  function openDrawer()  { if (!drawerClosing) setDrawerOpen(true); }
+  function openDrawer() { if (!drawerClosing) setDrawerOpen(true); }
   function closeDrawer() {
     if (!drawerOpen) return;
     setDrawerClosing(true);
@@ -107,7 +105,7 @@ export default function Navbar() {
   const [spotifyOpen, setSpotifyOpen] = useState(false);
 
   // Chat popup
-  const [chatOpen, setChatOpen]       = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [chatClosing, setChatClosing] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
@@ -128,6 +126,36 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [chatOpen]);
 
+  // Profile dropdown
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isMobilePanel, setIsMobilePanel] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState<{ top: number; right: number } | null>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const profilePanelRef = useRef<HTMLDivElement>(null);
+
+  function handleProfileToggle() {
+    if (profileOpen) { setProfileOpen(false); return; }
+    const mobile = window.innerWidth <= 450;
+    setIsMobilePanel(mobile);
+    if (!mobile && profileRef.current) {
+      const r = profileRef.current.getBoundingClientRect();
+      setProfileAnchor({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    }
+    setProfileOpen(true);
+  }
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    function onDown(e: MouseEvent) {
+      if (
+        !profileRef.current?.contains(e.target as Node) &&
+        !profilePanelRef.current?.contains(e.target as Node)
+      ) setProfileOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [profileOpen]);
+
   // Create dropdown
   const [createOpen, setCreateOpen] = useState(false);
   const createRef = useRef<HTMLDivElement>(null);
@@ -142,10 +170,10 @@ export default function Navbar() {
   }, [createOpen]);
 
   // Notifications
-  const [notifOpen, setNotifOpen]       = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [notifClosing, setNotifClosing] = useState(false);
-  const [hasNew, setHasNew]             = useState(false);
-  const bellRef  = useRef<HTMLButtonElement>(null);
+  const [hasNew, setHasNew] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const storageKey = `lh_last_seen_commit_${session?.user?.id ?? "guest"}`;
@@ -157,9 +185,9 @@ export default function Navbar() {
   // Does NOT require the panel to be open.
   useEffect(() => {
     const siteNewsSeenAt = parseInt(localStorage.getItem("lh_notif_sitenews_seen") ?? "0", 10);
-    const devNewsSeenAt  = parseInt(localStorage.getItem("lh_notif_devnews_seen")  ?? "0", 10);
-    const postsSeenAt    = parseInt(localStorage.getItem("lh_notif_posts_seen")    ?? "0", 10);
-    const videosSeenAt   = parseInt(localStorage.getItem("lh_notif_videos_seen")   ?? "0", 10);
+    const devNewsSeenAt = parseInt(localStorage.getItem("lh_notif_devnews_seen") ?? "0", 10);
+    const postsSeenAt = parseInt(localStorage.getItem("lh_notif_posts_seen") ?? "0", 10);
+    const videosSeenAt = parseInt(localStorage.getItem("lh_notif_videos_seen") ?? "0", 10);
 
     // 1. Check static site news immediately (no fetch needed)
     const siteNewsUnread = SITE_NEWS_DATES.some(
@@ -188,7 +216,7 @@ export default function Navbar() {
         ));
       setHasNew(unread);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -210,7 +238,7 @@ export default function Navbar() {
     localStorage.setItem(storageKey, latestSha);
   }
 
-  function openNotif()  { if (!notifClosing) setNotifOpen(true); }
+  function openNotif() { if (!notifClosing) setNotifOpen(true); }
   function closeNotif() {
     if (!notifOpen) return;
     setNotifClosing(true);
@@ -219,7 +247,7 @@ export default function Navbar() {
   function toggleNotif() { notifOpen ? closeNotif() : openNotif(); }
 
   // Support inbox (staff only)
-  const [inboxOpen, setInboxOpen]       = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [inboxClosing, setInboxClosing] = useState(false);
   const [hasNewTickets, setHasNewTickets] = useState(false);
   const inboxBtnRef = useRef<HTMLButtonElement>(null);
@@ -232,14 +260,14 @@ export default function Navbar() {
       fetch("/api/support/unread")
         .then((r) => r.json())
         .then((d) => setHasNewTickets((d?.count ?? 0) > 0))
-        .catch(() => {});
+        .catch(() => { });
     }
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
   }, [isStaff]);
 
-  function openInbox()  { if (!inboxClosing) setInboxOpen(true); }
+  function openInbox() { if (!inboxClosing) setInboxOpen(true); }
   function closeInbox() {
     if (!inboxOpen) return;
     setInboxClosing(true);
@@ -288,7 +316,7 @@ export default function Navbar() {
 
             <Link href="/feed" className="flex items-center gap-2 no-underline">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--accent-orange)] shrink-0">
-                <Zap size={18} color="white" strokeWidth={2.5} />
+                <img src="/icons/icon-512.png" alt="Logo" className="w-10 h-8" />
               </div>
               <span className="hidden md:block font-display font-extrabold text-xl tracking-tight text-[var(--text-primary)]">
                 Light<span className="text-[var(--accent-orange)]">House</span>
@@ -296,133 +324,133 @@ export default function Navbar() {
             </Link>
           </div>
 
-{/* Overlay (mobile/tablet only) — rendered via portal so it covers the full screen */}
-{searchQ.trim().length > 0 && typeof document !== "undefined" && createPortal(
-  <div
-    className="fixed inset-0 z-[900] bg-black/50 backdrop-blur-sm lg:hidden"
-    onClick={() => {
-      setSearchQ("");
-      closeSuggest();
-    }}
-  />,
-  document.body
-)}
+          {/* Overlay (mobile/tablet only) — rendered via portal so it covers the full screen */}
+          {searchQ.trim().length > 0 && typeof document !== "undefined" && createPortal(
+            <div
+              className="fixed inset-0 z-[900] bg-black/50 backdrop-blur-sm lg:hidden"
+              onClick={() => {
+                setSearchQ("");
+                closeSuggest();
+              }}
+            />,
+            document.body
+          )}
 
-{/* Search */}
-<div
-  ref={searchRef}
-  className={[
-    "transition-all duration-300",
-
-    // 📱 mobile/tablet: overlay mode
-    searchQ.trim().length > 0
-      ? "fixed left-1/2 -translate-x-1/2 top-[12px] z-[999] w-[85%]"
-      : "relative w-full",
-
-    // 💻 desktop: normal
-    "lg:static lg:translate-x-0 lg:w-full",
-  ].join(" ")}
->
-  <form onSubmit={handleSearch} className="relative">
-    <Search
-      size={14}
-      className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
-    />
-
-    <input
-      type="text"
-      value={searchQ}
-      onChange={(e) => handleSearchChange(e.target.value)}
-      onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
-      onKeyDown={handleKeyDown}
-      placeholder={t("searchPlaceholder")}
-      className="input-field w-full h-[42px] rounded-[10px] shadow-2xl"
-      style={{ paddingLeft: "2.25rem" }}
-      autoComplete="off"
-    />
-  </form>
-
-  {/* Suggestions */}
-  {suggestOpen && suggestions.length > 0 && (
-    <div
-      className={[
-
-        "absolute left-0 right-0 top-[calc(100%+6px)] z-[1000]",
-
-        "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
-
-        "rounded-xl border border-[var(--border-subtle)]",
-        "bg-[rgba(12,12,12,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden",
-        "flex flex-col",
-      ].join(" ")}
-      style={{ animation: "slideDownIn 0.15s ease both" }}
-    >
-      {/* Search for */}
-      <button
-        onMouseDown={() => {
-          router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`);
-          closeSuggest();
-        }}
-        className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors border-b border-[var(--border-subtle)] cursor-pointer shrink-0"
-      >
-        <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
-        <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
-          {t("searchFor", { query: searchQ })}
-          <span className="text-[var(--text-primary)] font-semibold font-display">
-            &ldquo;{searchQ}&rdquo;
-          </span>
-        </span>
-      </button>
-
-      {/* Results */}
-      <div className="overflow-y-auto max-h-[55vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {suggestions.map((s, i) => (
-          <button
-            key={`${s.type}-${s.id}`}
-            onMouseDown={() => {
-              router.push(s.href);
-              closeSuggest();
-              setSearchQ(s.label);
-            }}
-            onMouseEnter={() => setActiveIdx(i)}
+          {/* Search */}
+          <div
+            ref={searchRef}
             className={[
-              "w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left transition-colors cursor-pointer",
-              i < suggestions.length - 1
-                ? "border-b border-[var(--border-subtle)]"
-                : "",
-              activeIdx === i
-                ? "bg-white/[0.06]"
-                : "hover:bg-white/[0.04] active:bg-white/[0.06]",
+              "transition-all duration-300",
+
+              // 📱 mobile/tablet: overlay mode
+              searchQ.trim().length > 0
+                ? "fixed left-1/2 -translate-x-1/2 top-[12px] z-[999] w-[85%]"
+                : "relative w-full",
+
+              // 💻 desktop: normal
+              "lg:static lg:translate-x-0 lg:w-full",
             ].join(" ")}
           >
-            <div className="shrink-0 w-8 h-8 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
-              {TYPE_ICON[s.type]}
-            </div>
+            <form onSubmit={handleSearch} className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]"
+              />
 
-            <div className="flex-1 min-w-0">
-              <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
-                {s.label}
-              </p>
-              {s.sub && (
-                <p className="text-[0.72rem] text-[var(--text-muted)] truncate">
-                  {s.sub}
-                </p>
-              )}
-            </div>
+              <input
+                type="text"
+                value={searchQ}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
+                onKeyDown={handleKeyDown}
+                placeholder={t("searchPlaceholder")}
+                className="input-field w-full h-[42px] rounded-[10px] shadow-2xl"
+                style={{ paddingLeft: "2.25rem" }}
+                autoComplete="off"
+              />
+            </form>
 
-            <span className="hidden sm:inline-block shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
-              {TYPE_LABEL[s.type]}
-            </span>
+            {/* Suggestions */}
+            {suggestOpen && suggestions.length > 0 && (
+              <div
+                className={[
 
-            <span className="sm:hidden shrink-0 text-[0.6rem] font-display font-medium text-[var(--text-muted)]">
-              {TYPE_LABEL[s.type]}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )}
-</div>
+                  "absolute left-0 right-0 top-[calc(100%+6px)] z-[1000]",
+
+                  "lg:absolute lg:left-0 lg:right-0 lg:top-[calc(100%+6px)]",
+
+                  "rounded-xl border border-[var(--border-subtle)]",
+                  "bg-[rgba(12,12,12,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden",
+                  "flex flex-col",
+                ].join(" ")}
+                style={{ animation: "slideDownIn 0.15s ease both" }}
+              >
+                {/* Search for */}
+                <button
+                  onMouseDown={() => {
+                    router.push(`/search?q=${encodeURIComponent(searchQ.trim())}`);
+                    closeSuggest();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors border-b border-[var(--border-subtle)] cursor-pointer shrink-0"
+                >
+                  <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
+                  <span className="text-[0.8125rem] text-[var(--text-secondary)] truncate">
+                    {t("searchFor", { query: searchQ })}
+                    <span className="text-[var(--text-primary)] font-semibold font-display">
+                      &ldquo;{searchQ}&rdquo;
+                    </span>
+                  </span>
+                </button>
+
+                {/* Results */}
+                <div className="overflow-y-auto max-h-[55vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={`${s.type}-${s.id}`}
+                      onMouseDown={() => {
+                        router.push(s.href);
+                        closeSuggest();
+                        setSearchQ(s.label);
+                      }}
+                      onMouseEnter={() => setActiveIdx(i)}
+                      className={[
+                        "w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 text-left transition-colors cursor-pointer",
+                        i < suggestions.length - 1
+                          ? "border-b border-[var(--border-subtle)]"
+                          : "",
+                        activeIdx === i
+                          ? "bg-white/[0.06]"
+                          : "hover:bg-white/[0.04] active:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      <div className="shrink-0 w-8 h-8 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center bg-white/[0.06]">
+                        {TYPE_ICON[s.type]}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
+                          {s.label}
+                        </p>
+                        {s.sub && (
+                          <p className="text-[0.72rem] text-[var(--text-muted)] truncate">
+                            {s.sub}
+                          </p>
+                        )}
+                      </div>
+
+                      <span className="hidden sm:inline-block shrink-0 text-[0.65rem] font-display font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[var(--text-muted)]">
+                        {TYPE_LABEL[s.type]}
+                      </span>
+
+                      <span className="sm:hidden shrink-0 text-[0.6rem] font-display font-medium text-[var(--text-muted)]">
+                        {TYPE_LABEL[s.type]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Right */}
           <div className="flex items-center gap-1 sm:gap-[0.625rem]">
@@ -430,9 +458,9 @@ export default function Navbar() {
             {/* Nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
               {[
-                { href: "/games",         label: t("games") },
+                { href: "/games", label: t("games") },
                 { href: "/subscriptions", label: t("plans") },
-                { href: "/contact",       label: t("contact") },
+                { href: "/contact", label: t("contact") },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
@@ -444,12 +472,12 @@ export default function Navbar() {
               ))}
             </div>
 
-            {/* Admin panel link */}
+            {/* Admin panel link — desktop only */}
             {session?.user?.role === "ADMIN" && (
               <Link
                 href="/admin"
                 title="Admin Panel"
-                className={iconBtn(false)}
+                className={["hidden md:flex", iconBtn(false)].join(" ")}
               >
                 <LayoutDashboard size={16} />
               </Link>
@@ -480,7 +508,7 @@ export default function Navbar() {
                     "font-display font-semibold text-[0.8125rem] whitespace-nowrap",
                     "border transition-[background,border-color,color] duration-150",
                     createOpen
-                      ? "bg--[var(--accent-orange)]/10 border-[var(--accent-orange)]/35 text-[var(--accent-orange)]"
+                      ? "bg-[rgba(219,39,119,0.1)] border-[rgba(219,39,119,0.35)] text-[var(--accent-orange)]"
                       : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
                   ].join(" ")}
                 >
@@ -494,8 +522,8 @@ export default function Navbar() {
                     style={{ animation: "slideDownIn 0.15s ease both" }}
                   >
                     {[
-                      { href: "/upload",   icon: Video,    label: "Upload Video" },
-                      { href: "/post/new", icon: FileText, label: "Write Post"   },
+                      { href: "/upload", icon: Video, label: "Upload Video" },
+                      { href: "/post/new", icon: FileText, label: "Write Post" },
                     ].map(({ href, icon: Icon, label }) => (
                       <Link
                         key={href}
@@ -537,30 +565,33 @@ export default function Navbar() {
               </button>
             )}
 
-            {/* User */}
+            {/* User profile dropdown */}
             {session ? (
-              <>
-                <Link
-                  href="/profile"
-                  className="w-[38px] h-[38px] rounded-lg flex items-center justify-center no-underline bg-[var(--bg-elevated)] border border-[var(--border-subtle)] overflow-hidden"
+              <div ref={profileRef} className="relative">
+                <button
+                  onClick={handleProfileToggle}
+                  className={[
+                    "flex items-center gap-1.5 h-[38px] pl-1 pr-2 rounded-lg cursor-pointer",
+                    "border transition-[background,border-color] duration-150",
+                    profileOpen
+                      ? "bg-[rgba(219,39,119,0.1)] border-[rgba(219,39,119,0.35)]"
+                      : "bg-[var(--bg-elevated)] border-[var(--border-subtle)]",
+                  ].join(" ")}
                   title={session.user?.name ?? "Profile"}
                 >
-                  {session.user?.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={session.user.image} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={16} className="text-[var(--accent-orange)]" />
-                  )}
-                </Link>
-                <LanguageSwitcher current={locale} />
-                <button
-                  onClick={() => signOut()}
-                  className="hidden sm:flex items-center p-[0.375rem] rounded-md bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-red-500 transition-colors duration-150"
-                  title={t("logout")}
-                >
-                  <LogOut size={15} />
+                  <div className="w-[26px] h-[26px] rounded-md overflow-hidden flex items-center justify-center bg-[var(--bg-card)] shrink-0">
+                    <UserAvatar name={session.user?.name ?? "?"} image={session.user?.image} size="sm" />
+                  </div>
+                  <ChevronDown
+                    size={13}
+                    className={[
+                      "text-[var(--text-muted)] transition-transform duration-150",
+                      profileOpen ? "rotate-180" : "",
+                    ].join(" ")}
+                  />
                 </button>
-              </>
+
+              </div>
             ) : (
               <>
                 <Link href="/auth/signin" className="btn-ghost hidden md:inline-flex no-underline py-[0.4rem] px-4 text-sm whitespace-nowrap">
@@ -572,54 +603,126 @@ export default function Navbar() {
               </>
             )}
 
-            {/* Mobile menu toggle */}
-            <button
-              className="flex md:hidden items-center justify-center bg-transparent border-none cursor-pointer text-[var(--text-secondary)]"
-              onClick={() => setMobileOpen(!mobileOpen)}
-            >
-              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-            </button>
           </div>
         </div>
-
-        {/* Mobile menu */}
-        {mobileOpen && (
-          <div className="md:hidden bg-[var(--bg-secondary)] border-t border-[var(--border-subtle)] px-4 py-3">
-            {[
-              { href: "/feed",          label: "Feed" },
-              { href: "/chat",          label: "Chat" },
-              { href: "/games", label: "Games" },
-              { href: "/subscriptions", label: "Plans" },
-              { href: "/contact",       label: "Contact" },
-            ].map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMobileOpen(false)}
-                className="flex px-4 py-3 rounded-lg no-underline text-[var(--text-secondary)] font-display font-medium text-[0.95rem] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors duration-150"
-              >
-                {label}
-              </Link>
-            ))}
-            {session ? (
-              <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                <button
-                  onClick={() => { signOut(); setMobileOpen(false); }}
-                  className="flex items-center gap-2 w-full px-4 py-3 rounded-lg bg-transparent border-none cursor-pointer text-[var(--text-muted)] font-display font-medium text-[0.95rem] hover:bg-red-500/10 hover:text-red-500 transition-colors duration-150"
-                >
-                  <LogOut size={16} />
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                <Link href="/auth/signin" className="btn-ghost no-underline flex-1 text-center py-2 text-sm">Sign In</Link>
-                <Link href="/auth/register" className="btn-primary no-underline flex-1 text-center py-2 text-sm">Join Free</Link>
-              </div>
-            )}
-          </div>
-        )}
       </nav>
+
+      {/* Profile dropdown — rendered via portal to escape nav's backdrop-filter stacking context */}
+      {profileOpen && session && typeof document !== "undefined" && createPortal(
+        <div
+          ref={profilePanelRef}
+          className={
+            isMobilePanel
+              ? "fixed inset-0 z-[9999] flex flex-col overflow-y-auto bg-[var(--bg-card)]"
+              : "fixed z-[9999] w-[200px] rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-visible"
+          }
+          style={{
+            animation: "slideDownIn 0.15s ease both",
+            ...(!isMobilePanel && profileAnchor
+              ? { top: profileAnchor.top, right: profileAnchor.right }
+              : {}),
+          }}
+        >
+          {/* Mobile full-screen close header */}
+          {isMobilePanel && (
+            <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--border-subtle)] shrink-0">
+              <span className="text-[0.9rem] font-display font-bold text-[var(--text-primary)]">Menu</span>
+              <button
+                onClick={() => setProfileOpen(false)}
+                className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* User info header */}
+          <div className="px-4 py-3 border-b border-[var(--border-subtle)] shrink-0">
+            <p className="text-[0.8125rem] font-display font-semibold text-[var(--text-primary)] truncate">
+              {session.user?.name ?? "User"}
+            </p>
+            <p className="text-[0.7rem] text-[var(--text-muted)] truncate mt-0.5">
+              {session.user?.email ?? ""}
+            </p>
+          </div>
+
+          {/* Admin section — mobile only */}
+          {isMobilePanel && session.user?.role === "ADMIN" && (
+            <div className="py-1 border-b border-[var(--border-subtle)]">
+              <p className="px-4 pt-1 pb-0.5 text-[0.65rem] font-display font-bold uppercase tracking-widest text-[var(--accent-orange)]">Admin</p>
+              <Link
+                href="/admin"
+                onClick={() => setProfileOpen(false)}
+                className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+              >
+                <LayoutDashboard size={14} className="text-[var(--accent-orange)]" />
+                Admin Panel
+              </Link>
+            </div>
+          )}
+
+          {/* Menu items */}
+          <div className="py-1">
+            <Link
+              href="/profile"
+              onClick={() => setProfileOpen(false)}
+              className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+            >
+              <UserAvatar name={session.user?.name ?? "?"} image={session.user?.image} size="sm" />
+              {t("profile")}
+            </Link>
+            <Link
+              href="/settings"
+              onClick={() => setProfileOpen(false)}
+              className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+            >
+              <Settings size={14} className="text-[var(--text-muted)]" />
+              {t("settings")}
+            </Link>
+          </div>
+
+          {/* Mobile nav links */}
+          {isMobilePanel && (
+            <div className="border-t border-[var(--border-subtle)] py-1">
+              {[
+                { href: "/feed", icon: Rss, label: t("feed") },
+                { href: "/chat", icon: MessageCircle, label: t("chat") },
+                { href: "/games", icon: Gamepad2, label: t("games") },
+                { href: "/subscriptions", icon: CreditCard, label: t("plans") },
+                { href: "/contact", icon: Mail, label: t("contact") },
+              ].map(({ href, icon: Icon, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+                >
+                  <Icon size={14} className="text-[var(--text-muted)]" />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {/* Language switcher row */}
+          <div className="px-4 py-2.5 border-t border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+            <span className="text-[0.75rem] text-[var(--text-muted)] font-display">Language</span>
+            <LanguageSwitcher current={locale} />
+          </div>
+
+          {/* Sign out */}
+          <div className="border-t border-[var(--border-subtle)] py-1 shrink-0">
+            <button
+              onClick={() => { signOut(); setProfileOpen(false); }}
+              className="flex items-center gap-[0.625rem] w-full px-4 py-2.5 bg-transparent border-none cursor-pointer text-[var(--text-muted)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-red-500/10 hover:text-red-500"
+            >
+              <LogOut size={14} />
+              {t("logout")}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Side drawer */}
       {(drawerOpen || drawerClosing) && (

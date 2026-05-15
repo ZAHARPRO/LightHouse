@@ -163,12 +163,20 @@ type LeaderEntry = {
   maxStreak: number;
 };
 
+type PuzzleEntry = {
+  id: string;
+  name: string | null;
+  image: string | null;
+  solveCount: number;
+};
+
 const LEADERBOARDS = [
-  { key: "chess",       label: "♟ Chess",        eloField: "chessElo"       as const },
-  { key: "minesweeper", label: "💣 Minesweeper",  eloField: "minesweeperElo" as const },
-  { key: "checkers",    label: "🔴 Checkers",     eloField: "checkersElo"    as const },
-  { key: "battleship",  label: "🚢 Battleship",   eloField: "battleshipElo"  as const },
-  { key: "billiards",   label: "🎱 Billiards",    eloField: "billiardsElo"   as const },
+  { key: "chess",       label: "♟ Chess",        eloField: "chessElo"       as const, isPuzzles: false },
+  { key: "minesweeper", label: "💣 Minesweeper",  eloField: "minesweeperElo" as const, isPuzzles: false },
+  { key: "checkers",    label: "🔴 Checkers",     eloField: "checkersElo"    as const, isPuzzles: false },
+  { key: "battleship",  label: "🚢 Battleship",   eloField: "battleshipElo"  as const, isPuzzles: false },
+  { key: "billiards",   label: "🎱 Billiards",    eloField: "billiardsElo"   as const, isPuzzles: false },
+  { key: "puzzles",     label: "🧩 Puzzles",      eloField: "chessElo"       as const, isPuzzles: true  },
 ];
 
 const PLACE_COLOR = ["#ffd700", "#c0c0c0", "#cd7f32"];
@@ -177,6 +185,7 @@ export default function GamesPage() {
   const t = useTranslations("games");
   const [lbIndex, setLbIndex] = useState(0);
   const [entries, setEntries] = useState<LeaderEntry[]>([]);
+  const [puzzleEntries, setPuzzleEntries] = useState<PuzzleEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const prevIndex = useRef(lbIndex);
@@ -185,17 +194,24 @@ export default function GamesPage() {
 
   useEffect(() => {
     function load() {
-      fetch(`/api/leaderboard?game=${current.key}&limit=10`, { cache: "no-store" })
-        .then(r => r.json())
-        .then(d => { setEntries(d); setLoading(false); })
-        .catch(() => setLoading(false));
+      if (current.isPuzzles) {
+        fetch("/api/puzzles/leaderboard?limit=10", { cache: "no-store" })
+          .then(r => r.json())
+          .then(d => { setPuzzleEntries(d); setLoading(false); })
+          .catch(() => setLoading(false));
+      } else {
+        fetch(`/api/leaderboard?game=${current.key}&limit=10`, { cache: "no-store" })
+          .then(r => r.json())
+          .then(d => { setEntries(d); setLoading(false); })
+          .catch(() => setLoading(false));
+      }
     }
     setLoading(true);
     load();
-    const t = setInterval(load, 30000);
+    const timer = setInterval(load, 30000);
     prevIndex.current = lbIndex;
-    return () => clearInterval(t);
-  }, [lbIndex, current.key]);
+    return () => clearInterval(timer);
+  }, [lbIndex, current.key, current.isPuzzles]);
 
   function prev() { setLbIndex(i => (i - 1 + LEADERBOARDS.length) % LEADERBOARDS.length); setExpanded(false); }
   function next() { setLbIndex(i => (i + 1) % LEADERBOARDS.length); setExpanded(false); }
@@ -229,79 +245,111 @@ export default function GamesPage() {
 
         {/* Table */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden">
-          {/* Column headers */}
-          <div className="grid items-center px-4 py-2 border-b border-[var(--border-subtle)]"
-            style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
-            <span />
-            <span />
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">{t("player")}</span>
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("elo")}</span>
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("wins")}</span>
-            <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
-              <Flame size={10} className="text-orange-400" /> {t("best")}
-            </span>
-          </div>
+          {current.isPuzzles ? (
+            <>
+              {/* Puzzle columns header */}
+              <div className="grid items-center px-4 py-2 border-b border-[var(--border-subtle)]"
+                style={{ gridTemplateColumns: "28px 36px 1fr 70px" }}>
+                <span />
+                <span />
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider pl-2">{t("player")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">Solved</span>
+              </div>
 
-          {loading ? (
-            <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("loading")}</div>
-          ) : entries.length === 0 ? (
-            <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("noPlayers")}</div>
+              {loading ? (
+                <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("loading")}</div>
+              ) : puzzleEntries.length === 0 ? (
+                <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("noPlayers")}</div>
+              ) : (
+                (expanded ? puzzleEntries : puzzleEntries.slice(0, 3)).map((u, i) => (
+                  <Link key={u.id} href={`/profile/${u.id}`}
+                    className="grid items-center px-4 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border-subtle)] last:border-0 no-underline"
+                    style={{ gridTemplateColumns: "28px 36px 1fr 70px" }}>
+                    <span className="font-mono font-bold text-sm text-center"
+                      style={{ color: PLACE_COLOR[i] ?? "var(--text-muted)" }}>
+                      {i < 3 ? ["🥇","🥈","🥉"][i] : i + 1}
+                    </span>
+                    {u.image
+                      ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
+                      : <div className="w-7 h-7 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-300 font-bold text-xs">
+                          {u.name?.[0]?.toUpperCase() ?? "?"}
+                        </div>
+                    }
+                    <p className="font-display font-semibold text-sm text-[var(--text-primary)] truncate pl-2">{u.name ?? "Anonymous"}</p>
+                    <span className="font-mono font-bold text-sm text-violet-300 text-center">{u.solveCount}</span>
+                  </Link>
+                ))
+              )}
+              {!loading && puzzleEntries.length > 3 && (
+                <button onClick={() => setExpanded(e => !e)}
+                  className="w-full py-2 text-[0.75rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors border-t border-[var(--border-subtle)] bg-transparent">
+                  {expanded ? t("showLess") : t("showAll", { count: puzzleEntries.length })}
+                </button>
+              )}
+            </>
           ) : (
-            (expanded ? entries : entries.slice(0, 3)).map((u, i) => {
-              const elo  = u[current.eloField];
-              const rank = getRank(elo);
-              return (
-                <Link key={u.id} href={`/profile/${u.id}`}
-                  className="grid items-center px-4 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border-subtle)] last:border-0 no-underline"
-                  style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
+            <>
+              {/* ELO columns header */}
+              <div className="grid items-center px-4 py-2 border-b border-[var(--border-subtle)]"
+                style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
+                <span />
+                <span />
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">{t("player")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("elo")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("wins")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
+                  <Flame size={10} className="text-orange-400" /> {t("best")}
+                </span>
+              </div>
 
-                  {/* Place */}
-                  <span className="font-mono font-bold text-sm text-center"
-                    style={{ color: PLACE_COLOR[i] ?? "var(--text-muted)" }}>
-                    {i + 1}
-                  </span>
-
-                  {/* Avatar */}
-                  {u.image
-                    ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
-                    : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">
-                        {u.name?.[0] ?? "?"}
-                      </div>
-                  }
-
-                  {/* Name + rank */}
-                  <div className="min-w-0 pl-2">
-                    <p className="font-display font-semibold text-sm text-[var(--text-primary)] truncate leading-tight">{u.name ?? "Anonymous"}</p>
-                    {rank && (
-                      <span className="text-[0.6rem] font-bold leading-tight" style={{ color: rank.color }}>
-                        {rank.emoji} {rank.label}
+              {loading ? (
+                <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("loading")}</div>
+              ) : entries.length === 0 ? (
+                <div className="py-8 text-center text-[var(--text-muted)] text-sm">{t("noPlayers")}</div>
+              ) : (
+                (expanded ? entries : entries.slice(0, 3)).map((u, i) => {
+                  const elo  = u[current.eloField];
+                  const rank = getRank(elo);
+                  return (
+                    <Link key={u.id} href={`/profile/${u.id}`}
+                      className="grid items-center px-4 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border-subtle)] last:border-0 no-underline"
+                      style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
+                      <span className="font-mono font-bold text-sm text-center"
+                        style={{ color: PLACE_COLOR[i] ?? "var(--text-muted)" }}>
+                        {i + 1}
                       </span>
-                    )}
-                  </div>
-
-                  {/* ELO */}
-                  <span className="font-mono font-bold text-sm text-[var(--text-primary)] text-center">{elo}</span>
-
-                  {/* Wins */}
-                  <span className="font-mono text-sm text-[var(--text-secondary)] text-center">{u.wins}</span>
-
-                  {/* Max streak */}
-                  <span className="font-mono text-sm text-center flex items-center justify-center gap-0.5"
-                    style={{ color: u.maxStreak >= 5 ? "#f97316" : "var(--text-muted)" }}>
-                    {u.maxStreak >= 3 && <Flame size={11} className="shrink-0" style={{ color: u.maxStreak >= 5 ? "#f97316" : "#888" }} />}
-                    {u.maxStreak}
-                  </span>
-                </Link>
-              );
-            })
-          )}
-          {!loading && entries.length > 3 && (
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="w-full py-2 text-[0.75rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors border-t border-[var(--border-subtle)] bg-transparent"
-            >
-              {expanded ? t("showLess") : t("showAll", { count: entries.length })}
-            </button>
+                      {u.image
+                        ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
+                        : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">
+                            {u.name?.[0] ?? "?"}
+                          </div>
+                      }
+                      <div className="min-w-0 pl-2">
+                        <p className="font-display font-semibold text-sm text-[var(--text-primary)] truncate leading-tight">{u.name ?? "Anonymous"}</p>
+                        {rank && (
+                          <span className="text-[0.6rem] font-bold leading-tight" style={{ color: rank.color }}>
+                            {rank.emoji} {rank.label}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-bold text-sm text-[var(--text-primary)] text-center">{elo}</span>
+                      <span className="font-mono text-sm text-[var(--text-secondary)] text-center">{u.wins}</span>
+                      <span className="font-mono text-sm text-center flex items-center justify-center gap-0.5"
+                        style={{ color: u.maxStreak >= 5 ? "#f97316" : "var(--text-muted)" }}>
+                        {u.maxStreak >= 3 && <Flame size={11} className="shrink-0" style={{ color: u.maxStreak >= 5 ? "#f97316" : "#888" }} />}
+                        {u.maxStreak}
+                      </span>
+                    </Link>
+                  );
+                })
+              )}
+              {!loading && entries.length > 3 && (
+                <button onClick={() => setExpanded(e => !e)}
+                  className="w-full py-2 text-[0.75rem] font-display font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors border-t border-[var(--border-subtle)] bg-transparent">
+                  {expanded ? t("showLess") : t("showAll", { count: entries.length })}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

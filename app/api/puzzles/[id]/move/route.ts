@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, getAllLegalMoves, isInCheck } from "@/lib/chess";
 import { getBotMove } from "@/lib/chess-bot";
+import { awardBadge, awardPuzzleMilestoneBadges } from "@/lib/awardBadge";
 import type { PieceType, Move, GameState } from "@/lib/chess";
 
 const FILES = "abcdefgh";
@@ -36,6 +37,37 @@ function isCheckmate(state: GameState): boolean {
   return getAllLegalMoves(state).length === 0 && isInCheck(state, state.turn);
 }
 
+function puzzlePoints(rating: number): number {
+  return Math.min(25, Math.max(5, Math.round(rating / 100)));
+}
+
+async function handleSolve(puzzleId: string, rating: number, userId: string | null) {
+  if (!userId) return { points: 0, newBadges: [] as string[] };
+
+  try {
+    await prisma.userPuzzleSolve.create({ data: { userId, puzzleId } });
+    await prisma.chessPuzzle.update({ where: { id: puzzleId }, data: { solveCount: { increment: 1 } } });
+
+    const pts = puzzlePoints(rating);
+    await prisma.user.update({ where: { id: userId }, data: { points: { increment: pts } } });
+
+    const totalSolves = await prisma.userPuzzleSolve.count({ where: { userId } });
+    const newBadges = await awardPuzzleMilestoneBadges(prisma, userId, totalSolves);
+
+    // Check PUZZLE_MASTER (solved all puzzles)
+    const [totalPuzzles] = await Promise.all([prisma.chessPuzzle.count()]);
+    if (totalSolves >= totalPuzzles) {
+      const result = await awardBadge(prisma, userId, "PUZZLE_MASTER");
+      if (result.awarded) newBadges.push("PUZZLE_MASTER");
+    }
+
+    return { points: pts, newBadges };
+  } catch {
+    // Already solved — still return points = 0 (no double reward)
+    return { points: 0, newBadges: [] as string[] };
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -49,9 +81,10 @@ export async function POST(
   const puzzle = await prisma.chessPuzzle.findUnique({ where: { id } });
   if (!puzzle) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const movesCount = puzzle.difficulty === "mate1" ? 1 : 2;
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
 
-  // Replay all previous moves from puzzle start, validate each
+  // ── Replay all previous moves to get current FEN ─────────────────────────
   let fen = puzzle.fen;
   for (let i = 0; i < moves.length - 1; i++) {
     const next = applyUCI(fen, moves[i]);
@@ -59,52 +92,49 @@ export async function POST(
     fen = next;
   }
 
-  // Apply the new user move (last element)
   const userUCI = moves[moves.length - 1];
   const afterUser = applyUCI(fen, userUCI);
   if (!afterUser) return NextResponse.json({ status: "invalid" });
 
   const stateAfterUser = fromFEN(afterUser);
 
-  // Check for checkmate
-  if (isCheckmate(stateAfterUser)) {
-    const session = await auth();
-    if (session?.user?.id) {
-      const uid = session.user.id;
-      try {
-        await prisma.userPuzzleSolve.create({ data: { userId: uid, puzzleId: id } });
-        await prisma.chessPuzzle.update({ where: { id }, data: { solveCount: { increment: 1 } } });
+  // ── Lichess / solution-based puzzles ──────────────────────────────────────
+  if (puzzle.source === "lichess" && puzzle.solution) {
+    const solution: string[] = JSON.parse(puzzle.solution);
+    const moveIdx = moves.length - 1; // index of the new user move in full sequence
 
-        // Check for Puzzle Master badge
-        const [total, userSolves, existing] = await Promise.all([
-          prisma.chessPuzzle.count(),
-          prisma.userPuzzleSolve.count({ where: { userId: uid } }),
-          prisma.reward.findFirst({ where: { userId: uid, type: "PUZZLE_MASTER" } }),
-        ]);
-        if (userSolves >= total && !existing) {
-          await prisma.reward.create({
-            data: {
-              userId: uid,
-              type: "PUZZLE_MASTER",
-              pointsValue: 50,
-              description: "Puzzle Master — solved all chess puzzles",
-            },
-          });
-          await prisma.user.update({ where: { id: uid }, data: { points: { increment: 50 } } });
-          return NextResponse.json({ status: "solved", badge: "PUZZLE_MASTER" });
-        }
-      } catch { /* already solved */ }
+    // Validate user move matches expected solution move
+    if (solution[moveIdx] !== userUCI) {
+      return NextResponse.json({ status: "invalid" });
     }
-    return NextResponse.json({ status: "solved" });
+
+    // Check if solution is fully exhausted (last user move played)
+    if (moves.length >= solution.length) {
+      const { points, newBadges } = await handleSolve(id, puzzle.rating, userId);
+      return NextResponse.json({ status: "solved", points, newBadges });
+    }
+
+    // Return next bot move from stored solution
+    const botMoveUCI = solution[moves.length];
+    const botFen = applyUCI(afterUser, botMoveUCI);
+    if (!botFen) return NextResponse.json({ status: "invalid" });
+
+    return NextResponse.json({ status: "continue", botMove: botMoveUCI, newFen: botFen });
   }
 
-  // Count user moves: even indices (0,2,4...) are user moves
+  // ── Legacy checkmate-based puzzles (mate1 / mate2) ────────────────────────
+  const movesCount = puzzle.difficulty === "mate1" ? 1 : 2;
+
+  if (isCheckmate(stateAfterUser)) {
+    const { points, newBadges } = await handleSolve(id, puzzle.rating, userId);
+    return NextResponse.json({ status: "solved", points, newBadges });
+  }
+
   const userMoveCount = Math.ceil(moves.length / 2);
   if (userMoveCount >= movesCount) {
     return NextResponse.json({ status: "failed" });
   }
 
-  // Bot responds defensively
   const botMove = getBotMove(stateAfterUser, "hard");
   if (!botMove) return NextResponse.json({ status: "failed" });
 

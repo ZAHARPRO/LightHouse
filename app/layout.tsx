@@ -14,12 +14,17 @@ import DMNotifier from "@/components/DMNotifier";
 import SupportChatBubble from "@/components/SupportChatBubble";
 import PwaInit from "@/components/PwaInit";
 import { MusicProvider } from "@/contexts/MusicContext";
+import { LocaleProvider } from "@/components/LocaleProvider";
 
 export const metadata: Metadata = {
   title: "LightHouse — Illuminate Your World",
   description:
     "A premium video platform with global chat, creator subscriptions, and a reward system.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-512.png",
+    apple: "/icons/icon-512.png",
+  },
   appleWebApp: {
     capable: true,
     title: "LightHouse",
@@ -66,6 +71,7 @@ export default async function RootLayout({
     <html lang={intlLocale} data-theme="pink">
       <body>
         <SessionProvider session={session}>
+          <LocaleProvider locale={locale}>
           <NextIntlClientProvider locale={intlLocale} messages={messages}>
             <MusicProvider>
               <div className="min-h-screen flex flex-col">
@@ -83,6 +89,7 @@ export default async function RootLayout({
               </div>
             </MusicProvider>
           </NextIntlClientProvider>
+          </LocaleProvider>
         </SessionProvider>
       </body>
     </html>

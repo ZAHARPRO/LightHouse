@@ -9,10 +9,8 @@ export async function GET() {
   const puzzles = await prisma.chessPuzzle.findMany({
     orderBy: { createdAt: "asc" },
     select: {
-      id: true,
-      title: true,
-      difficulty: true,
-      solveCount: true,
+      id: true, title: true, difficulty: true, solveCount: true,
+      rating: true, themes: true, source: true,
       ...(userId ? { solves: { where: { userId }, select: { id: true } } } : {}),
     },
   });
@@ -23,6 +21,9 @@ export async function GET() {
       title: p.title,
       difficulty: p.difficulty,
       solveCount: p.solveCount,
+      rating: p.rating,
+      themes: p.themes,
+      source: p.source,
       solved: userId ? (p.solves?.length ?? 0) > 0 : false,
     }))
   );

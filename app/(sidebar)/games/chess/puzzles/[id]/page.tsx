@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Loader2, RotateCcw, Trophy, CheckCircle2, XCircle, ChevronLeft,
-  Puzzle, ChevronRight, Lightbulb, Play, X, Zap,
+  Puzzle, ChevronRight, Lightbulb, Play, X, Zap, Tag,
 } from "lucide-react";
 import YouTubePlayer, { type YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import Link from "next/link";
@@ -278,10 +278,17 @@ function VideoModal({ onClose, onRecharged }: { onClose:()=>void; onRecharged:(p
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type PuzzleData = { id:string; title:string; difficulty:"mate1"|"mate2"; fen:string; alreadySolved:boolean };
+type PuzzleData = { id:string; title:string; difficulty:string; fen:string; alreadySolved:boolean; rating:number; themes:string[]; source:string };
 type Status = "playing"|"wrong"|"opponent"|"solved"|"failed";
 
-const DIFF_LABEL: Record<string,string> = { mate1:"Mate in 1", mate2:"Mate in 2" };
+const DIFF_LABEL: Record<string,string> = {
+  mate1:"Mate in 1", mate2:"Mate in 2",
+  tactical:"Tactical", endgame:"Endgame", opening:"Opening",
+};
+
+function puzzlePoints(rating: number) {
+  return Math.min(25, Math.max(5, Math.round(rating / 100)));
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PuzzleSolverPage() {
@@ -305,6 +312,8 @@ export default function PuzzleSolverPage() {
   const [hintPoints, setHintPoints] = useState<number|null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [newBadge, setNewBadge] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState<number | null>(null);
+  const [newBadges, setNewBadges] = useState<string[]>([]);
 
   // All moves played so far (user + bot interleaved)
   const movesRef      = useRef<string[]>([]);
@@ -346,6 +355,8 @@ export default function PuzzleSolverPage() {
     setHintFrom(null);
     setHintTo(null);
     setHintUsed(false);
+    setEarnedPoints(null);
+    setNewBadges([]);
   }, [puzzle]);
 
   const submitMove = useCallback(async (move: Move) => {
@@ -367,7 +378,8 @@ export default function PuzzleSolverPage() {
     });
     const data = await res.json() as {
       status: "solved"|"failed"|"continue"|"invalid";
-      botMove?: string; newFen?: string; badge?: string;
+      botMove?: string; newFen?: string;
+      badge?: string; points?: number; newBadges?: string[];
     };
 
     if (data.status === "invalid") {
@@ -388,7 +400,11 @@ export default function PuzzleSolverPage() {
     if (data.status === "solved") {
       movesRef.current = newMoves;
       setStatus("solved");
-      if (data.badge === "PUZZLE_MASTER") setNewBadge(true);
+      if (data.points && data.points > 0) setEarnedPoints(data.points);
+      if (data.newBadges && data.newBadges.length > 0) {
+        setNewBadges(data.newBadges);
+        if (data.newBadges.includes("PUZZLE_MASTER")) setNewBadge(true);
+      }
       // Find next unsolved puzzle
       fetch("/api/puzzles")
         .then(r => r.json())
@@ -485,7 +501,8 @@ export default function PuzzleSolverPage() {
   );
 
   const turnLabel = state.turn==="w" ? t("white") : t("black");
-  const diffLabel = DIFF_LABEL[puzzle.difficulty];
+  const diffLabel = DIFF_LABEL[puzzle.difficulty] ?? puzzle.difficulty;
+  const pts = puzzlePoints(puzzle.rating ?? 1200);
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-10">
@@ -500,17 +517,30 @@ export default function PuzzleSolverPage() {
         <h1 className="text-2xl font-display font-extrabold text-[var(--text-primary)]">{puzzle.title}</h1>
       </div>
 
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <span className="text-[0.7rem] font-display font-bold px-2 py-0.5 rounded-full border text-orange-400 bg-orange-500/10 border-orange-500/20">
           {diffLabel}
         </span>
-        <span className="text-sm text-[var(--text-muted)]">{turnLabel} {t("toPlay")} — {diffLabel.toLowerCase()}</span>
+        <span className="text-sm text-[var(--text-muted)]">{turnLabel} {t("toPlay")}</span>
+        <span className="flex items-center gap-1 text-[0.7rem] font-semibold text-emerald-400">
+          <Zap size={11}/> {pts} pts
+        </span>
+        {puzzle.rating && (
+          <span className="text-[0.7rem] font-mono text-amber-400/80">★ {puzzle.rating}</span>
+        )}
         {hintPoints !== null && (
           <span className="flex items-center gap-1 ml-auto text-xs font-display font-semibold text-amber-400">
             <Lightbulb size={12}/> {hintPoints} {t("hintPoints")}
           </span>
         )}
       </div>
+      {puzzle.themes && puzzle.themes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-5">
+          {puzzle.themes.map(th => (
+            <span key={th} className="text-[0.6rem] font-semibold text-violet-400/80 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">{th}</span>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* Board */}
@@ -542,7 +572,15 @@ export default function PuzzleSolverPage() {
               <>
                 <Trophy size={28} className="text-yellow-400"/>
                 <p className="font-display font-bold text-green-400 text-base">{t("solved")}</p>
-                {newBadge && <p className="text-amber-400 text-xs font-display font-bold">🏆 {t("puzzleMaster")}</p>}
+                {earnedPoints !== null && earnedPoints > 0 && (
+                  <div className="flex items-center gap-1 text-emerald-400 font-display font-bold text-sm">
+                    <Zap size={14}/> +{earnedPoints} points
+                  </div>
+                )}
+                {newBadges.map(b => (
+                  <p key={b} className="text-amber-400 text-xs font-display font-bold">🏅 {b.replace(/_/g, " ")}</p>
+                ))}
+                {newBadge && newBadges.length === 0 && <p className="text-amber-400 text-xs font-display font-bold">🏆 {t("puzzleMaster")}</p>}
                 <p className="text-[var(--text-muted)] text-xs">{t("wellDone")}</p>
               </>
             ) : status==="failed" ? (

@@ -269,4 +269,41 @@ export const BADGE_DEFS: Record<string, BadgeDef> = {
     howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online billiards.",
     category: "games", rare: true,
   },
+
+  // Puzzle milestones
+  PUZZLE_FIRST: {
+    icon: "🧩", label: "First Solve", color: "#34d399", points: 5,
+    description: "Solved your first chess puzzle",
+    how: "Solve any chess puzzle",
+    howToEarn: "Complete any chess puzzle on the platform.",
+    category: "games",
+  },
+  PUZZLE_10: {
+    icon: "🎯", label: "Puzzle Adept", color: "#60a5fa", points: 20,
+    description: "Solved 10 chess puzzles",
+    how: "Solve 10 chess puzzles",
+    howToEarn: "Complete 10 chess puzzles to earn this badge.",
+    category: "games",
+  },
+  PUZZLE_50: {
+    icon: "⚔️", label: "Puzzle Hunter", color: "#f59e0b", points: 75,
+    description: "Solved 50 chess puzzles",
+    how: "Solve 50 chess puzzles",
+    howToEarn: "Complete 50 chess puzzles to earn this badge.",
+    category: "games",
+  },
+  PUZZLE_100: {
+    icon: "🏹", label: "Puzzle Grandmaster", color: "#a855f7", points: 150,
+    description: "Solved 100 chess puzzles",
+    how: "Solve 100 chess puzzles",
+    howToEarn: "Complete 100 chess puzzles to unlock this rare badge.",
+    category: "games", rare: true,
+  },
+  PUZZLE_MASTER: {
+    icon: "♟️", label: "Puzzle Master", color: "#818cf8", points: 50,
+    description: "Solved every chess puzzle on the platform",
+    how: "Solve all chess puzzles",
+    howToEarn: "Complete every single chess puzzle in the library.",
+    category: "games", rare: true,
+  },
 };

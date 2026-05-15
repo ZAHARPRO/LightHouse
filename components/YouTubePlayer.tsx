@@ -189,6 +189,10 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
         dead = true;
         readyRef.current = false;
         stopPoll();
+        // Blank the iframe src before destroy so YouTube's postMessage to
+        // youtube.com no longer fails with an origin mismatch on unmount.
+        const iframe = mountRef.current?.querySelector("iframe");
+        if (iframe) iframe.src = "about:blank";
         ytRef.current?.destroy();
         ytRef.current = null;
       };

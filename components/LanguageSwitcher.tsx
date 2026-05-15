@@ -15,7 +15,7 @@ export default function LanguageSwitcher({ current }: { current: Locale }) {
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
 
-  // 🔥 ВОТ ЭТО ФИКС
+
   const [selected, setSelected] = useState<Locale>(current);
 
   const router = useRouter();
@@ -49,7 +49,6 @@ export default function LanguageSwitcher({ current }: { current: Locale }) {
 
   return (
     <div ref={ref} className="relative inline-block text-left">
-      {/* текущий язык */}
       <button
         onClick={() => setOpen((v) => !v)}
         disabled={pending}
@@ -59,7 +58,7 @@ export default function LanguageSwitcher({ current }: { current: Locale }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-28 rounded-xl border bg-[var(--bg-elevated)] border-[var(--border-subtle)] shadow-lg z-50">
+        <div className="absolute right-0 mt-1 w-28 rounded-xl border bg-[var(--bg-elevated)] border-[var(--border-subtle)] shadow-lg z-50 scroll-m-5">
           {locales.map((locale) => (
             <button
               key={locale}
@@ -67,7 +66,7 @@ export default function LanguageSwitcher({ current }: { current: Locale }) {
               disabled={pending || selected === locale}
               title={localeNames[locale]}
               className={[
-                "w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors",
+                "w-full text-left px-3 py-2 text-xs flex items-center gap-2 z-50 transition-colors",
                 selected === locale
                   ? "opacity-50 cursor-default"
                   : "hover:bg-[var(--bg-hover)]",

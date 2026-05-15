@@ -14,6 +14,7 @@ export async function GET(
     where: { id },
     select: {
       id: true, title: true, difficulty: true, fen: true, solveCount: true,
+      rating: true, themes: true, source: true,
       solves: userId ? { where: { userId }, select: { id: true } } : false,
     },
   });
@@ -26,6 +27,9 @@ export async function GET(
     difficulty: puzzle.difficulty,
     fen: puzzle.fen,
     solveCount: puzzle.solveCount,
+    rating: puzzle.rating,
+    themes: puzzle.themes,
+    source: puzzle.source,
     alreadySolved: userId ? ((puzzle as typeof puzzle & { solves?: { id: string }[] }).solves?.length ?? 0) > 0 : false,
   });
 }

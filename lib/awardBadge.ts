@@ -92,3 +92,25 @@ export async function awardBilliardsEloBadges(prisma: PrismaClient, userId: stri
     if (newElo >= threshold) await awardBadge(prisma, userId, type);
   }
 }
+
+const PUZZLE_MILESTONE_BADGES: [number, string][] = [
+  [1,   "PUZZLE_FIRST"],
+  [10,  "PUZZLE_10"],
+  [50,  "PUZZLE_50"],
+  [100, "PUZZLE_100"],
+];
+
+export async function awardPuzzleMilestoneBadges(
+  prisma: PrismaClient,
+  userId: string,
+  solveCount: number,
+): Promise<string[]> {
+  const awarded: string[] = [];
+  for (const [threshold, type] of PUZZLE_MILESTONE_BADGES) {
+    if (solveCount >= threshold) {
+      const result = await awardBadge(prisma, userId, type);
+      if (result.awarded) awarded.push(type);
+    }
+  }
+  return awarded;
+}

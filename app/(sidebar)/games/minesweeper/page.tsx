@@ -23,11 +23,43 @@ interface Cell {
   neighborCount: number;
 }
 
-const DIFFICULTIES: Record<Difficulty, { rows: number; cols: number; mines: number; label: string }> = {
-  easy:   { rows: 9,  cols: 9,  mines: 10, label: "Easy" },
-  medium: { rows: 16, cols: 16, mines: 40, label: "Normal" },
-  hard:   { rows: 16, cols: 30, mines: 99, label: "Hard" },
+const DIFFICULTIES: Record<Difficulty, { label: string }> = {
+  easy:   { label: "Easy" },
+  medium: { label: "Normal" },
+  hard:   { label: "Hard" },
 };
+
+const DIFF_RANGES: Record<Difficulty, { minCols: number; maxCols: number; minRows: number; maxRows: number; density: number }> = {
+  easy:   { minCols: 8,  maxCols: 12, minRows: 8,  maxRows: 12, density: 0.123 },
+  medium: { minCols: 13, maxCols: 20, minRows: 13, maxRows: 20, density: 0.155 },
+  hard:   { minCols: 18, maxCols: 28, minRows: 14, maxRows: 22, density: 0.206 },
+};
+
+function genBoard(difficulty: Difficulty): { rows: number; cols: number; mines: number } {
+  const r = DIFF_RANGES[difficulty];
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const maxColsByScreen = Math.floor((screenW - 32) / 24);
+  const maxCols = Math.min(r.maxCols, Math.max(r.minCols, maxColsByScreen));
+  const cols  = r.minCols + Math.floor(Math.random() * (maxCols - r.minCols + 1));
+  const rows  = r.minRows + Math.floor(Math.random() * (r.maxRows - r.minRows + 1));
+  const mines = Math.max(1, Math.round(cols * rows * r.density));
+  return { rows, cols, mines };
+}
+
+function useCellPx(cols: number) {
+  const [px, setPx] = useState(30);
+  useEffect(() => {
+    function compute() {
+      const gap = 2;
+      const fromW = Math.floor((window.innerWidth - 32 - (cols - 1) * gap) / cols);
+      setPx(Math.max(22, Math.min(36, fromW)));
+    }
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [cols]);
+  return px;
+}
 
 const NEIGHBOR_COLORS: Record<number, string> = {
   1: "text-blue-400",
@@ -183,10 +215,14 @@ export default function GamesPage() {
   const [actions, setActions] = useState<ActionEntry[]>([]);
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressCell  = useRef<{ r: number; c: number } | null>(null);
+  const pressDidFlag = useRef(false);
 
   useEffect(() => { preloadSounds(); }, []);
 
-  const cfg = DIFFICULTIES[difficulty];
+  const [cfg, setCfg] = useState<{ rows: number; cols: number; mines: number }>({ rows: 9, cols: 9, mines: 10 });
+  const cellPx = useCellPx(cfg.cols);
 
   useEffect(() => {
     if (replayIdx === null && actionsRef.current)
@@ -195,8 +231,10 @@ export default function GamesPage() {
 
   const startGame = useCallback((diff: Difficulty = difficulty) => {
     setDifficulty(diff);
-    setBoard(createEmptyBoard(DIFFICULTIES[diff].rows, DIFFICULTIES[diff].cols));
-    setMinesLeft(DIFFICULTIES[diff].mines);
+    const newCfg = genBoard(diff);
+    setCfg(newCfg);
+    setBoard(createEmptyBoard(newCfg.rows, newCfg.cols));
+    setMinesLeft(newCfg.mines);
     setGameState("playing");
     setFirstClick(true);
     setHitPos(null);
@@ -239,11 +277,9 @@ export default function GamesPage() {
     }
   }, [gameState, firstClick, cfg.mines, difficulty, board, minesLeft, replayIdx]);
 
-  const handleFlag = useCallback((e: React.MouseEvent, r: number, c: number) => {
-    e.preventDefault();
+  const toggleFlag = useCallback((r: number, c: number) => {
     if (gameState !== "playing" || replayIdx !== null) return;
     if (board[r][c].isRevealed) return;
-
     const willFlag = !board[r][c].isFlagged;
     const newMinesLeft = minesLeft + (willFlag ? -1 : 1);
     setMinesLeft(newMinesLeft);
@@ -255,12 +291,46 @@ export default function GamesPage() {
       r, c, board: b, minesLeft: newMinesLeft,
     }]);
     playSound(willFlag ? "flag_place" : "flag_remove");
+    navigator.vibrate?.(30);
   }, [gameState, board, minesLeft, replayIdx]);
+
+  const handleFlag = useCallback((e: React.MouseEvent, r: number, c: number) => {
+    e.preventDefault();
+    toggleFlag(r, c);
+  }, [toggleFlag]);
+
+  function handlePointerDown(r: number, c: number, e: React.PointerEvent) {
+    if (e.button !== 0) return; // right-click handled by onContextMenu
+    if (gameState !== "playing" || replayIdx !== null) return;
+    e.preventDefault();
+    pressCell.current = { r, c };
+    pressDidFlag.current = false;
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = setTimeout(() => {
+      pressDidFlag.current = true;
+      toggleFlag(r, c);
+    }, 450);
+  }
+
+  function handlePointerUp(r: number, c: number) {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+    if (!pressDidFlag.current && pressCell.current?.r === r && pressCell.current?.c === c) {
+      handleReveal(r, c);
+    }
+    pressCell.current = null;
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (pressTimer.current && Math.hypot(e.movementX, e.movementY) > 6) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
 
   const displayBoard = replayIdx !== null ? (actions[replayIdx]?.board ?? board) : board;
   const displayMinesLeft = replayIdx !== null ? (actions[replayIdx]?.minesLeft ?? minesLeft) : minesLeft;
 
-  const cellSize = difficulty === "hard" ? "w-7 h-7 text-xs" : "w-8 h-8 text-sm";
+  const iconSz = Math.max(9, Math.round(cellPx * 0.42));
 
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12 flex flex-col items-center">
@@ -288,7 +358,7 @@ export default function GamesPage() {
           >
             {DIFFICULTIES[diff].label}
             <span className="ml-2 text-[0.7rem] opacity-60">
-              {DIFFICULTIES[diff].cols}×{DIFFICULTIES[diff].rows} · {DIFFICULTIES[diff].mines} мин
+              {DIFF_RANGES[diff].minCols}-{DIFF_RANGES[diff].maxCols}×{DIFF_RANGES[diff].minRows}-{DIFF_RANGES[diff].maxRows}
             </span>
           </button>
         ))}
@@ -357,7 +427,7 @@ export default function GamesPage() {
                           : "bg-[var(--bg-card)] border-[var(--border-subtle)]";
                       content = (
                         <Bomb
-                          size={12}
+                          size={iconSz}
                           className={isDeath ? "text-red-400" : "text-red-400/40"}
                           style={isDeath ? { filter: "drop-shadow(0 0 4px rgba(239,68,68,0.8))" } : undefined}
                         />
@@ -373,15 +443,21 @@ export default function GamesPage() {
                       }
                     }
                   } else if (cell.isFlagged) {
-                    content = <Flag size={12} className="text-[var(--accent-orange)]" />;
+                    content = <Flag size={iconSz} className="text-[var(--accent-orange)]" />;
                   }
 
                   return (
                     <button
                       key={`${r}-${c}`}
-                      className={`${cellSize} flex items-center justify-center rounded border transition-colors duration-75 ${replayIdx !== null ? "cursor-default" : "cursor-pointer"} ${bg}`}
-                      onClick={() => replayIdx === null && handleReveal(r, c)}
-                      onContextMenu={e => { if (replayIdx === null) handleFlag(e, r, c); else e.preventDefault(); }}
+                      className={`flex items-center justify-center rounded border transition-colors duration-75 ${replayIdx !== null ? "cursor-default" : "cursor-pointer"} ${bg}`}
+                      style={{ width: cellPx, height: cellPx, fontSize: Math.max(10, Math.round(cellPx * 0.38)), touchAction: "manipulation" }}
+                      onPointerDown={e => handlePointerDown(r, c, e)}
+                      onPointerUp={() => handlePointerUp(r, c)}
+                      onPointerMove={handlePointerMove}
+                      onPointerLeave={() => {
+                        if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+                      }}
+                      onContextMenu={e => { e.preventDefault(); if (replayIdx === null) handleFlag(e, r, c); }}
                     >
                       {content}
                     </button>
@@ -390,6 +466,10 @@ export default function GamesPage() {
               )}
             </div>
           </div>
+
+          <p className="text-[0.7rem] text-[var(--text-muted)] text-center md:hidden">
+            Tap to reveal · Hold to flag 🚩
+          </p>
 
           <ReplayPanel
             actions={actions}

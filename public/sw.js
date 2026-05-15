@@ -1,9 +1,7 @@
 const CACHE_NAME = "lighthouse-v1";
 
-// Static assets to pre-cache on install
 const PRECACHE_URLS = ["/", "/feed"];
 
-// Routes that should never be cached
 const NO_CACHE_PATTERNS = [
   /\/api\//,
   /\/_next\/webpack-hmr/,
@@ -20,19 +18,19 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ── Activate: delete old caches ────────────────────────────────────────────
+// ── Activate: enable navigation preload + delete old caches ───────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== CACHE_NAME)
-            .map((k) => caches.delete(k))
-        )
-      )
-      .then(() => self.clients.claim())
+    Promise.all([
+      self.registration.navigationPreload?.enable(),
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+          )
+        ),
+    ]).then(() => self.clients.claim())
   );
 });
 
@@ -40,16 +38,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
-  // Only handle GET requests
   if (request.method !== "GET") return;
-
-  // Skip non-http(s) requests (chrome-extension, etc.)
   if (!request.url.startsWith("http")) return;
-
-  // Never cache API calls, HMR, auth routes
   if (NO_CACHE_PATTERNS.some((p) => p.test(request.url))) return;
 
-  // Next.js internal chunks — cache-first (they're content-hashed)
+  // Next.js static chunks — cache-first (content-hashed, never stale)
   if (request.url.includes("/_next/static/")) {
     event.respondWith(
       caches.match(request).then(
@@ -65,17 +58,48 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Navigation requests — use preloadResponse to avoid the warning
+  if (request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          // Use the preloaded response if available
+          const preloaded = await event.preloadResponse;
+          if (preloaded) {
+            const clone = preloaded.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            return preloaded;
+          }
+          // Fall back to network
+          const res = await fetch(request);
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        } catch {
+          const cached = await caches.match(request);
+          return cached || new Response("Network error", { status: 503 });
+        }
+      })()
+    );
+    return;
+  }
+
   // Everything else — network-first, fall back to cache
   event.respondWith(
     fetch(request)
       .then((res) => {
-        // Only cache successful responses
         if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(request, clone));
         }
         return res;
       })
-      .catch(() => caches.match(request).then((cached) => cached || new Response("Network error", { status: 503 })))
+      .catch(() =>
+        caches.match(request).then(
+          (cached) => cached || new Response("Network error", { status: 503 })
+        )
+      )
   );
 });

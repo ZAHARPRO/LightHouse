@@ -151,7 +151,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     toggleShuffle, setSmartShuffle,
     removeFromQueue, reorderQueue,
   } = music;
-  const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
+  const duration = (music.playerRef.current?.getDuration?.() ?? 0) * 1000;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
   // Live streams report duration=0; confirm by waiting until position actually advances
   const isLive = playerReady && duration === 0 && positionMs > 2000;

@@ -165,8 +165,8 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
               if (dead) return;
               const st = e.data;
               setBuffering(st === 3);
-              if (st === 1) { setPlaying(true);  startPoll(); syncQualities(); }
-              if (st === 2 || st === 0) { setPlaying(false); stopPoll(); }
+              if (st === 1) { setPlaying(true);  startPoll(); syncQualities(); onPlayPause?.(true); }
+              if (st === 2 || st === 0) { setPlaying(false); stopPoll(); onPlayPause?.(false); }
               if (st === 0) onEnded?.();
               if (ytRef.current) setDur(ytRef.current.getDuration());
             },

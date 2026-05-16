@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Lock, Loader2, Trophy, Puzzle, Lightbulb, Zap, Tag } from "lucide-react";
+import { CheckCircle2, Lock, Loader2, Trophy, Puzzle, Lightbulb, Zap, Tag, Play } from "lucide-react";
+import HintVideoModal from "@/components/HintVideoModal";
 
 type PuzzleItem = {
   id: string;
@@ -37,6 +38,7 @@ export default function PuzzleListPage() {
   const [filter, setFilter]     = useState("all");
   const [themeFilter, setThemeFilter] = useState("");
   const [hintPoints, setHintPoints] = useState<number | null>(null);
+  const [showVideo, setShowVideo]   = useState(false);
 
   useEffect(() => {
     fetch("/api/puzzles")
@@ -72,9 +74,17 @@ export default function PuzzleListPage() {
         <Puzzle size={22} className="text-violet-400" />
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">Chess Puzzles</h1>
         {hintPoints !== null && (
-          <span className="ml-auto flex items-center gap-1.5 text-xs font-display font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-            <Lightbulb size={12} /> {hintPoints} hints
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-display font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+              <Lightbulb size={12} /> {hintPoints} hints
+            </span>
+            <button
+              onClick={() => setShowVideo(true)}
+              className="flex items-center gap-1.5 text-xs font-display font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-full hover:bg-violet-500/20 transition-colors"
+            >
+              <Play size={11} /> Watch ad
+            </button>
+          </div>
         )}
       </div>
       <p className="text-[var(--text-muted)] mb-4">Solve tactical puzzles and earn points</p>
@@ -128,7 +138,7 @@ export default function PuzzleListPage() {
       ) : visible.length === 0 ? (
         <p className="text-center text-[var(--text-muted)] py-20">No puzzles match the filter.</p>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 overflow-y-auto max-h-[60vh] pr-1">
           {visible.map((puzzle, i) => (
             <Link key={puzzle.id} href={`/games/chess/puzzles/${puzzle.id}`}
               className="flex items-center gap-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl px-5 py-4 no-underline hover:border-violet-500/30 transition-all group">
@@ -161,6 +171,12 @@ export default function PuzzleListPage() {
             </Link>
           ))}
         </div>
+      )}
+      {showVideo && (
+        <HintVideoModal
+          onClose={() => setShowVideo(false)}
+          onRecharged={(pts) => { setHintPoints(pts); setShowVideo(false); }}
+        />
       )}
     </main>
   );

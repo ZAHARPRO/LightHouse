@@ -10,12 +10,10 @@ type Category = { id: string; name: string };
 function getYouTubeId(url: string): string | null {
   const m1 = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
   if (m1) return m1[1];
-  const m2 = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+  const m2 = url.match(/\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})/);
   if (m2) return m2[1];
-  const m3 = url.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+  const m3 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
   if (m3) return m3[1];
-  const m4 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
-  if (m4) return m4[1];
   return null;
 }
 

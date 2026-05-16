@@ -12,20 +12,17 @@ export function isGDriveEmbed(url: string): boolean {
   return url.includes("drive.google.com") && url.includes("/preview");
 }
 
-/** Extracts YouTube video ID from watch, short, embed, and youtu.be URLs */
+/** Extracts YouTube video ID from watch, short, embed, live, and youtu.be URLs */
 function getYouTubeId(url: string): string | null {
   // youtu.be/ID
   const m1 = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
   if (m1) return m1[1];
-  // youtube.com/shorts/ID
-  const m2 = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+  // youtube.com/shorts/ID, /embed/ID, /live/ID
+  const m2 = url.match(/\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})/);
   if (m2) return m2[1];
-  // youtube.com/embed/ID
-  const m3 = url.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
-  if (m3) return m3[1];
   // youtube.com/watch?v=ID or /v/ID
-  const m4 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
-  if (m4) return m4[1];
+  const m3 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
+  if (m3) return m3[1];
   return null;
 }
 

@@ -22,12 +22,14 @@ interface VPlayer {
   getPlayerState(): number;
   destroy(): void;
   setPlaybackQuality(quality: string): void;
+  setPlaybackQualityRange(min: string, max?: string): void;
   getAvailableQualityLevels(): string[];
   getPlaybackQuality(): string;
   setPlaybackRate(rate: number): void;
   loadModule(moduleName: string): void;
   unloadModule(moduleName: string): void;
   setOption(module: string, option: string, value: unknown): void;
+  getVideoData(): { video_id: string; isLive: boolean; title: string; author: string };
 }
 
 export interface YouTubePlayerHandle {
@@ -156,7 +158,9 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
             onReady(e: { target: VPlayer }) {
               if (dead) return;
               readyRef.current = true;
-              setDur(e.target.getDuration());
+              const d = e.target.getDuration();
+              setDur(d);
+              try { setIsLive(e.target.getVideoData().isLive); } catch { setIsLive(d === 0); }
               if (muted) { e.target.mute(); }
               else { e.target.unMute(); e.target.setVolume(volume); }
               e.target.playVideo();
@@ -170,7 +174,7 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
                 setPlaying(true); startPoll(); syncQualities(); onPlayPause?.(true);
                 const d = ytRef.current?.getDuration() ?? 0;
                 setDur(d);
-                setIsLive(d === 0);
+                try { setIsLive(ytRef.current?.getVideoData().isLive ?? d === 0); } catch { setIsLive(d === 0); }
               }
               if (st === 2 || st === 0) { setPlaying(false); stopPoll(); onPlayPause?.(false); }
               if (st === 0) onEnded?.();
@@ -311,9 +315,26 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
     }
 
     function changeQuality(q: string) {
-      ytRef.current?.setPlaybackQuality(q);
+      if (!ytRef.current) return;
+      if (q === "auto" || q === "default") {
+        ytRef.current.setPlaybackQuality("default");
+        try { ytRef.current.setPlaybackQualityRange("tiny", "highres"); } catch { /* ignore */ }
+      } else {
+        try { ytRef.current.setPlaybackQualityRange(q, q); } catch { /* ignore */ }
+        ytRef.current.setPlaybackQuality(q);
+      }
       setQuality(q);
       setMenu(null);
+    }
+
+    function goToLive() {
+      if (!ytRef.current || !isLive) return;
+      const dur = ytRef.current.getDuration();
+      if (dur > 0) {
+        ytRef.current.seekTo(dur, true);
+        setCurrent(dur);
+        onSeek?.(dur);
+      }
     }
 
     function toggleCaptions() {
@@ -331,6 +352,10 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
     }
 
     const pct = durationSec > 0 ? Math.min(100, (currentSec / durationSec) * 100) : 0;
+    // DVR live stream: user scrolled back more than 30s behind live edge
+    const isBehindLive = isLive && durationSec > 0 && (durationSec - currentSec) > 30;
+    // Show seek bar for DVR-enabled live streams, hide for pure live (durationSec=0)
+    const showSeekBar = !isLive || durationSec > 0;
     const ctrlVisible = showCtrl || !playing;
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -440,13 +465,8 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
               style={{ background: "linear-gradient(to top, rgba(2,0,6,0.97) 0%, rgba(2,0,6,0.55) 65%, transparent 100%)" }}
               onClick={e => e.stopPropagation()}
             >
-              {/* Seek bar — disabled for live streams */}
-              {isLive ? (
-                <div className="relative h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                  <div className="absolute left-0 top-0 h-full w-full rounded-full animate-pulse"
-                    style={{ background: "linear-gradient(to right, #7f1d1d, #ef4444, #7f1d1d)", backgroundSize: "200% 100%", animation: "liveBar 2s ease-in-out infinite" }} />
-                </div>
-              ) : (
+              {/* Seek bar — hidden for pure live (no DVR), shown for regular + DVR live */}
+              {showSeekBar ? (
                 <div
                   className="group/s relative h-[3px] rounded-full cursor-pointer"
                   style={{ background: "rgba(255,255,255,0.12)" }}
@@ -460,10 +480,20 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
                       boxShadow: "0 0 6px rgba(236,72,153,0.5)",
                     }}
                   />
+                  {/* Live edge marker for DVR streams */}
+                  {isLive && (
+                    <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)]"
+                      style={{ left: "calc(100% - 4px)" }} />
+                  )}
                   <div
                     className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full -translate-x-1/2 opacity-0 group-hover/s:opacity-100 transition-opacity shadow-lg"
                     style={{ left: `${pct}%`, background: "#f9a8d4", boxShadow: "0 0 8px rgba(249,168,212,0.8)" }}
                   />
+                </div>
+              ) : (
+                <div className="relative h-[3px] rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+                  <div className="absolute left-0 top-0 h-full w-full rounded-full"
+                    style={{ background: "linear-gradient(90deg, rgba(239,68,68,0.3) 0%, rgba(239,68,68,0.8) 85%, #ef4444 100%)" }} />
                 </div>
               )}
 
@@ -472,22 +502,29 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
                 <button onClick={togglePlay} aria-label={playing ? t("pause") : t("play")} className="text-pink-300 hover:text-pink-100 transition-colors shrink-0">
                   {playing ? <Pause size={13} /> : <Play size={13} className="ml-px" />}
                 </button>
-                {/* LIVE badge — red + pulsing when live, grey when not */}
-                <div
+                {/* LIVE badge — clickable when behind live edge (DVR), pulsing red when at edge */}
+                <button
+                  onClick={e => { e.stopPropagation(); goToLive(); }}
+                  disabled={!isBehindLive}
+                  title={isBehindLive ? "Go to live" : isLive ? "You're live" : "Not a live stream"}
                   className={[
-                    "flex items-center gap-1 px-1.5 py-0.5 rounded shrink-0 select-none",
-                    isLive ? "bg-red-500/20 border border-red-500/50" : "bg-white/5 border border-white/10",
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded shrink-0 select-none transition-all",
+                    isBehindLive
+                      ? "bg-white/10 border border-white/20 hover:bg-red-500/20 hover:border-red-500/40 cursor-pointer"
+                      : isLive
+                        ? "bg-red-500/20 border border-red-500/50 cursor-default"
+                        : "bg-white/5 border border-white/10 cursor-default",
                   ].join(" ")}
                 >
                   <div className={[
                     "w-1.5 h-1.5 rounded-full shrink-0",
-                    isLive && playing ? "bg-red-500 animate-pulse" : isLive ? "bg-red-500/60" : "bg-white/20",
+                    isBehindLive ? "bg-white/40" : isLive && playing ? "bg-red-500 animate-pulse" : isLive ? "bg-red-500/60" : "bg-white/20",
                   ].join(" ")} />
                   <span className={[
                     "text-[0.52rem] font-bold uppercase tracking-wide leading-none",
-                    isLive ? "text-red-400" : "text-white/25",
+                    isBehindLive ? "text-white/50" : isLive ? "text-red-400" : "text-white/25",
                   ].join(" ")}>LIVE</span>
-                </div>
+                </button>
                 {!isLive && (
                   <span className="text-[0.58rem] font-mono tabular-nums shrink-0" style={{ color: "rgba(249,168,212,0.7)" }}>
                     {fmt(currentSec)}<span style={{ color: "rgba(249,168,212,0.35)" }}> / {fmt(durationSec)}</span>

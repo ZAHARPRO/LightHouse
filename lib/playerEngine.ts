@@ -46,6 +46,10 @@ export type PlayerAction =
   | { type: "PLAY_NEXT"; track: YTTrack }
   /** Append track to the end of the queue */
   | { type: "ADD_TO_QUEUE"; track: YTTrack }
+  /** Remove track at a specific queue index */
+  | { type: "REMOVE_FROM_QUEUE"; index: number }
+  /** Replace the entire queue (used for reordering) */
+  | { type: "REORDER_QUEUE"; queue: YTTrack[] }
   /** Replace queue with playlist tracks; push current track to history */
   | { type: "PLAY_PLAYLIST"; id: string; name: string; tracks: YTTrack[] }
   /** Advance to next track; handles repeat / smart-shuffle when queue empty */
@@ -232,6 +236,12 @@ export function playerReducer(s: PlayerState, action: PlayerAction): ReducerResu
         command: null,
       };
     }
+
+    case "REMOVE_FROM_QUEUE":
+      return { state: { ...s, queue: s.queue.filter((_, i) => i !== action.index) }, command: null };
+
+    case "REORDER_QUEUE":
+      return { state: { ...s, queue: action.queue }, command: null };
 
     case "SET_REPEAT":
       return { state: { ...s, repeatMode: action.mode }, command: null };

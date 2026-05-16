@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
   let usedMode = "daily";
 
   if (lichessApiKey && cfg.count > 1) {
-    const { puzzles, error } = await fetchLichessPuzzleBatch(cfg.count, lichessApiKey);
+    const { puzzles, error } = await fetchLichessPuzzleBatch(cfg.count, lichessApiKey, cfg.minRating, cfg.maxRating);
 
     if (puzzles.length > 0) {
       usedMode = "batch";

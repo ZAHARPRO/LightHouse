@@ -150,18 +150,36 @@ export async function fetchLichessDailyPuzzle(): Promise<LichessPuzzleRow | null
   }
 }
 
+// ── Map a rating midpoint to Lichess difficulty string ───────────────────────
+function ratingToDifficulty(min?: number | null, max?: number | null): string {
+  const mid = min != null && max != null ? (min + max) / 2
+            : min != null ? min
+            : max != null ? max
+            : null;
+  if (mid == null) return "normal";
+  if (mid < 900)  return "easiest";
+  if (mid < 1200) return "easier";
+  if (mid < 1600) return "normal";
+  if (mid < 1900) return "harder";
+  return "hardest";
+}
+
 // ── Fetch one puzzle by theme angle (public, no auth needed) ─────────────────
 // GET /api/puzzle/next?angle={theme}  — returns a different puzzle per theme
 async function fetchPuzzleByAngle(
   angle: string,
   apiKey?: string,
+  difficulty?: string,
 ): Promise<LichessPuzzleRow | null> {
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
+    const params = new URLSearchParams({ angle });
+    if (difficulty && difficulty !== "normal") params.set("difficulty", difficulty);
+
     const res = await fetch(
-      `https://lichess.org/api/puzzle/next?angle=${encodeURIComponent(angle)}`,
+      `https://lichess.org/api/puzzle/next?${params}`,
       { headers, signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return null;
@@ -208,8 +226,15 @@ const FETCH_ANGLES = [
 export async function fetchLichessPuzzleBatch(
   count: number,
   apiKey?: string,
+  minRating?: number | null,
+  maxRating?: number | null,
 ): Promise<{ puzzles: LichessPuzzleRow[]; error?: string }> {
-  const n = Math.max(1, Math.min(FETCH_ANGLES.length, count));
+  const difficulty = ratingToDifficulty(minRating, maxRating);
+  // Over-fetch when a rating range is set so post-filtering still yields enough puzzles
+  const fetchCount = (minRating != null || maxRating != null)
+    ? Math.min(FETCH_ANGLES.length, count * 3)
+    : count;
+  const n = Math.max(1, Math.min(FETCH_ANGLES.length, fetchCount));
   const angles = FETCH_ANGLES.slice(0, n);
 
   // Fetch in parallel (max 6 at a time to avoid rate-limiting)
@@ -220,7 +245,7 @@ export async function fetchLichessPuzzleBatch(
   for (let i = 0; i < angles.length; i += 6) {
     const batch = angles.slice(i, i + 6);
     const settled = await Promise.allSettled(
-      batch.map(angle => fetchPuzzleByAngle(angle, apiKey))
+      batch.map(angle => fetchPuzzleByAngle(angle, apiKey, difficulty))
     );
     for (const r of settled) {
       if (r.status === "fulfilled" && r.value && !seen.has(r.value.lichessId)) {

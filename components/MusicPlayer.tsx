@@ -6,7 +6,8 @@ import {
   Music2, X, Minus, ChevronDown, Play, Pause, SkipBack, SkipForward,
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
   History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
-  Shuffle, Sparkles, MonitorPlay,
+  Shuffle, Sparkles, MonitorPlay, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
+  ListOrdered, Save,
 } from "lucide-react";
 import YouTubePlayer, { type YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import Image from "next/image";
@@ -32,7 +33,7 @@ type ActiveLobby = {
   isPlaying: boolean; positionMs: number; syncedAt: string;
 };
 
-type LobbyTab = "player" | "listeners" | "history" | "playlists";
+type LobbyTab = "player" | "listeners" | "history" | "playlists" | "queue";
 
 function fmtMs(ms: number) {
   const s = Math.floor(Math.max(0, ms) / 1000);
@@ -57,7 +58,7 @@ function timeAgo(at: number) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function MusicPlayer({ onClose }: { onClose: () => void }) {
+export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () => void; isOpen?: boolean }) {
   const { data: session } = useSession();
   const music = useMusicContext();
 
@@ -113,6 +114,13 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [creatingPl, setCreatingPl]   = useState(false);
   const [expandedPl, setExpandedPl]   = useState<string | null>(null);
   // Queue / playlist / shuffle state lives in MusicContext (playerEngine)
+  // Queue tab — save-as-playlist flow
+  const [saveQueueName, setSaveQueueName] = useState("");
+  const [savingQueue, setSavingQueue]     = useState(false);
+  const [showSaveQueue, setShowSaveQueue] = useState(false);
+
+  // Standalone player — "player" | "queue" mini-tab
+  const [playerSubTab, setPlayerSubTab] = useState<"player" | "queue">("player");
 
   // Favorites
   const [favIds, setFavIds]         = useState<Set<string>>(new Set());
@@ -123,6 +131,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   const [addToPlItem, setAddToPlItem]     = useState<YTItem | null>(null);
   const [addingToPlId, setAddingToPlId]   = useState<string | null>(null);
   const [addPlLoading, setAddPlLoading]   = useState(false);
+  const [copiedPlId, setCopiedPlId]       = useState<string | null>(null);
 
   const syncedTrackRef      = useRef<string | null>(null);
   const prevIsPlayingRef    = useRef<boolean | null>(null);
@@ -140,6 +149,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     queue: activeQueue, activePlId, activePlName, isShuffled,
     smartShuffle, smartLoading,
     toggleShuffle, setSmartShuffle,
+    removeFromQueue, reorderQueue,
   } = music;
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
@@ -395,6 +405,51 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
     fetch("/api/playlists").then(r => r.json()).then((d: Playlist[]) => { setPlaylists(d); setPlLoaded(true); }).catch(() => {});
   }, [lobbyTab, plLoaded]);
 
+  // ── Queue helpers ──────────────────────────────────────────────────────────
+  function moveQueueItem(from: number, to: number) {
+    if (to < 0 || to >= activeQueue.length) return;
+    const q = [...activeQueue];
+    const [item] = q.splice(from, 1);
+    q.splice(to, 0, item);
+    reorderQueue(q);
+  }
+
+  function openSaveQueue() {
+    if (!showSaveQueue) {
+      const d = new Date();
+      const dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const lobbyLabel = activeLobby?.name
+        ? activeLobby.name
+        : activeLobby?.host?.name
+          ? `${activeLobby.host.name}'s Lobby`
+          : null;
+      setSaveQueueName(lobbyLabel ? `${lobbyLabel} · ${dateStr}` : `Queue · ${dateStr}`);
+    }
+    setShowSaveQueue(s => !s);
+  }
+
+  async function saveQueueAsPlaylist() {
+    const rawName = saveQueueName.trim();
+    if (!rawName || activeQueue.length === 0) return;
+    // Prefix with [Q] so saved queues appear in their own section in the Playlists tab
+    const name = `[Q] ${rawName}`;
+    setSavingQueue(true);
+    try {
+      const tracks = track ? [track, ...activeQueue] : activeQueue;
+      const res = await fetch("/api/playlists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, tracks }),
+      });
+      if (res.ok) {
+        const pl = await res.json() as Playlist;
+        setPlaylists(p => [pl, ...p]);
+        setSaveQueueName("");
+        setShowSaveQueue(false);
+        setPlLoaded(true);
+      }
+    } finally { setSavingQueue(false); }
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   function hostSync(item: YTItem | null, posMs = 0, playing = true) {
     if (!activeLobby) return;
@@ -422,6 +477,11 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   function copyLink(id: string) {
     navigator.clipboard.writeText(`${window.location.origin}/music/${id}`);
     setCopiedId(id); setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  function copyPlaylistLink(id: string) {
+    navigator.clipboard.writeText(`${window.location.origin}/playlists/${id}`);
+    setCopiedPlId(id); setTimeout(() => setCopiedPlId(null), 1500);
   }
 
   async function toggleFav(item: YTItem) {
@@ -649,14 +709,17 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                 <p className="text-[0.58rem] text-[var(--text-muted)] truncate">{r.channel}</p>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
-                <button onClick={() => playTrack(r)} className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.58rem] font-bold flex items-center gap-0.5 hover:bg-red-500/25">
-                  <Play size={8} />Play
+                <button
+                  onClick={(e) => { e.stopPropagation(); music.addToQueue(r); setSearchOpen(false); setSearchQ(""); }}
+                  title="Add to queue"
+                  className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.58rem] font-bold flex items-center gap-0.5 hover:bg-red-500/25">
+                  <Plus size={8} />Queue
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); music.playNext(r); setSearchOpen(false); setSearchQ(""); }}
-                  title="Play next (add to queue)"
+                  onClick={() => playTrack(r)}
+                  title="Replace current track"
                   className="px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-muted)] text-[0.58rem] font-bold flex items-center gap-0.5 hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors">
-                  <Plus size={8} />Queue
+                  <Play size={8} />Replace
                 </button>
                 <FavBtn item={r} size={10} />
                 <AddPlBtn item={r} sz={10} />
@@ -868,7 +931,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="fixed z-[980] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-subtle)] bg-[rgba(12,12,14,0.97)] backdrop-blur-xl"
-      style={{ left: pos.x, top: pos.y, width: size.w, userSelect: "none" }}>
+      style={{ left: pos.x, top: pos.y, width: size.w, userSelect: "none", display: isOpen ? undefined : "none" }}>
 
       {/* Header */}
       <div onMouseDown={handleDrag}
@@ -905,9 +968,85 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
           {/* ── PLAYER VIEW ─────────────────────────────────────── */}
           {view === "player" && (
-            <div className="p-3 flex flex-col gap-3">
-              {SearchBar}
-              {PlayerControls}
+            <div className="flex flex-col">
+              {/* Mini-tab: Player / Queue */}
+              <div className="flex border-b border-[var(--border-subtle)] shrink-0">
+                {(["player", "queue"] as const).map(tab => (
+                  <button key={tab} onClick={() => setPlayerSubTab(tab)}
+                    className={[
+                      "flex-1 flex items-center justify-center gap-1 py-1.5 text-[0.55rem] font-display font-bold uppercase tracking-wide transition-colors",
+                      playerSubTab === tab ? "text-red-400 border-b-2 border-red-500" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
+                    ].join(" ")}>
+                    {tab === "player" ? <Play size={9} /> : <ListOrdered size={9} />}
+                    {tab === "queue"
+                      ? <span className="relative">Queue{activeQueue.length > 0 && <span className="absolute -top-1.5 -right-2.5 text-[0.45rem] bg-red-500 text-white rounded-full px-0.5 leading-tight">{activeQueue.length}</span>}</span>
+                      : "Player"}
+                  </button>
+                ))}
+              </div>
+
+              {playerSubTab === "player" ? (
+                <div className="p-3 flex flex-col gap-3">
+                  {SearchBar}
+                  {PlayerControls}
+                </div>
+              ) : (
+                /* Standalone queue panel */
+                <div className="p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                      Queue · {activeQueue.length} track{activeQueue.length !== 1 ? "s" : ""}
+                    </span>
+                    {activeQueue.length > 0 && (
+                      <button onClick={openSaveQueue}
+                        className={["flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.58rem] font-bold border transition-colors",
+                          showSaveQueue ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"].join(" ")}>
+                        <Save size={9} /> Save
+                      </button>
+                    )}
+                  </div>
+                  {showSaveQueue && (
+                    <div className="flex gap-1.5 mb-1">
+                      <input value={saveQueueName} onChange={e => setSaveQueueName(e.target.value)}
+                        placeholder="Playlist name…" onKeyDown={e => e.key === "Enter" && saveQueueAsPlaylist()}
+                        className="flex-1 px-2 py-1 rounded-lg text-xs bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
+                      <button onClick={saveQueueAsPlaylist} disabled={savingQueue || !saveQueueName.trim()}
+                        className="px-2 py-1 rounded-lg text-xs font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center gap-1">
+                        {savingQueue ? <Loader2 size={9} className="animate-spin" /> : <Save size={9} />}
+                      </button>
+                    </div>
+                  )}
+                  {activeQueue.length === 0 ? (
+                    <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                      <ListOrdered size={20} className="text-[var(--text-muted)] opacity-30" />
+                      <p className="text-[var(--text-muted)] text-xs">Queue is empty</p>
+                      <p className="text-[0.6rem] text-[var(--text-muted)] opacity-60">Add tracks with the + button</p>
+                    </div>
+                  ) : activeQueue.map((t, i) => (
+                    <div key={`${t.videoId}-${i}`}
+                      className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-lg hover:bg-[var(--bg-card)] transition-colors group">
+                      <span className="text-[0.5rem] text-[var(--text-muted)] w-3.5 shrink-0 text-center">{i + 1}</span>
+                      <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
+                        <p className="text-[0.52rem] text-[var(--text-muted)] truncate">{t.channel}</p>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top"
+                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ChevronsUp size={9} /></button>
+                        <button onClick={() => moveQueueItem(i, i - 1)} disabled={i === 0} title="Move up"
+                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ArrowUp size={9} /></button>
+                        <button onClick={() => moveQueueItem(i, i + 1)} disabled={i === activeQueue.length - 1} title="Move down"
+                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ArrowDown size={9} /></button>
+                        <button onClick={() => moveQueueItem(i, activeQueue.length - 1)} disabled={i === activeQueue.length - 1} title="To bottom"
+                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ChevronsDown size={9} /></button>
+                        <button onClick={() => removeFromQueue(i)} title="Remove"
+                          className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-colors"><X size={9} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1008,17 +1147,21 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
               {/* Lobby tab bar */}
               <div className="flex border-b border-[var(--border-subtle)] shrink-0">
                 {([
-                  { key: "player",    icon: Play,      label: "Player" },
-                  { key: "listeners", icon: Users,     label: "People" },
-                  { key: "history",   icon: History,   label: "History" },
-                  { key: "playlists", icon: ListMusic, label: "Playlists" },
+                  { key: "player",    icon: Play,         label: "Player" },
+                  { key: "listeners", icon: Users,        label: "People" },
+                  { key: "history",   icon: History,      label: "History" },
+                  { key: "queue",     icon: ListOrdered,  label: "Queue" },
+                  { key: "playlists", icon: ListMusic,    label: "Lists" },
                 ] as { key: LobbyTab; icon: React.ElementType; label: string }[]).map(({ key, icon: Icon, label }) => (
                   <button key={key} onClick={() => setLobbyTab(key)}
                     className={[
                       "flex-1 flex flex-col items-center gap-0.5 py-1.5 text-[0.55rem] font-display font-bold uppercase tracking-wide transition-colors",
                       lobbyTab === key ? "text-red-400 border-b-2 border-red-500" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
                     ].join(" ")}>
-                    <Icon size={11} />{label}
+                    <Icon size={11} />
+                    {key === "queue" && activeQueue.length > 0
+                      ? <span className="relative">{label}<span className="absolute -top-1.5 -right-2.5 text-[0.45rem] bg-red-500 text-white rounded-full px-0.5 leading-tight">{activeQueue.length}</span></span>
+                      : label}
                   </button>
                 ))}
               </div>
@@ -1083,7 +1226,85 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                         <div className="flex items-center gap-0.5 shrink-0">
                           <FavBtn item={item} size={10} />
                           <AddPlBtn item={item} sz={10} />
-                          <Play size={9} className="text-[var(--text-muted)]" />
+                          <button onClick={e => { e.stopPropagation(); music.addToQueue(item); }}
+                            title="Add to queue"
+                            className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5">
+                            <Plus size={9} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Queue tab */}
+                {lobbyTab === "queue" && (
+                  <div className="p-3 flex flex-col gap-2">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                        Queue · {activeQueue.length} track{activeQueue.length !== 1 ? "s" : ""}
+                      </span>
+                      {activeQueue.length > 0 && (
+                        <button onClick={openSaveQueue}
+                          className={["flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.58rem] font-bold border transition-colors",
+                            showSaveQueue ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"].join(" ")}>
+                          <Save size={9} /> Save
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Save-as-playlist form */}
+                    {showSaveQueue && (
+                      <div className="flex gap-1.5 mb-1">
+                        <input value={saveQueueName} onChange={e => setSaveQueueName(e.target.value)}
+                          placeholder="Playlist name…" onKeyDown={e => e.key === "Enter" && saveQueueAsPlaylist()}
+                          className="flex-1 px-2 py-1 rounded-lg text-xs bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
+                        <button onClick={saveQueueAsPlaylist} disabled={savingQueue || !saveQueueName.trim()}
+                          className="px-2 py-1 rounded-lg text-xs font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center gap-1">
+                          {savingQueue ? <Loader2 size={9} className="animate-spin" /> : <Save size={9} />}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Empty state */}
+                    {activeQueue.length === 0 ? (
+                      <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                        <ListOrdered size={20} className="text-[var(--text-muted)] opacity-30" />
+                        <p className="text-[var(--text-muted)] text-xs">Queue is empty</p>
+                        <p className="text-[0.6rem] text-[var(--text-muted)] opacity-60">Add tracks with the + button</p>
+                      </div>
+                    ) : activeQueue.map((t, i) => (
+                      <div key={`${t.videoId}-${i}`}
+                        className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-lg hover:bg-[var(--bg-card)] transition-colors group">
+                        <span className="text-[0.5rem] text-[var(--text-muted)] w-3.5 shrink-0 text-center">{i + 1}</span>
+                        <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
+                          <p className="text-[0.52rem] text-[var(--text-muted)] truncate">{t.channel}</p>
+                        </div>
+                        {/* Reorder + remove buttons */}
+                        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top"
+                            className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors">
+                            <ChevronsUp size={9} />
+                          </button>
+                          <button onClick={() => moveQueueItem(i, i - 1)} disabled={i === 0} title="Move up"
+                            className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors">
+                            <ArrowUp size={9} />
+                          </button>
+                          <button onClick={() => moveQueueItem(i, i + 1)} disabled={i === activeQueue.length - 1} title="Move down"
+                            className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors">
+                            <ArrowDown size={9} />
+                          </button>
+                          <button onClick={() => moveQueueItem(i, activeQueue.length - 1)} disabled={i === activeQueue.length - 1} title="To bottom"
+                            className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors">
+                            <ChevronsDown size={9} />
+                          </button>
+                          <button onClick={() => removeFromQueue(i)} title="Remove"
+                            className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-colors">
+                            <X size={9} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1151,6 +1372,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
                                   <FavBtn item={t} size={9} />
+                                  <button onClick={() => music.addToQueue(t)} title="Add to queue"
+                                    className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Plus size={9} /></button>
                                   <button onClick={() => {
                                     music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks.slice(i) });
                                     if (activeLobby) hostSync(t, 0, true);
@@ -1165,56 +1388,85 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
 
                     {!plLoaded ? (
                       <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-[var(--text-muted)]" /></div>
-                    ) : playlists.length === 0 ? (
-                      <div className="text-center py-5">
-                        <ListMusic size={20} className="mx-auto mb-1.5 text-[var(--text-muted)] opacity-30" />
-                        <p className="text-[0.65rem] text-[var(--text-muted)]">No playlists yet</p>
-                      </div>
-                    ) : playlists.map(pl => (
-                      <div key={pl.id} className="mb-2 rounded-xl border border-[var(--border-subtle)] overflow-hidden">
-                        <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[var(--bg-secondary)]">
-                          <button onClick={() => setExpandedPl(expandedPl === pl.id ? null : pl.id)}
-                            className="flex items-center gap-1 flex-1 min-w-0 text-left">
-                            <ChevronRight size={10} className={`text-[var(--text-muted)] shrink-0 transition-transform ${expandedPl === pl.id ? "rotate-90" : ""}`} />
-                            <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">{pl.name}</span>
-                            <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{pl.tracks.length}</span>
-                          </button>
-                          <button onClick={() => startPlaylist(pl)}
-                            className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
-                              activePlId === pl.id ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
-                            <Play size={7} />{activePlId === pl.id ? "Playing" : "Play"}
-                          </button>
-                          <button onClick={() => deletePlaylist(pl.id)} className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors">
-                            <Trash2 size={10} />
-                          </button>
-                        </div>
-                        {expandedPl === pl.id && (
-                          <div className="max-h-44 overflow-y-auto">
-                            {pl.tracks.length === 0 ? (
-                              <p className="text-[0.62rem] text-[var(--text-muted)] text-center py-2">Empty</p>
-                            ) : pl.tracks.map((t, i) => (
-                              <div key={`${t.videoId}-${i}`}
-                                className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", track?.videoId === t.videoId ? "bg-red-500/10" : ""].join(" ")}>
-                                <span className="text-[0.5rem] text-[var(--text-muted)] w-3 shrink-0">{i + 1}</span>
-                                <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
-                                </div>
-                                <div className="flex items-center gap-0.5 shrink-0">
-                                  <FavBtn item={t} size={9} />
-                                  <button onClick={() => {
-                                    music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
-                                    if (activeLobby) hostSync(t, 0, true);
-                                  }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
-                                  <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}
-                                    className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><X size={9} /></button>
-                                </div>
-                              </div>
-                            ))}
+                    ) : (() => {
+                      const queuePls  = playlists.filter(p => p.name.startsWith("[Q] "));
+                      const regularPls = playlists.filter(p => !p.name.startsWith("[Q] "));
+
+                      const PlaylistRow = (pl: Playlist, displayName: string) => (
+                        <div key={pl.id} className="mb-2 rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+                          <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[var(--bg-secondary)]">
+                            <button onClick={() => setExpandedPl(expandedPl === pl.id ? null : pl.id)}
+                              className="flex items-center gap-1 flex-1 min-w-0 text-left">
+                              <ChevronRight size={10} className={`text-[var(--text-muted)] shrink-0 transition-transform ${expandedPl === pl.id ? "rotate-90" : ""}`} />
+                              <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">{displayName}</span>
+                              <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{pl.tracks.length}</span>
+                            </button>
+                            <button onClick={() => copyPlaylistLink(pl.id)} title="Copy link"
+                              className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
+                              {copiedPlId === pl.id ? <Check size={9} className="text-green-400" /> : <Copy size={9} />}
+                            </button>
+                            <button onClick={() => startPlaylist(pl)}
+                              className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
+                                activePlId === pl.id ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
+                              <Play size={7} />{activePlId === pl.id ? "Playing" : "Play"}
+                            </button>
+                            <button onClick={() => deletePlaylist(pl.id)} className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors">
+                              <Trash2 size={10} />
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {expandedPl === pl.id && (
+                            <div className="max-h-44 overflow-y-auto">
+                              {pl.tracks.length === 0 ? (
+                                <p className="text-[0.62rem] text-[var(--text-muted)] text-center py-2">Empty</p>
+                              ) : pl.tracks.map((t, i) => (
+                                <div key={`${t.videoId}-${i}`}
+                                  className={["flex items-center gap-1.5 px-2.5 py-1.5 border-t border-[var(--border-subtle)]", track?.videoId === t.videoId ? "bg-red-500/10" : ""].join(" ")}>
+                                  <span className="text-[0.5rem] text-[var(--text-muted)] w-3 shrink-0">{i + 1}</span>
+                                  <Image src={t.thumbnail} alt="" width={24} height={18} className="rounded shrink-0 object-cover" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[0.62rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{t.title}</p>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <FavBtn item={t} size={9} />
+                                    <button onClick={() => music.addToQueue(t)} title="Add to queue"
+                                      className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Plus size={9} /></button>
+                                    <button onClick={() => {
+                                      music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
+                                      if (activeLobby) hostSync(t, 0, true);
+                                    }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
+                                    <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}
+                                      className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><X size={9} /></button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+
+                      return (
+                        <>
+                          {/* ── Saved Queues section ── */}
+                          {queuePls.length > 0 && (
+                            <>
+                              <p className="text-[0.58rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <ListOrdered size={9} /> Saved Queues
+                              </p>
+                              {queuePls.map(pl => PlaylistRow(pl, pl.name.slice(4)))}
+                              {regularPls.length > 0 && <div className="border-t border-[var(--border-subtle)] my-2" />}
+                            </>
+                          )}
+
+                          {/* ── Regular playlists ── */}
+                          {regularPls.length === 0 && queuePls.length === 0 ? (
+                            <div className="text-center py-5">
+                              <ListMusic size={20} className="mx-auto mb-1.5 text-[var(--text-muted)] opacity-30" />
+                              <p className="text-[0.65rem] text-[var(--text-muted)]">No playlists yet</p>
+                            </div>
+                          ) : regularPls.map(pl => PlaylistRow(pl, pl.name))}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

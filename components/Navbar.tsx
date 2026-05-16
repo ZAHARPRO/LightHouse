@@ -758,8 +758,8 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Music player popup */}
-      {spotifyOpen && <MusicPlayer onClose={() => setSpotifyOpen(false)} />}
+      {/* Music player — always mounted so playback state is never lost on close */}
+      <MusicPlayer isOpen={spotifyOpen} onClose={() => setSpotifyOpen(false)} />
     </>
   );
 }

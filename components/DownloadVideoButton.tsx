@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Music, Lock, Loader2, ExternalLink } from "lucide-react";
+import { Download, Music, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { audioBufferToWav } from "@/lib/audioBufferToWav";
 
@@ -60,17 +60,9 @@ export default function DownloadVideoButton({ videoId, userTier }: Props) {
       const meta = await fetchInfo();
       if (!meta) { setVideoState("error"); return; }
 
-      if (meta.urlType !== "direct") {
-        // YouTube / GDrive — open original in new tab
-        window.open(meta.url, "_blank", "noopener,noreferrer");
-        setVideoState("done");
-        return;
-      }
-
-      // Direct URL — proxy stream download
       const a = document.createElement("a");
       a.href = `/api/videos/${videoId}/download?stream=true`;
-      a.download = `${meta.filename}.mp4`;
+      a.download = meta.filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -87,42 +79,47 @@ export default function DownloadVideoButton({ videoId, userTier }: Props) {
     setAudioProgress(0);
     try {
       const meta = await fetchInfo();
-      if (!meta || !meta.canEliteAudio) {
-        setAudioState("error");
-        return;
+      if (!meta || !meta.canEliteAudio) { setAudioState("error"); return; }
+
+      if (meta.urlType === "youtube") {
+        // YouTube: server extracts audio-only stream directly
+        const a = document.createElement("a");
+        a.href = `/api/videos/${videoId}/download?stream=true&audio=true`;
+        a.download = meta.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setAudioProgress(100);
+        setAudioState("done");
+      } else {
+        // Direct URL: client-side decode → WAV
+        setAudioProgress(10);
+        const res = await fetch(`/api/videos/${videoId}/download?stream=true`);
+        if (!res.ok || !res.body) { setAudioState("error"); return; }
+
+        setAudioProgress(30);
+        const arrayBuffer = await res.arrayBuffer();
+
+        setAudioProgress(60);
+        const audioCtx   = new AudioContext();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        await audioCtx.close();
+
+        setAudioProgress(85);
+        const wavBlob = audioBufferToWav(audioBuffer);
+
+        const url = URL.createObjectURL(wavBlob);
+        const a   = document.createElement("a");
+        a.href     = url;
+        a.download = `${meta.filename}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setAudioProgress(100);
+        setAudioState("done");
       }
-
-      // 1. Fetch video file via proxy
-      setAudioProgress(10);
-      const res = await fetch(`/api/videos/${videoId}/download?stream=true`);
-      if (!res.ok || !res.body) { setAudioState("error"); return; }
-
-      // Read full body (needed for AudioContext.decodeAudioData)
-      setAudioProgress(30);
-      const arrayBuffer = await res.arrayBuffer();
-
-      // 2. Decode audio with Web Audio API
-      setAudioProgress(60);
-      const audioCtx = new AudioContext();
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      await audioCtx.close();
-
-      // 3. Convert to WAV
-      setAudioProgress(85);
-      const wavBlob = audioBufferToWav(audioBuffer);
-
-      // 4. Trigger download
-      const url = URL.createObjectURL(wavBlob);
-      const a   = document.createElement("a");
-      a.href     = url;
-      a.download = `${meta.filename}.wav`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      setAudioProgress(100);
-      setAudioState("done");
     } catch {
       setAudioState("error");
     }
@@ -134,7 +131,6 @@ export default function DownloadVideoButton({ videoId, userTier }: Props) {
     if (videoState === "done")    return <><Download size={13} className="text-green-400" /> Done!</>;
     if (videoState === "error")   return <><Download size={13} className="text-red-400" /> Error</>;
     // If YouTube/GDrive, show external icon hint
-    if (info && info.urlType !== "direct") return <><ExternalLink size={13} /> Open video</>;
     return <><Download size={13} /> MP4</>;
   };
 

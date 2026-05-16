@@ -175,7 +175,9 @@ export default function MusicLobbyPage() {
   // ── Auto-join ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!lobby || joined || !session?.user?.id) return;
-    if (isHost || !lobby.hasPassword) handleJoin();
+    const alreadyMember = lobby.members.some(m => m.id === session.user.id);
+    // skip password for host, no-password lobbies, and users already in members list
+    if (isHost || !lobby.hasPassword || alreadyMember) handleJoin();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lobby?.id, isHost, session?.user?.id]);
 

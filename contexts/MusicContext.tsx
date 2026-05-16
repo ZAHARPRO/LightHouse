@@ -98,6 +98,8 @@ type MusicCtx = {
   setRepeatMode: (mode: RepeatMode) => void;
   setSmartShuffle: (enabled: boolean) => void;
   clearQueue: () => void;
+  removeFromQueue: (index: number) => void;
+  reorderQueue: (queue: YTTrack[]) => void;
 };
 
 const MusicContext = createContext<MusicCtx | null>(null);
@@ -115,7 +117,14 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying]     = useState(false);
   const [playerState, setPlayerState] = useState(-1);
   const [positionMs, setPositionMs]   = useState(0);
-  const [activeLobbyId, setActiveLobbyId] = useState<string | null>(null);
+  const [activeLobbyId, setActiveLobbyIdRaw] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("active_lobby_id") : null
+  );
+  const setActiveLobbyId = useCallback((id: string | null) => {
+    setActiveLobbyIdRaw(id);
+    if (id) localStorage.setItem("active_lobby_id", id);
+    else localStorage.removeItem("active_lobby_id");
+  }, []);
   const [smartLoading, setSmartLoading]   = useState(false);
 
   // Engine state — the authoritative source for queue / history / playlist
@@ -294,6 +303,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       setRepeatMode:   (m) => dispatch({ type: "SET_REPEAT", mode: m }),
       setSmartShuffle: (e) => dispatch({ type: "SET_SMART_SHUFFLE", enabled: e }),
       clearQueue:      () => dispatch({ type: "CLEAR" }),
+      removeFromQueue: (i) => dispatch({ type: "REMOVE_FROM_QUEUE", index: i }),
+      reorderQueue:    (q) => dispatch({ type: "REORDER_QUEUE", queue: q }),
     }}>
       {children}
     </MusicContext.Provider>

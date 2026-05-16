@@ -297,43 +297,186 @@
     "cta": "Sign in to track your progress and see which badges you've already earned.",
     "signIn": "Sign In",
     "defs": {
-      "EARLY_ADOPTER":          { "label": "Early Adopter",       "description": "One of the first members of LightHouse",                        "howToEarn": "This badge was awarded to users who signed up during the closed beta period." },
-      "FIRST_COMMENT":          { "label": "First Comment",        "description": "Left your very first comment",                                  "howToEarn": "Jump into the conversation — post your first comment on any video." },
-      "WATCH_STREAK":           { "label": "Watch Streak",         "description": "Maintained a consistent watch streak",                          "howToEarn": "Stay consistent — watch at least one video every day for 7 consecutive days." },
-      "SUPER_FAN":              { "label": "Super Fan",            "description": "A dedicated fan of a creator",                                  "howToEarn": "Show your appreciation — like 50+ videos across LightHouse." },
-      "PREMIUM_MEMBER":         { "label": "Premium Member",       "description": "Upgraded to a premium tier",                                    "howToEarn": "Unlock premium content by subscribing to any paid plan on LightHouse." },
-      "CHESS_WIN":              { "label": "Chess Victor",         "description": "Won a game of chess against the bot",                           "howToEarn": "Beat the AI opponent in Chess — any difficulty counts." },
-      "CHESS_ONLINE_WIN":       { "label": "Online Champion",      "description": "Won an online 1v1 chess match",                                "howToEarn": "Win a real-time 1v1 online chess match against another player." },
-      "MINESWEEPER_WIN":        { "label": "Bomb Defuser",         "description": "Cleared a minesweeper board",                                  "howToEarn": "Clear any minesweeper board without hitting a mine." },
-      "MINESWEEPER_EXPERT":     { "label": "Mine Expert",          "description": "Cleared the hard minesweeper board (30×16, 99 mines)",          "howToEarn": "Clear the Hard difficulty board (30×16, 99 mines)." },
-      "MINESWEEPER_ONLINE_WIN": { "label": "Online Sweeper",       "description": "Won an online minesweeper match",                              "howToEarn": "Win a 1v1 online minesweeper match against another player." },
-      "CHESS_SILVER":           { "label": "Chess Silver",         "description": "Reached Silver rank in rated chess (700+ ELO)",                "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online chess." },
-      "CHESS_GOLD":             { "label": "Chess Gold",           "description": "Reached Gold rank in rated chess (1300+ ELO)",                 "howToEarn": "Prove your skill — reach 1300 ELO in rated online chess." },
-      "CHESS_PLATINUM":         { "label": "Chess Platinum",       "description": "Reached Platinum rank in rated chess (2200+ ELO)",             "howToEarn": "Elite territory — reach 2200 ELO in rated online chess." },
-      "CHESS_DIAMOND":          { "label": "Chess Diamond",        "description": "Reached Diamond rank in rated chess (3400+ ELO)",              "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online chess." },
-      "MINE_SILVER":            { "label": "Sweeper Silver",       "description": "Reached Silver rank in rated minesweeper (700+ ELO)",           "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online minesweeper." },
-      "MINE_GOLD":              { "label": "Sweeper Gold",         "description": "Reached Gold rank in rated minesweeper (1300+ ELO)",            "howToEarn": "Prove your skill — reach 1300 ELO in rated online minesweeper." },
-      "MINE_PLATINUM":          { "label": "Sweeper Platinum",     "description": "Reached Platinum rank in rated minesweeper (2200+ ELO)",       "howToEarn": "Elite territory — reach 2200 ELO in rated online minesweeper." },
-      "MINE_DIAMOND":           { "label": "Sweeper Diamond",      "description": "Reached Diamond rank in rated minesweeper (3400+ ELO)",        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online minesweeper." },
-      "CHECKERS_WIN":           { "label": "Checkers Victor",      "description": "Won an online checkers match",                                  "howToEarn": "Beat your opponent in a 1v1 online checkers match." },
-      "CHECKERS_ONLINE_WIN":    { "label": "Checkers Champion",    "description": "Won a rated online checkers match",                            "howToEarn": "Win a rated 1v1 online checkers match to earn this badge." },
-      "CHECKERS_SILVER":        { "label": "Checkers Silver",      "description": "Reached Silver rank in rated checkers (700+ ELO)",             "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online checkers." },
-      "CHECKERS_GOLD":          { "label": "Checkers Gold",        "description": "Reached Gold rank in rated checkers (1300+ ELO)",              "howToEarn": "Prove your skill — reach 1300 ELO in rated online checkers." },
-      "CHECKERS_PLATINUM":      { "label": "Checkers Platinum",    "description": "Reached Platinum rank in rated checkers (2200+ ELO)",          "howToEarn": "Elite territory — reach 2200 ELO in rated online checkers." },
-      "CHECKERS_DIAMOND":       { "label": "Checkers Diamond",     "description": "Reached Diamond rank in rated checkers (3400+ ELO)",           "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online checkers." },
-      "BATTLESHIP_WIN":         { "label": "Naval Victor",         "description": "Won a game of battleship against the bot",                     "howToEarn": "Beat the AI opponent in Battleship — any difficulty counts." },
-      "BATTLESHIP_ONLINE_WIN":  { "label": "Admiral",              "description": "Won an online 1v1 battleship match",                           "howToEarn": "Win a real-time 1v1 online battleship match against another player." },
-      "BATTLESHIP_SILVER":      { "label": "Battleship Silver",    "description": "Reached Silver rank in rated battleship (700+ ELO)",           "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online battleship." },
-      "BATTLESHIP_GOLD":        { "label": "Battleship Gold",      "description": "Reached Gold rank in rated battleship (1300+ ELO)",            "howToEarn": "Prove your skill — reach 1300 ELO in rated online battleship." },
-      "BATTLESHIP_PLATINUM":    { "label": "Battleship Platinum",  "description": "Reached Platinum rank in rated battleship (2200+ ELO)",       "howToEarn": "Elite territory — reach 2200 ELO in rated online battleship." },
-      "BATTLESHIP_DIAMOND":     { "label": "Battleship Diamond",   "description": "Reached Diamond rank in rated battleship (3400+ ELO)",        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship." },
-
-      "BILLIARDS_WIN":          { "label": "Billiards Victor",    "description": "Won a game of billiards against the bot",                        "howToEarn": "Beat the AI opponent in Billiards — any difficulty counts." },
-      "BILLIARDS_ONLINE_WIN":   { "label": "Pool Shark",          "description": "Won an online 1v1 billiards match",                              "howToEarn": "Win a real-time 1v1 online billiards match against another player." },
-      "BILLIARDS_SILVER":       { "label": "Billiards Silver",    "description": "Reached Silver rank in rated billiards (700+ ELO)",              "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online billiards." },
-      "BILLIARDS_GOLD":         { "label": "Billiards Gold",      "description": "Reached Gold rank in rated billiards (1300+ ELO)",               "howToEarn": "Prove your skill — reach 1300 ELO in rated online billiards." },
-      "BILLIARDS_PLATINUM":     { "label": "Billiards Platinum",  "description": "Reached Platinum rank in rated billiards (2200+ ELO)",           "howToEarn": "Elite territory — reach 2200 ELO in rated online billiards." },
-      "BILLIARDS_DIAMOND":      { "label": "Billiards Diamond",   "description": "Reached Diamond rank in rated billiards (3400+ ELO)",            "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online billiards." }
+      "EARLY_ADOPTER": {
+        "label": "Early Adopter",
+        "description": "One of the first members of LightHouse",
+        "howToEarn": "This badge was awarded to users who signed up during the closed beta period."
+      },
+      "FIRST_COMMENT": {
+        "label": "First Comment",
+        "description": "Left your very first comment",
+        "howToEarn": "Jump into the conversation — post your first comment on any video."
+      },
+      "WATCH_STREAK": {
+        "label": "Watch Streak",
+        "description": "Maintained a consistent watch streak",
+        "howToEarn": "Stay consistent — watch at least one video every day for 7 consecutive days."
+      },
+      "SUPER_FAN": {
+        "label": "Super Fan",
+        "description": "A dedicated fan of a creator",
+        "howToEarn": "Show your appreciation — like 50+ videos across LightHouse."
+      },
+      "PREMIUM_MEMBER": {
+        "label": "Premium Member",
+        "description": "Upgraded to a premium tier",
+        "howToEarn": "Unlock premium content by subscribing to any paid plan on LightHouse."
+      },
+      "CHESS_WIN": {
+        "label": "Chess Victor",
+        "description": "Won a game of chess against the bot",
+        "howToEarn": "Beat the AI opponent in Chess — any difficulty counts."
+      },
+      "CHESS_ONLINE_WIN": {
+        "label": "Online Champion",
+        "description": "Won an online 1v1 chess match",
+        "howToEarn": "Win a real-time 1v1 online chess match against another player."
+      },
+      "MINESWEEPER_WIN": {
+        "label": "Bomb Defuser",
+        "description": "Cleared a minesweeper board",
+        "howToEarn": "Clear any minesweeper board without hitting a mine."
+      },
+      "MINESWEEPER_EXPERT": {
+        "label": "Mine Expert",
+        "description": "Cleared the hard minesweeper board (30×16, 99 mines)",
+        "howToEarn": "Clear the Hard difficulty board (30×16, 99 mines)."
+      },
+      "MINESWEEPER_ONLINE_WIN": {
+        "label": "Online Sweeper",
+        "description": "Won an online minesweeper match",
+        "howToEarn": "Win a 1v1 online minesweeper match against another player."
+      },
+      "CHESS_SILVER": {
+        "label": "Chess Silver",
+        "description": "Reached Silver rank in rated chess (700+ ELO)",
+        "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online chess."
+      },
+      "CHESS_GOLD": {
+        "label": "Chess Gold",
+        "description": "Reached Gold rank in rated chess (1300+ ELO)",
+        "howToEarn": "Prove your skill — reach 1300 ELO in rated online chess."
+      },
+      "CHESS_PLATINUM": {
+        "label": "Chess Platinum",
+        "description": "Reached Platinum rank in rated chess (2200+ ELO)",
+        "howToEarn": "Elite territory — reach 2200 ELO in rated online chess."
+      },
+      "CHESS_DIAMOND": {
+        "label": "Chess Diamond",
+        "description": "Reached Diamond rank in rated chess (3400+ ELO)",
+        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online chess."
+      },
+      "MINE_SILVER": {
+        "label": "Sweeper Silver",
+        "description": "Reached Silver rank in rated minesweeper (700+ ELO)",
+        "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online minesweeper."
+      },
+      "MINE_GOLD": {
+        "label": "Sweeper Gold",
+        "description": "Reached Gold rank in rated minesweeper (1300+ ELO)",
+        "howToEarn": "Prove your skill — reach 1300 ELO in rated online minesweeper."
+      },
+      "MINE_PLATINUM": {
+        "label": "Sweeper Platinum",
+        "description": "Reached Platinum rank in rated minesweeper (2200+ ELO)",
+        "howToEarn": "Elite territory — reach 2200 ELO in rated online minesweeper."
+      },
+      "MINE_DIAMOND": {
+        "label": "Sweeper Diamond",
+        "description": "Reached Diamond rank in rated minesweeper (3400+ ELO)",
+        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online minesweeper."
+      },
+      "CHECKERS_WIN": {
+        "label": "Checkers Victor",
+        "description": "Won an online checkers match",
+        "howToEarn": "Beat your opponent in a 1v1 online checkers match."
+      },
+      "CHECKERS_ONLINE_WIN": {
+        "label": "Checkers Champion",
+        "description": "Won a rated online checkers match",
+        "howToEarn": "Win a rated 1v1 online checkers match to earn this badge."
+      },
+      "CHECKERS_SILVER": {
+        "label": "Checkers Silver",
+        "description": "Reached Silver rank in rated checkers (700+ ELO)",
+        "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online checkers."
+      },
+      "CHECKERS_GOLD": {
+        "label": "Checkers Gold",
+        "description": "Reached Gold rank in rated checkers (1300+ ELO)",
+        "howToEarn": "Prove your skill — reach 1300 ELO in rated online checkers."
+      },
+      "CHECKERS_PLATINUM": {
+        "label": "Checkers Platinum",
+        "description": "Reached Platinum rank in rated checkers (2200+ ELO)",
+        "howToEarn": "Elite territory — reach 2200 ELO in rated online checkers."
+      },
+      "CHECKERS_DIAMOND": {
+        "label": "Checkers Diamond",
+        "description": "Reached Diamond rank in rated checkers (3400+ ELO)",
+        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online checkers."
+      },
+      "BATTLESHIP_WIN": {
+        "label": "Naval Victor",
+        "description": "Won a game of battleship against the bot",
+        "howToEarn": "Beat the AI opponent in Battleship — any difficulty counts."
+      },
+      "BATTLESHIP_ONLINE_WIN": {
+        "label": "Admiral",
+        "description": "Won an online 1v1 battleship match",
+        "howToEarn": "Win a real-time 1v1 online battleship match against another player."
+      },
+      "BATTLESHIP_SILVER": {
+        "label": "Battleship Silver",
+        "description": "Reached Silver rank in rated battleship (700+ ELO)",
+        "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online battleship."
+      },
+      "BATTLESHIP_GOLD": {
+        "label": "Battleship Gold",
+        "description": "Reached Gold rank in rated battleship (1300+ ELO)",
+        "howToEarn": "Prove your skill — reach 1300 ELO in rated online battleship."
+      },
+      "BATTLESHIP_PLATINUM": {
+        "label": "Battleship Platinum",
+        "description": "Reached Platinum rank in rated battleship (2200+ ELO)",
+        "howToEarn": "Elite territory — reach 2200 ELO in rated online battleship."
+      },
+      "BATTLESHIP_DIAMOND": {
+        "label": "Battleship Diamond",
+        "description": "Reached Diamond rank in rated battleship (3400+ ELO)",
+        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online battleship."
+      },
+      "BILLIARDS_WIN": {
+        "label": "Billiards Victor",
+        "description": "Won a game of billiards against the bot",
+        "howToEarn": "Beat the AI opponent in Billiards — any difficulty counts."
+      },
+      "BILLIARDS_ONLINE_WIN": {
+        "label": "Pool Shark",
+        "description": "Won an online 1v1 billiards match",
+        "howToEarn": "Win a real-time 1v1 online billiards match against another player."
+      },
+      "BILLIARDS_SILVER": {
+        "label": "Billiards Silver",
+        "description": "Reached Silver rank in rated billiards (700+ ELO)",
+        "howToEarn": "Climb to Silver rank by reaching 700 ELO in rated online billiards."
+      },
+      "BILLIARDS_GOLD": {
+        "label": "Billiards Gold",
+        "description": "Reached Gold rank in rated billiards (1300+ ELO)",
+        "howToEarn": "Prove your skill — reach 1300 ELO in rated online billiards."
+      },
+      "BILLIARDS_PLATINUM": {
+        "label": "Billiards Platinum",
+        "description": "Reached Platinum rank in rated billiards (2200+ ELO)",
+        "howToEarn": "Elite territory — reach 2200 ELO in rated online billiards."
+      },
+      "BILLIARDS_DIAMOND": {
+        "label": "Billiards Diamond",
+        "description": "Reached Diamond rank in rated billiards (3400+ ELO)",
+        "howToEarn": "The pinnacle — reach Diamond rank (3400 ELO) in rated online billiards."
+      }
     }
   },
   "games": {
@@ -422,57 +565,56 @@
     "spectating": "Spectating"
   },
   "battleship": {
-      "title": "Battleship",
-      "description": "Naval strategy game. Sink all enemy ships!",
-      "placement": {
-        "title": "Place Your Ships",
-        "subtitle": "Drag ships to place them on the board",
-        "rotate": "Rotate",
-        "random": "Random",
-        "ready": "Ready!",
-        "waitingOpponent": "Waiting for opponent to place ships...",
-        "shipsRemaining": "Ships remaining: {count}"
-      },
-      "battle": {
-        "yourBoard": "Your Board",
-        "enemyBoard": "Enemy Board",
-        "yourTurn": "Your Turn",
-        "opponentTurn": "Opponent's Turn",
-        "hit": "Hit!",
-        "miss": "Miss!",
-        "sunk": "Ship sunk!",
-        "shipSizes": "Fleet"
-      },
-      "result": {
-        "victory": "Victory!",
-        "defeat": "Defeat",
-        "allSunk": "All ships sunk",
-        "resigned": "Opponent resigned",
-        "timeout": "Time out"
-      },
-      "replay": {
-        "title": "Match Replay",
-        "shot": "Shot {n}",
-        "by": "by {player}"
-      },
-      "bot": {
-        "easy": "Easy",
-        "medium": "Medium", 
-        "hard": "Hard",
-        "thinking": "Bot is thinking..."
-      },
-      "fleet": {
-        "carrier": "Carrier (4)",
-        "battleship": "Battleship (3)",
-        "cruiser": "Cruiser (2)",
-        "destroyer": "Destroyer (1)"
-      },
-    
-    "UI":{
+    "title": "Battleship",
+    "description": "Naval strategy game. Sink all enemy ships!",
+    "placement": {
+      "title": "Place Your Ships",
+      "subtitle": "Drag ships to place them on the board",
+      "rotate": "Rotate",
+      "random": "Random",
+      "ready": "Ready!",
+      "waitingOpponent": "Waiting for opponent to place ships...",
+      "shipsRemaining": "Ships remaining: {count}"
+    },
+    "battle": {
+      "yourBoard": "Your Board",
+      "enemyBoard": "Enemy Board",
+      "yourTurn": "Your Turn",
+      "opponentTurn": "Opponent's Turn",
+      "hit": "Hit!",
+      "miss": "Miss!",
+      "sunk": "Ship sunk!",
+      "shipSizes": "Fleet"
+    },
+    "result": {
+      "victory": "Victory!",
+      "defeat": "Defeat",
+      "allSunk": "All ships sunk",
+      "resigned": "Opponent resigned",
+      "timeout": "Time out"
+    },
+    "replay": {
+      "title": "Match Replay",
+      "shot": "Shot {n}",
+      "by": "by {player}"
+    },
+    "bot": {
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard",
+      "thinking": "Bot is thinking..."
+    },
+    "fleet": {
+      "carrier": "Carrier (4)",
+      "battleship": "Battleship (3)",
+      "cruiser": "Cruiser (2)",
+      "destroyer": "Destroyer (1)"
+    },
+    "UI": {
       "Back": "Back to live view",
       "Again": "Play Again"
-      }
-    },
+    }
+  },
   "forms": {
     "title": "Title",
     "titleRequired": "Title *",
@@ -773,5 +915,76 @@
     "cooldown": "Please wait {min} more minutes before watching again.",
     "rechargeError": "Something went wrong. Try again.",
     "noVideo": "No video available right now."
+  },
+  "musicPage": {
+    "title": "Music",
+    "searchPlaceholder": "Search YouTube…",
+    "searchPlaceholderLobby": "Search & play for everyone…",
+    "noResults": "No results.",
+    "apiKeyMissing": "API key not configured.",
+    "searchFailed": "Search failed.",
+    "networkError": "Network error.",
+    "queueBtn": "Queue",
+    "replaceBtn": "Replace",
+    "likeBtn": "Like",
+    "likedBtn": "Saved",
+    "playlistBtn": "Playlist",
+    "noTrack": "Search a track to play",
+    "loadingPlayer": "Loading player…",
+    "live": "Live",
+    "paused": "Paused",
+    "closeSong": "Close song",
+    "shuffle": "Shuffle",
+    "smartOn": "Smart ON",
+    "smart": "Smart",
+    "tabPlayer": "Player",
+    "tabQueue": "Queue",
+    "tabHistory": "History",
+    "tabPlaylists": "Playlists",
+    "tabLobbies": "Rooms",
+    "tabListeners": "People",
+    "queueEmpty": "Queue is empty",
+    "queueEmptyHint": "Add tracks with the + button",
+    "queueSaveBtn": "Save as playlist",
+    "queueSavePlaceholder": "Playlist name…",
+    "savedQueues": "Saved Queues",
+    "toTop": "To top",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "toBottom": "To bottom",
+    "remove": "Remove",
+    "lobbiesTitle": "Active Rooms",
+    "noLobbies": "No active rooms",
+    "createRoom": "Create",
+    "createRoomTitle": "Create Room",
+    "lobbyNameLabel": "Name (optional)",
+    "lobbyNamePlaceholder": "My session",
+    "lobbyPassLabel": "Password (optional)",
+    "lobbyPassPlaceholder": "Leave blank for public",
+    "cancel": "Cancel",
+    "joinBtn": "Join",
+    "shareBtn": "Share",
+    "copied": "Copied",
+    "leaveRoom": "Leave",
+    "closeRoom": "Close",
+    "host": "host",
+    "noListeners": "No listeners yet",
+    "noHistory": "No tracks played yet",
+    "addToQueue": "Add to queue",
+    "newPlaylist": "New playlist / Import YouTube",
+    "playlistNamePlaceholder": "Playlist name",
+    "ytUrlPlaceholder": "YouTube playlist URL (optional)",
+    "importBtn": "Import",
+    "createBtn": "Create",
+    "playAll": "Play all",
+    "playing": "Playing",
+    "favorites": "Favorites",
+    "noPlaylists": "No playlists yet",
+    "emptyPlaylist": "Empty",
+    "watchVideo": "Watch video",
+    "hideVideo": "Hide video",
+    "signInRequired": "Sign in to use the music player",
+    "signInBtn": "Sign In",
+    "openFullPage": "Open full room page"
   }
 }

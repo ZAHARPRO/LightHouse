@@ -7,7 +7,7 @@ import {
   Music2, Users, Lock, Play, Pause, SkipForward, SkipBack,
   Loader2, X, Copy, Check, Volume2, Search, LogOut,
   History, ListMusic, Plus, Trash2, Download, ChevronRight,
-  Youtube,
+  Youtube, ListOrdered, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Save,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,7 +37,7 @@ function timeAgo(at: number) {
   return `${Math.floor(d / 3600)}h ago`;
 }
 
-type SideTab = "listeners" | "history" | "playlists";
+type SideTab = "queue" | "listeners" | "history" | "playlists";
 
 export default function MusicLobbyPage() {
   const { lobbyId } = useParams<{ lobbyId: string }>();
@@ -53,7 +53,10 @@ export default function MusicLobbyPage() {
   const [copied, setCopied]       = useState(false);
   const [leaving, setLeaving]     = useState(false);
   const [volume, setVolume]       = useState(70);
-  const [sideTab, setSideTab]     = useState<SideTab>("listeners");
+  const [sideTab, setSideTab]     = useState<SideTab>("queue");
+  const [saveQueueName, setSaveQueueName] = useState("");
+  const [savingQueue, setSavingQueue]     = useState(false);
+  const [showSaveQueue, setShowSaveQueue] = useState(false);
 
   // Search
   const [searchQ, setSearchQ]       = useState("");
@@ -217,6 +220,42 @@ export default function MusicLobbyPage() {
   }, [sideTab, playlistsLoaded]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
+  function moveQueueItem(from: number, to: number) {
+    if (to < 0 || to >= music.queue.length) return;
+    const q = [...music.queue];
+    const [item] = q.splice(from, 1);
+    q.splice(to, 0, item);
+    music.reorderQueue(q);
+  }
+
+  function openSaveQueue() {
+    if (!showSaveQueue) {
+      const d = new Date();
+      const dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const label = lobby?.name ?? (lobby?.host?.name ? `${lobby.host.name}'s Lobby` : null);
+      setSaveQueueName(label ? `${label} · ${dateStr}` : `Queue · ${dateStr}`);
+    }
+    setShowSaveQueue(s => !s);
+  }
+
+  async function saveQueueAsPlaylist() {
+    const rawName = saveQueueName.trim();
+    if (!rawName || music.queue.length === 0) return;
+    setSavingQueue(true);
+    try {
+      const tracks = music.track ? [music.track, ...music.queue] : music.queue;
+      const res = await fetch("/api/playlists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `[Q] ${rawName}`, tracks }),
+      });
+      if (res.ok) {
+        const pl = await res.json() as Playlist;
+        setPlaylists(p => [pl, ...p]);
+        setSaveQueueName(""); setShowSaveQueue(false); setPlLoaded(true);
+      }
+    } finally { setSavingQueue(false); }
+  }
+
   async function handleJoin(pass?: string) {
     setJoining(true);
     try {
@@ -332,7 +371,7 @@ export default function MusicLobbyPage() {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   }
 
-  const duration      = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
+  const duration      = (music.playerRef.current?.getDuration?.() ?? 0) * 1000;
   const pct           = duration > 0 ? Math.min(100, (music.positionMs / duration) * 100) : 0;
   const estimatedPos  = lobby ? lobby.positionMs + (lobby.isPlaying ? Math.min(lobby.elapsedMs, 300_000) : 0) : 0;
 
@@ -581,10 +620,11 @@ export default function MusicLobbyPage() {
           {/* Tab bar */}
           <div className="flex border-b border-[var(--border-subtle)]">
             {([
-              { key: "listeners", icon: Users,     label: "People" },
-              { key: "history",   icon: History,   label: "History" },
-              { key: "playlists", icon: ListMusic, label: "Lists" },
-            ] as { key: SideTab; icon: React.ElementType; label: string }[]).map(({ key, icon: Icon, label }) => (
+              { key: "queue",     icon: ListOrdered, label: "Queue", badge: music.queue.length },
+              { key: "listeners", icon: Users,       label: "People" },
+              { key: "history",   icon: History,     label: "History" },
+              { key: "playlists", icon: ListMusic,   label: "Lists" },
+            ] as { key: SideTab; icon: React.ElementType; label: string; badge?: number }[]).map(({ key, icon: Icon, label, badge }) => (
               <button key={key} onClick={() => setSideTab(key)}
                 className={[
                   "flex-1 flex flex-col items-center gap-0.5 py-2 text-[0.58rem] font-display font-bold uppercase tracking-wide transition-colors",
@@ -593,12 +633,67 @@ export default function MusicLobbyPage() {
                     : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
                 ].join(" ")}>
                 <Icon size={13} />
-                {label}
+                {badge != null && badge > 0
+                  ? <span className="relative">{label}<span className="absolute -top-1.5 -right-3 text-[0.45rem] bg-red-500 text-white rounded-full px-0.5 leading-tight">{badge}</span></span>
+                  : label}
               </button>
             ))}
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            {/* Queue tab */}
+            {sideTab === "queue" && (
+              <div className="p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                    Queue · {music.queue.length}
+                  </span>
+                  {music.queue.length > 0 && (
+                    <button onClick={openSaveQueue}
+                      className={["flex items-center gap-1 px-2 py-1 rounded-lg text-[0.6rem] font-bold border transition-colors",
+                        showSaveQueue ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"].join(" ")}>
+                      <Save size={10} /> Save
+                    </button>
+                  )}
+                </div>
+                {showSaveQueue && (
+                  <div className="flex gap-1.5">
+                    <input value={saveQueueName} onChange={e => setSaveQueueName(e.target.value)}
+                      placeholder="Playlist name" onKeyDown={e => e.key === "Enter" && saveQueueAsPlaylist()}
+                      className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] outline-none focus:border-red-500/40" />
+                    <button onClick={saveQueueAsPlaylist} disabled={savingQueue || !saveQueueName.trim()}
+                      className="px-2 py-1.5 rounded-lg text-xs font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-40 flex items-center">
+                      {savingQueue ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                    </button>
+                  </div>
+                )}
+                {music.queue.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <ListOrdered size={24} className="text-[var(--text-muted)] opacity-30" />
+                    <p className="text-xs text-[var(--text-muted)]">Queue is empty</p>
+                    <p className="text-[0.6rem] text-[var(--text-muted)] opacity-60">Search a track and add it to queue</p>
+                  </div>
+                ) : music.queue.map((q, i) => (
+                  <div key={`${q.videoId}-${i}`}
+                    className="flex items-center gap-2 px-1.5 py-2 rounded-xl hover:bg-[var(--bg-secondary)] transition-colors group">
+                    <span className="text-[0.55rem] text-[var(--text-muted)] w-4 shrink-0 text-center">{i + 1}</span>
+                    <Image src={q.thumbnail} alt="" width={32} height={24} className="rounded shrink-0 object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[0.65rem] font-display font-semibold text-[var(--text-primary)] truncate leading-tight">{q.title}</p>
+                      <p className="text-[0.55rem] text-[var(--text-muted)] truncate">{q.channel}</p>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top" className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20"><ChevronsUp size={10} /></button>
+                      <button onClick={() => moveQueueItem(i, i - 1)} disabled={i === 0} title="Move up" className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20"><ArrowUp size={10} /></button>
+                      <button onClick={() => moveQueueItem(i, i + 1)} disabled={i === music.queue.length - 1} title="Move down" className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20"><ArrowDown size={10} /></button>
+                      <button onClick={() => moveQueueItem(i, music.queue.length - 1)} disabled={i === music.queue.length - 1} title="To bottom" className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20"><ChevronsDown size={10} /></button>
+                      <button onClick={() => music.removeFromQueue(i)} title="Remove" className="p-0.5 text-[var(--text-muted)] hover:text-red-400"><X size={10} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Listeners tab */}
             {sideTab === "listeners" && (
               <div className="p-3">

@@ -32,6 +32,7 @@ model User {
   banReason       String?
   bannedAt        DateTime?
   hintPoints      Int       @default(5)
+  puzzleRating    Int       @default(1000)
   lastAdWatchedAt          DateTime?
   lastMonthlyPointsClaim   DateTime?
   createdAt                DateTime  @default(now())
@@ -820,6 +821,8 @@ model PuzzleCronConfig {
   count        Int       @default(1)
   intervalDays Int       @default(7)
   lastRunAt    DateTime?
+  minRating    Int?
+  maxRating    Int?
 }
 
 model UserPuzzleSolve {

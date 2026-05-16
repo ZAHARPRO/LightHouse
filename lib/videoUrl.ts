@@ -66,7 +66,7 @@ export function normalizeThumbnailUrl(url: string | null | undefined): string | 
   if (url.includes("youtube.com") || url.includes("youtu.be")) {
     const id = getYouTubeId(url);
     if (!id) return url;
-    return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
   }
   return url;
 }

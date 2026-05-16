@@ -78,7 +78,7 @@ const DIFF_COLOR: Record<string, string> = {
   opening: "text-violet-400 bg-violet-500/10 border-violet-500/20",
 };
 
-type CronConfig = { count: number; intervalDays: number; lastRunAt: string | null };
+type CronConfig = { count: number; intervalDays: number; lastRunAt: string | null; minRating: number | null; maxRating: number | null };
 
 // ── Stats Panel ───────────────────────────────────────────────────────────────
 function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () => void }) {
@@ -87,28 +87,41 @@ function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () 
   const [fixing, setFixing]           = useState(false);
   const [fixMsg, setFixMsg]           = useState<{ ok: boolean; text: string } | null>(null);
   const [cfg, setCfg]                 = useState<CronConfig | null>(null);
-  const [editCount, setEditCount]     = useState("");
+  const [editCount, setEditCount]       = useState("");
   const [editInterval, setEditInterval] = useState("");
-  const [savingCfg, setSavingCfg]     = useState(false);
-  const [cfgMsg, setCfgMsg]           = useState<string | null>(null);
+  const [editMinRating, setEditMinRating] = useState("");
+  const [editMaxRating, setEditMaxRating] = useState("");
+  const [savingCfg, setSavingCfg]       = useState(false);
+  const [cfgMsg, setCfgMsg]             = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/puzzles/cron-config")
       .then(r => r.json())
-      .then((d: CronConfig) => { setCfg(d); setEditCount(String(d.count)); setEditInterval(String(d.intervalDays)); })
+      .then((d: CronConfig) => { setCfg(d); setEditCount(String(d.count)); setEditInterval(String(d.intervalDays)); setEditMinRating(d.minRating != null ? String(d.minRating) : ""); setEditMaxRating(d.maxRating != null ? String(d.maxRating) : ""); })
       .catch(() => {});
   }, []);
 
   async function saveCfg() {
     setSavingCfg(true); setCfgMsg(null);
-    const count = parseInt(editCount);
+    const count        = parseInt(editCount);
     const intervalDays = parseInt(editInterval);
-    if (isNaN(count) || count < 1 || isNaN(intervalDays) || intervalDays < 1) {
+    if (isNaN(count) || count < 1 || isNaN(intervalDays) || intervalDays < 0) {
       setCfgMsg("Invalid values"); setSavingCfg(false); return;
+    }
+    const minRating = editMinRating.trim() ? parseInt(editMinRating) : null;
+    const maxRating = editMaxRating.trim() ? parseInt(editMaxRating) : null;
+    if (minRating !== null && (isNaN(minRating) || minRating < 400 || minRating > 3000)) {
+      setCfgMsg("Min rating must be 400–3000"); setSavingCfg(false); return;
+    }
+    if (maxRating !== null && (isNaN(maxRating) || maxRating < 400 || maxRating > 3000)) {
+      setCfgMsg("Max rating must be 400–3000"); setSavingCfg(false); return;
+    }
+    if (minRating !== null && maxRating !== null && minRating > maxRating) {
+      setCfgMsg("Min rating must be ≤ max rating"); setSavingCfg(false); return;
     }
     const res = await fetch("/api/admin/puzzles/cron-config", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, intervalDays }),
+      body: JSON.stringify({ count, intervalDays, minRating, maxRating }),
     });
     const d: CronConfig = await res.json();
     setSavingCfg(false);
@@ -231,13 +244,44 @@ function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () 
           </div>
           <div>
             <label className="block text-[0.6rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
-              Every N days
+              Every N days <span className="normal-case text-amber-400/80">(0 = off)</span>
             </label>
             <input
-              type="number" min={1} max={365} value={editInterval}
+              type="number" min={0} max={365} value={editInterval}
               onChange={e => setEditInterval(e.target.value)}
-              className="w-full px-2 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs focus:outline-none focus:border-violet-500/50"
+              className={["w-full px-2 py-1.5 rounded-lg bg-[var(--bg-elevated)] border text-[var(--text-primary)] text-xs focus:outline-none focus:border-violet-500/50", editInterval === "0" ? "border-amber-500/40 text-amber-300" : "border-[var(--border-subtle)]"].join(" ")}
             />
+            {editInterval === "0" && (
+              <p className="text-[0.55rem] text-amber-400/70 mt-0.5">Auto-refresh disabled</p>
+            )}
+          </div>
+        </div>
+
+        {/* Rating range */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="block text-[0.6rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+              Min rating <span className="normal-case text-[var(--text-muted)]">(400–3000)</span>
+            </label>
+            <input
+              type="number" min={400} max={3000} placeholder="Any"
+              value={editMinRating}
+              onChange={e => setEditMinRating(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs focus:outline-none focus:border-violet-500/50 placeholder:text-[var(--text-muted)]"
+            />
+            <p className="text-[0.55rem] text-[var(--text-muted)] mt-0.5">Beginner ≈ 600, Club ≈ 1500</p>
+          </div>
+          <div>
+            <label className="block text-[0.6rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+              Max rating <span className="normal-case text-[var(--text-muted)]">(400–3000)</span>
+            </label>
+            <input
+              type="number" min={400} max={3000} placeholder="Any"
+              value={editMaxRating}
+              onChange={e => setEditMaxRating(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs focus:outline-none focus:border-violet-500/50 placeholder:text-[var(--text-muted)]"
+            />
+            <p className="text-[0.55rem] text-[var(--text-muted)] mt-0.5">Master ≈ 2000, Elite ≈ 2800</p>
           </div>
         </div>
 
@@ -276,7 +320,7 @@ function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () 
         {/* Step-by-step flow */}
         <div className="flex flex-col gap-1.5 mb-3">
           {[
-            { step: "1", color: "text-violet-400 bg-violet-500/10 border-violet-500/20", label: "Cron runs daily 09:00 UTC", desc: `Checks if ${editInterval || "N"} day(s) have passed since last run` },
+            { step: "1", color: editInterval === "0" ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-violet-400 bg-violet-500/10 border-violet-500/20", label: editInterval === "0" ? "Auto-refresh disabled" : "Cron runs daily 09:00 UTC", desc: editInterval === "0" ? "Set interval > 0 to enable" : `Checks if ${editInterval || "N"} day(s) have passed since last run` },
             { step: "2", color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
               label: parseInt(editCount) > 1 ? `Fetch ${editCount} puzzles by theme` : "Fetch Lichess daily puzzle",
               desc: parseInt(editCount) > 1 ? `/api/puzzle/next?angle={theme} × ${editCount} — no auth needed` : "/api/puzzle/daily — no auth needed" },

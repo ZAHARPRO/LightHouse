@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove } from "@/lib/chess";
 import { awardBadge, awardPuzzleMilestoneBadges } from "@/lib/awardBadge";
+import { puzzleEloDelta } from "@/lib/elo";
 import type { PieceType } from "@/lib/chess";
 
 const FILES = "abcdefgh";
@@ -31,29 +32,35 @@ function puzzlePoints(rating: number): number {
 }
 
 async function handleSolve(puzzleId: string, rating: number, userId: string | null) {
-  if (!userId) return { points: 0, newBadges: [] as string[] };
+  if (!userId) return { points: 0, newBadges: [] as string[], ratingDelta: 0 };
 
   try {
     await prisma.userPuzzleSolve.create({ data: { userId, puzzleId } });
     await prisma.chessPuzzle.update({ where: { id: puzzleId }, data: { solveCount: { increment: 1 } } });
 
     const pts = puzzlePoints(rating);
-    await prisma.user.update({ where: { id: userId }, data: { points: { increment: pts } } });
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { points: { increment: pts } },
+      select: { puzzleRating: true },
+    });
+
+    const delta = puzzleEloDelta(user.puzzleRating, rating, true);
+    const newRating = Math.max(400, user.puzzleRating + delta);
+    await prisma.user.update({ where: { id: userId }, data: { puzzleRating: newRating } });
 
     const totalSolves = await prisma.userPuzzleSolve.count({ where: { userId } });
     const newBadges = await awardPuzzleMilestoneBadges(prisma, userId, totalSolves);
 
-    // Check PUZZLE_MASTER (solved all puzzles)
-    const [totalPuzzles] = await Promise.all([prisma.chessPuzzle.count()]);
+    const totalPuzzles = await prisma.chessPuzzle.count();
     if (totalSolves >= totalPuzzles) {
       const result = await awardBadge(prisma, userId, "PUZZLE_MASTER");
       if (result.awarded) newBadges.push("PUZZLE_MASTER");
     }
 
-    return { points: pts, newBadges };
+    return { points: pts, newBadges, ratingDelta: delta };
   } catch {
-    // Already solved — still return points = 0 (no double reward)
-    return { points: 0, newBadges: [] as string[] };
+    return { points: 0, newBadges: [] as string[], ratingDelta: 0 };
   }
 }
 
@@ -97,8 +104,8 @@ export async function POST(
 
     // Check if solution is fully exhausted (last user move played)
     if (moves.length >= solution.length) {
-      const { points, newBadges } = await handleSolve(id, puzzle.rating, userId);
-      return NextResponse.json({ status: "solved", points, newBadges });
+      const { points, newBadges, ratingDelta } = await handleSolve(id, puzzle.rating, userId);
+      return NextResponse.json({ status: "solved", points, newBadges, ratingDelta });
     }
 
     // Return next bot move from stored solution

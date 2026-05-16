@@ -23,6 +23,7 @@ type PuzzleEntry = {
   id: string;
   name: string | null;
   image: string | null;
+  puzzleRating: number;
   solveCount: number;
 };
 
@@ -145,10 +146,11 @@ export default function LeaderboardPage() {
         {/* ── Puzzles columns ── */}
         {isPuzzles && (
           <div className="grid items-center px-4 py-2 border-b border-[var(--border-subtle)]"
-            style={{ gridTemplateColumns: "32px 36px 1fr 80px" }}>
+            style={{ gridTemplateColumns: "32px 36px 1fr 72px 72px" }}>
             <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">#</span>
             <span />
             <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider pl-2">Player</span>
+            <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">Rating</span>
             <span className="text-[0.62rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
               <Puzzle size={9} className="text-violet-400" /> Solved
             </span>
@@ -191,7 +193,7 @@ export default function LeaderboardPage() {
             return (
               <Link key={u.id} href={`/profile/${u.id}`}
                 className="grid items-center px-4 py-2.5 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border-subtle)] last:border-0 no-underline"
-                style={{ gridTemplateColumns: "32px 36px 1fr 80px" }}>
+                style={{ gridTemplateColumns: "32px 36px 1fr 72px 72px" }}>
 
                 <span className="font-mono font-bold text-sm text-center"
                   style={{ color: placeColor ?? "var(--text-muted)" }}>
@@ -209,7 +211,8 @@ export default function LeaderboardPage() {
                   {u.name ?? "Anonymous"}
                 </p>
 
-                <span className="font-mono font-bold text-sm text-[var(--text-primary)] text-center">{u.solveCount}</span>
+                <span className="font-mono font-bold text-sm text-violet-300 text-center">{u.puzzleRating}</span>
+                <span className="font-mono text-sm text-[var(--text-secondary)] text-center">{u.solveCount}</span>
               </Link>
             );
           })

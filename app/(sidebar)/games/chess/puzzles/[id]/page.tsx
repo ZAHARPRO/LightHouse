@@ -156,6 +156,10 @@ export default function PuzzleSolverPage() {
 
   const reset = useCallback(() => {
     if (!puzzle) return;
+    // Penalize rating if user gave up mid-puzzle (made at least 1 move, not already solved)
+    if (movesRef.current.length > 0 && status !== "solved") {
+      fetch(`/api/puzzles/${puzzle.id}/fail`, { method: "POST" }).catch(() => {});
+    }
     movesRef.current = [];
     currentFenRef.current = puzzle.fen;
     const gs = fromFEN(puzzle.fen);
@@ -172,7 +176,7 @@ export default function PuzzleSolverPage() {
     setHintUsed(false);
     setEarnedPoints(null);
     setNewBadges([]);
-  }, [puzzle]);
+  }, [puzzle, status]);
 
   const submitMove = useCallback(async (move: Move) => {
     if (!state || !puzzle || status !== "playing") return;

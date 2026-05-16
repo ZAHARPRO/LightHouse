@@ -44,7 +44,7 @@ function getYouTubeId(url: string): string | null {
     if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0] || null;
     if (u.hostname.includes("youtube.com")) {
       if (u.pathname === "/watch") return u.searchParams.get("v");
-      const m = u.pathname.match(/\/(?:embed|shorts|v)\/([^/?]+)/);
+      const m = u.pathname.match(/\/(?:embed|shorts|v|live)\/([^/?]+)/);
       if (m) return m[1];
     }
   } catch {}
@@ -143,6 +143,8 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   } = music;
   const duration = music.playerRef.current?.getDuration() ? music.playerRef.current.getDuration() * 1000 : 0;
   const pct = duration > 0 ? Math.min(100, (positionMs / duration) * 100) : 0;
+  // Live streams report duration=0; confirm by waiting until position actually advances
+  const isLive = playerReady && duration === 0 && positionMs > 2000;
 
   // Apply saved volume as soon as the YouTube player becomes ready
   useEffect(() => {
@@ -197,7 +199,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
   positionMsRef.current = positionMs;
 
   useEffect(() => {
-    if (!showVideo || !isPlaying) return;
+    if (!showVideo || !isPlaying || isLive) return;
     const t = setInterval(() => {
       const videoSec = ytVideoRef.current?.getCurrentTime() ?? 0;
       const audioSec = positionMsRef.current / 1000;
@@ -206,7 +208,7 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
       }
     }, 3000);
     return () => clearInterval(t);
-  }, [showVideo, isPlaying]);
+  }, [showVideo, isPlaying, isLive]);
 
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
   const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
@@ -745,24 +747,36 @@ export default function MusicPlayer({ onClose }: { onClose: () => void }) {
           </div>
           {/* Progress */}
           <div>
-            <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full cursor-pointer group"
-              onClick={e => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
-                seek(ms);
-                ytVideoRef.current?.seekTo(ms / 1000);
-                if (activeLobby) {
-                  lastLocalActionRef.current = Date.now();
-                  if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
-                  seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 120);
-                }
-              }}>
-              <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="flex justify-between mt-0.5">
-              <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(positionMs)}</span>
-              <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
-            </div>
+            {isLive ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/40">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                  <span className="text-[0.6rem] font-bold text-red-400 uppercase tracking-wide">Live</span>
+                </div>
+                <div className="flex-1 h-1 rounded-full bg-red-500/30" />
+              </div>
+            ) : (
+              <>
+                <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full cursor-pointer group"
+                  onClick={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ms = Math.floor(((e.clientX - rect.left) / rect.width) * duration);
+                    seek(ms);
+                    ytVideoRef.current?.seekTo(ms / 1000);
+                    if (activeLobby) {
+                      lastLocalActionRef.current = Date.now();
+                      if (seekSyncRef.current) clearTimeout(seekSyncRef.current);
+                      seekSyncRef.current = setTimeout(() => pushSync(isPlaying, ms), 120);
+                    }
+                  }}>
+                  <div className="h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="flex justify-between mt-0.5">
+                  <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(positionMs)}</span>
+                  <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtMs(duration)}</span>
+                </div>
+              </>
+            )}
           </div>
           {/* Close song */}
           {activeLobby && (

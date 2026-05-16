@@ -37,6 +37,12 @@ async function upsertPuzzle(puzzle: LichessPuzzleRow) {
   });
 }
 
+function withinRating(puzzle: LichessPuzzleRow, minRating?: number | null, maxRating?: number | null) {
+  if (minRating !== null && minRating !== undefined && puzzle.rating < minRating) return false;
+  if (maxRating !== null && maxRating !== undefined && puzzle.rating > maxRating) return false;
+  return true;
+}
+
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -50,6 +56,11 @@ export async function GET(req: NextRequest) {
     update: {},
     create: { id: 1, count: 1, intervalDays: 7 },
   });
+
+  // intervalDays = 0 means disabled
+  if (cfg.intervalDays === 0) {
+    return NextResponse.json({ ok: false, skipped: true, reason: "Auto-refresh is disabled (interval = 0)" });
+  }
 
   const force = new URL(req.url).searchParams.get("force") === "1";
 
@@ -69,16 +80,20 @@ export async function GET(req: NextRequest) {
   const lichessApiKey = process.env.LICHESS_API_KEY ?? "";
   const added: string[] = [];
   const errors: string[] = [];
+  const skippedRating: string[] = [];
 
   let usedMode = "daily";
 
   if (lichessApiKey && cfg.count > 1) {
-    // ── Batch mode (requires LICHESS_API_KEY + puzzle rating on that account) ─
     const { puzzles, error } = await fetchLichessPuzzleBatch(cfg.count, lichessApiKey);
 
     if (puzzles.length > 0) {
       usedMode = "batch";
       for (const puzzle of puzzles) {
+        if (!withinRating(puzzle, cfg.minRating, cfg.maxRating)) {
+          skippedRating.push(puzzle.lichessId);
+          continue;
+        }
         try {
           await upsertPuzzle(puzzle);
           if (!added.includes(puzzle.lichessId)) added.push(puzzle.lichessId);
@@ -87,7 +102,6 @@ export async function GET(req: NextRequest) {
         }
       }
     } else {
-      // Batch failed — record why, then fall back to daily puzzle
       if (error) {
         const hint = error.includes("404")
           ? `${error}. Tip: the Lichess account linked to your API token must have played puzzles on lichess.org to have a puzzle rating (required for batch API).`
@@ -98,6 +112,8 @@ export async function GET(req: NextRequest) {
       const puzzle = await fetchLichessDailyPuzzle();
       if (!puzzle) {
         errors.push("Daily puzzle fallback also failed");
+      } else if (!withinRating(puzzle, cfg.minRating, cfg.maxRating)) {
+        skippedRating.push(puzzle.lichessId);
       } else {
         try {
           await upsertPuzzle(puzzle);
@@ -108,10 +124,11 @@ export async function GET(req: NextRequest) {
       }
     }
   } else {
-    // ── Single daily puzzle (no API key needed) ───────────────────────────────
     const puzzle = await fetchLichessDailyPuzzle();
     if (!puzzle) {
       errors.push("Could not fetch daily puzzle from Lichess");
+    } else if (!withinRating(puzzle, cfg.minRating, cfg.maxRating)) {
+      skippedRating.push(puzzle.lichessId);
     } else {
       try {
         await upsertPuzzle(puzzle);
@@ -131,6 +148,7 @@ export async function GET(req: NextRequest) {
     ok: errors.length === 0 || added.length > 0,
     added: added.length,
     puzzleIds: added,
+    skippedRating: skippedRating.length,
     errors,
     mode: usedMode,
   });

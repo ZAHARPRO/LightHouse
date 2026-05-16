@@ -7,6 +7,18 @@ import { useTranslations } from "next-intl";
 
 type Category = { id: string; name: string };
 
+function getYouTubeId(url: string): string | null {
+  const m1 = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (m1) return m1[1];
+  const m2 = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (m2) return m2[1];
+  const m3 = url.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+  if (m3) return m3[1];
+  const m4 = url.match(/(?:[?&]v=|\/v\/)([a-zA-Z0-9_-]{11})/);
+  if (m4) return m4[1];
+  return null;
+}
+
 export default function UploadForm({ categories }: { categories: Category[] }) {
   const t = useTranslations("upload");
   const [isPremium, setIsPremium]   = useState(false);
@@ -14,6 +26,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
   const [pending, startTransition]  = useTransition();
   const [duration, setDuration]     = useState<number | "">("");
   const [detecting, setDetecting]   = useState(false);
+  const [ytThumb, setYtThumb]       = useState<string | null>(null);
   const formRef    = useRef<HTMLFormElement>(null);
   const videoRef   = useRef<HTMLVideoElement>(null);
   const urlTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -21,8 +34,19 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
   function handleUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
     const url = e.target.value.trim();
     if (urlTimeout.current) clearTimeout(urlTimeout.current);
-    if (!url) return;
-    if (url.includes("drive.google.com") || url.includes("youtube.com") || url.includes("youtu.be")) return;
+    if (!url) { setYtThumb(null); return; }
+
+    // YouTube — show thumbnail preview, skip HTML5 duration detection
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      const id = getYouTubeId(url);
+      setYtThumb(id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null);
+      setDetecting(false);
+      return;
+    }
+
+    setYtThumb(null);
+    if (url.includes("drive.google.com")) return;
+
     urlTimeout.current = setTimeout(() => {
       setDetecting(true);
       const vid = videoRef.current!;
@@ -99,6 +123,13 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
             onChange={handleUrlChange}
             className="input-field"
           />
+          {ytThumb && (
+            <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ytThumb} alt="YouTube thumbnail" className="w-20 h-[45px] object-cover rounded" onError={e => (e.currentTarget.style.display = "none")} />
+              <span className="text-xs text-green-400 font-display font-semibold">✓ YouTube URL detected</span>
+            </div>
+          )}
         </Field>
 
         {/* Description */}
@@ -140,8 +171,8 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
               max={86400}
               placeholder={detecting ? t("detecting") : t("durationPlaceholder")}
               value={duration}
-              readOnly
-              className="input-field cursor-default opacity-70"
+              onChange={e => setDuration(e.target.value ? Number(e.target.value) : "")}
+              className="input-field"
             />
           </Field>
 
@@ -162,7 +193,7 @@ export default function UploadForm({ categories }: { categories: Category[] }) {
             "flex items-center justify-between px-5 py-4 rounded-[10px] cursor-pointer",
             "transition-[background,border-color] duration-200",
             isPremium
-              ? "bg-orange-500/[0.07] border border-orange-500/30"
+              ? "bg-[var(--accent-orange)]/[0.07] border border-pink-500/30"
               : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)]",
           ].join(" ")}
         >

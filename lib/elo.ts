@@ -66,3 +66,15 @@ export function calculateEloDelta(winnerElo: number, loserElo: number): [number,
 
   return [winnerDelta, loserDelta];
 }
+
+/**
+ * Puzzle Elo — standard Elo formula with K=20.
+ * Returns the integer delta to apply to the user's puzzleRating.
+ * Pass won=true when puzzle solved, won=false when user gave up / failed.
+ */
+export function puzzleEloDelta(userRating: number, puzzleRating: number, won: boolean): number {
+  const K = 20;
+  const expected = 1 / (1 + Math.pow(10, (puzzleRating - userRating) / 400));
+  const score = won ? 1 : 0;
+  return Math.round(K * (score - expected));
+}

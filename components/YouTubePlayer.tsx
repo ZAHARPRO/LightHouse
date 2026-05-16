@@ -97,6 +97,7 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
     const [buffering, setBuffering]   = useState(false);
     const [currentSec, setCurrent]    = useState(startSeconds);
     const [durationSec, setDur]       = useState(0);
+    const [isLive, setIsLive]         = useState(false);
     const [volume, setVol]            = useState(80);
     const [volMuted, setVolMuted]     = useState(false);
     const [isFullscreen, setFs]       = useState(false);
@@ -165,10 +166,15 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
               if (dead) return;
               const st = e.data;
               setBuffering(st === 3);
-              if (st === 1) { setPlaying(true);  startPoll(); syncQualities(); onPlayPause?.(true); }
+              if (st === 1) {
+                setPlaying(true); startPoll(); syncQualities(); onPlayPause?.(true);
+                const d = ytRef.current?.getDuration() ?? 0;
+                setDur(d);
+                setIsLive(d === 0);
+              }
               if (st === 2 || st === 0) { setPlaying(false); stopPoll(); onPlayPause?.(false); }
               if (st === 0) onEnded?.();
-              if (ytRef.current) setDur(ytRef.current.getDuration());
+              if (ytRef.current && st !== 1) setDur(ytRef.current.getDuration());
             },
             onPlaybackQualityChange(e: { data: string }) {
               if (!dead) setQuality(e.data);
@@ -225,13 +231,22 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
         onPlayPause?.(next);
       };
     });
+    const toggleFsRef = useRef<() => void>(() => {});
+    useEffect(() => {
+      toggleFsRef.current = () => {
+        const el = wrapperRef.current;
+        if (!el) return;
+        if (!document.fullscreenElement) el.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      };
+    });
+
     useEffect(() => {
       function onKey(e: KeyboardEvent) {
-        if (e.code !== "Space") return;
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return;
-        e.preventDefault();
-        togglePlayRef.current();
+        if (e.code === "Space") { e.preventDefault(); togglePlayRef.current(); }
+        if (e.code === "KeyF")  { e.preventDefault(); toggleFsRef.current(); }
       }
       document.addEventListener("keydown", onKey);
       return () => document.removeEventListener("keydown", onKey);
@@ -425,34 +440,59 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
               style={{ background: "linear-gradient(to top, rgba(2,0,6,0.97) 0%, rgba(2,0,6,0.55) 65%, transparent 100%)" }}
               onClick={e => e.stopPropagation()}
             >
-              {/* Seek bar */}
-              <div
-                className="group/s relative h-[3px] rounded-full cursor-pointer"
-                style={{ background: "rgba(255,255,255,0.12)" }}
-                onClick={handleSeek}
-              >
+              {/* Seek bar — disabled for live streams */}
+              {isLive ? (
+                <div className="relative h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                  <div className="absolute left-0 top-0 h-full w-full rounded-full animate-pulse"
+                    style={{ background: "linear-gradient(to right, #7f1d1d, #ef4444, #7f1d1d)", backgroundSize: "200% 100%", animation: "liveBar 2s ease-in-out infinite" }} />
+                </div>
+              ) : (
                 <div
-                  className="absolute left-0 top-0 h-full rounded-full"
-                  style={{
-                    width: `${pct}%`,
-                    background: "linear-gradient(to right, #be185d, #ec4899, #f472b6)",
-                    boxShadow: "0 0 6px rgba(236,72,153,0.5)",
-                  }}
-                />
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full -translate-x-1/2 opacity-0 group-hover/s:opacity-100 transition-opacity shadow-lg"
-                  style={{ left: `${pct}%`, background: "#f9a8d4", boxShadow: "0 0 8px rgba(249,168,212,0.8)" }}
-                />
-              </div>
+                  className="group/s relative h-[3px] rounded-full cursor-pointer"
+                  style={{ background: "rgba(255,255,255,0.12)" }}
+                  onClick={handleSeek}
+                >
+                  <div
+                    className="absolute left-0 top-0 h-full rounded-full"
+                    style={{
+                      width: `${pct}%`,
+                      background: "linear-gradient(to right, #be185d, #ec4899, #f472b6)",
+                      boxShadow: "0 0 6px rgba(236,72,153,0.5)",
+                    }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full -translate-x-1/2 opacity-0 group-hover/s:opacity-100 transition-opacity shadow-lg"
+                    style={{ left: `${pct}%`, background: "#f9a8d4", boxShadow: "0 0 8px rgba(249,168,212,0.8)" }}
+                  />
+                </div>
+              )}
 
               {/* Controls row */}
               <div className="flex items-center gap-2">
                 <button onClick={togglePlay} aria-label={playing ? t("pause") : t("play")} className="text-pink-300 hover:text-pink-100 transition-colors shrink-0">
                   {playing ? <Pause size={13} /> : <Play size={13} className="ml-px" />}
                 </button>
-                <span className="text-[0.58rem] font-mono tabular-nums shrink-0" style={{ color: "rgba(249,168,212,0.7)" }}>
-                  {fmt(currentSec)}<span style={{ color: "rgba(249,168,212,0.35)" }}> / {fmt(durationSec)}</span>
-                </span>
+                {/* LIVE badge — red + pulsing when live, grey when not */}
+                <div
+                  className={[
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded shrink-0 select-none",
+                    isLive ? "bg-red-500/20 border border-red-500/50" : "bg-white/5 border border-white/10",
+                  ].join(" ")}
+                >
+                  <div className={[
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    isLive && playing ? "bg-red-500 animate-pulse" : isLive ? "bg-red-500/60" : "bg-white/20",
+                  ].join(" ")} />
+                  <span className={[
+                    "text-[0.52rem] font-bold uppercase tracking-wide leading-none",
+                    isLive ? "text-red-400" : "text-white/25",
+                  ].join(" ")}>LIVE</span>
+                </div>
+                {!isLive && (
+                  <span className="text-[0.58rem] font-mono tabular-nums shrink-0" style={{ color: "rgba(249,168,212,0.7)" }}>
+                    {fmt(currentSec)}<span style={{ color: "rgba(249,168,212,0.35)" }}> / {fmt(durationSec)}</span>
+                  </span>
+                )}
                 <div className="flex-1" />
 
                 {/* Speed */}

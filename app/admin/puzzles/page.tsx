@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Plus, Trash2, Loader2, CheckCircle2, AlertCircle, Puzzle, Upload,
   FileJson, Copy, Check, Download, Pencil, X, BarChart3, RefreshCw,
-  Database, Globe, Zap, Tag,
+  Database, Globe, Zap, Tag, Wrench,
 } from "lucide-react";
 import { fromFEN, type GameState } from "@/lib/chess";
 import { LICHESS_THEMES } from "@/lib/lichess-puzzle";
@@ -84,6 +84,8 @@ type CronConfig = { count: number; intervalDays: number; lastRunAt: string | nul
 function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () => void }) {
   const [running, setRunning]         = useState(false);
   const [cronMsg, setCronMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+  const [fixing, setFixing]           = useState(false);
+  const [fixMsg, setFixMsg]           = useState<{ ok: boolean; text: string } | null>(null);
   const [cfg, setCfg]                 = useState<CronConfig | null>(null);
   const [editCount, setEditCount]     = useState("");
   const [editInterval, setEditInterval] = useState("");
@@ -112,6 +114,23 @@ function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () 
     setSavingCfg(false);
     if (res.ok) { setCfg(d); setCfgMsg("Saved!"); setTimeout(() => setCfgMsg(null), 2000); }
     else setCfgMsg("Failed to save");
+  }
+
+  async function runFix() {
+    setFixing(true); setFixMsg(null);
+    try {
+      const res = await fetch("/api/admin/puzzles/fix-fens", { method: "POST" });
+      const d = await res.json();
+      if (res.ok) {
+        setFixMsg({ ok: true, text: `Fixed ${d.fixed} puzzle${d.fixed !== 1 ? "s" : ""}${d.failed ? `, ${d.failed} failed` : ""}` });
+        onRefreshCron();
+      } else {
+        setFixMsg({ ok: false, text: d.error ?? "Failed" });
+      }
+    } catch {
+      setFixMsg({ ok: false, text: "Request failed" });
+    }
+    setFixing(false);
   }
 
   async function runCron() {
@@ -286,6 +305,24 @@ function StatsPanel({ stats, onRefreshCron }: { stats: Stats; onRefreshCron: () 
             {cronMsg.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />} {cronMsg.text}
           </div>
         )}
+
+        <div className="border-t border-[var(--border-subtle)] mt-4 pt-4">
+          <p className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Fix existing puzzles</p>
+          <p className="text-[0.6rem] text-[var(--text-muted)] mb-3">Re-fetches all Lichess puzzles and corrects their stored FEN &amp; solution without deleting solve records.</p>
+          <button
+            onClick={runFix}
+            disabled={fixing}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-display font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+          >
+            {fixing ? <Loader2 size={12} className="animate-spin" /> : <Wrench size={12} />}
+            {fixing ? "Fixing…" : "Fix FENs"}
+          </button>
+          {fixMsg && (
+            <div className={`flex items-center gap-1.5 text-xs mt-2 ${fixMsg.ok ? "text-green-400" : "text-red-400"}`}>
+              {fixMsg.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />} {fixMsg.text}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

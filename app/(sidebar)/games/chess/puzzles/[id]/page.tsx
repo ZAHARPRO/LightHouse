@@ -43,7 +43,7 @@ function PuzzleBoard({
   hintFrom?: [number,number]|null; hintTo?: [number,number]|null;
 }) {
   const ranks  = flip ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
-  const fileRow = flip ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const fileRow = flip ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
   const dotSet  = new Set(dots.map(([r,c]) => r*8+c));
   const CELL = 64;
 
@@ -68,8 +68,8 @@ function PuzzleBoard({
               style={{ width:CELL, height:CELL, background:bg, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", cursor:disabled?"default":"pointer", userSelect:"none" }}>
               {isDot && <div style={{ position:"absolute", width:piece?"88%":"30%", height:piece?"88%":"30%", borderRadius:"50%", background:piece?"rgba(0,0,0,0.25)":"rgba(0,0,0,0.18)", border:piece?"3px solid rgba(0,0,0,0.25)":undefined, pointerEvents:"none" }} />}
               {piece && <span style={{ fontSize:42, lineHeight:1, position:"relative", zIndex:1, color:piece.color==="w"?"#fff":"#1a1a1a", textShadow:piece.color==="w"?"0 0 3px #000,0 0 6px #000,0 1px 2px #000":"0 1px 2px rgba(255,255,255,0.3)" }}>{PIECE_UNICODE[`${piece.color}${piece.type}`]}</span>}
-              {c===(flip?7:0) && <span style={{ position:"absolute", top:2, left:3, fontSize:10, fontWeight:700, color:light?"#b58863":"#f0d9b5", lineHeight:1 }}>{8-r}</span>}
-              {r===(flip?0:7) && <span style={{ position:"absolute", bottom:2, right:3, fontSize:10, fontWeight:700, color:light?"#b58863":"#f0d9b5", lineHeight:1 }}>{FILES[c]}</span>}
+              {c===(flip?0:7) && <span style={{ position:"absolute", top:2, left:3, fontSize:10, fontWeight:700, color:light?"#b58863":"#f0d9b5", lineHeight:1 }}>{8-r}</span>}
+              {r===(flip?7:0) && <span style={{ position:"absolute", bottom:2, right:3, fontSize:10, fontWeight:700, color:light?"#b58863":"#f0d9b5", lineHeight:1 }}>{FILES[c]}</span>}
             </div>
           );
         }))}
@@ -328,7 +328,7 @@ export default function PuzzleSolverPage() {
         movesRef.current = [];
         const gs = fromFEN(data.fen);
         setState(gs);
-        setFlip(gs.turn === "b");
+        setFlip(gs.turn === "w");
         if (data.alreadySolved) setStatus("solved");
       })
       .catch(() => setLoadError(true));
@@ -345,7 +345,7 @@ export default function PuzzleSolverPage() {
     currentFenRef.current = puzzle.fen;
     const gs = fromFEN(puzzle.fen);
     setState(gs);
-    setFlip(gs.turn === "b");
+    setFlip(gs.turn === "w");
     setSelected(null);
     setDots([]);
     setLastMove(null);
@@ -474,8 +474,8 @@ export default function PuzzleSolverPage() {
     if (status !== "playing" || !puzzle || hintUsed) return;
     if (hintPoints !== null && hintPoints <= 0) { setShowVideo(true); return; }
 
-    const fen = encodeURIComponent(currentFenRef.current);
-    const res = await fetch(`/api/puzzles/${puzzle.id}/hint?fen=${fen}`);
+    const moveIndex = movesRef.current.length;
+    const res = await fetch(`/api/puzzles/${puzzle.id}/hint?moveIndex=${moveIndex}`);
     if (!res.ok) {
       const d = await res.json() as { error?:string };
       if (d.error === "no_points") { setShowVideo(true); return; }

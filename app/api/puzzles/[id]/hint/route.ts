@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { fromFEN } from "@/lib/chess";
-import { getBotMove } from "@/lib/chess-bot";
 
 const FILES = "abcdefgh";
 
@@ -24,22 +22,21 @@ export async function GET(
   const puzzle = await prisma.chessPuzzle.findUnique({ where: { id } });
   if (!puzzle) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // currentFen from query param — if not provided use puzzle start
   const url = new URL(req.url);
-  const currentFen = url.searchParams.get("fen") ?? puzzle.fen;
+  // moveIndex = number of moves already played (user + bot interleaved)
+  // next player move is at solution[moveIndex]
+  const moveIndex = parseInt(url.searchParams.get("moveIndex") ?? "0");
 
   let from = "";
   let to = "";
 
-  try {
-    const state = fromFEN(currentFen);
-    const move = getBotMove(state, "hard");
-    if (move) {
-      from = `${FILES[move.from[1]]}${8 - move.from[0]}`;
-      to   = `${FILES[move.to[1]]}${8 - move.to[0]}`;
+  if (puzzle.solution) {
+    const solution: string[] = JSON.parse(puzzle.solution);
+    const nextUCI = solution[moveIndex];
+    if (nextUCI && nextUCI.length >= 4) {
+      from = nextUCI.slice(0, 2);
+      to   = nextUCI.slice(2, 4);
     }
-  } catch {
-    return NextResponse.json({ error: "Engine error" }, { status: 500 });
   }
 
   if (!from) return NextResponse.json({ error: "No move found" }, { status: 500 });

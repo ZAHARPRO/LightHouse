@@ -9,8 +9,8 @@ export async function GET(req: Request) {
   // Group UserPuzzleSolve by userId, count solves, join user info
   const rows = await prisma.userPuzzleSolve.groupBy({
     by: ["userId"],
-    _count: { puzzleId: true },
-    orderBy: { _count: { puzzleId: "desc" } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
     take: search ? undefined : limit,
   });
 
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
         id:         u.id,
         name:       u.name,
         image:      u.image,
-        solveCount: r._count.puzzleId,
+        solveCount: r._count.id,
       };
     })
     .filter(Boolean)

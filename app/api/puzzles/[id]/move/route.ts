@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { fromFEN, toFEN, getLegalMoves, applyMove, getAllLegalMoves, isInCheck } from "@/lib/chess";
-import { getBotMove } from "@/lib/chess-bot";
+import { fromFEN, toFEN, getLegalMoves, applyMove } from "@/lib/chess";
 import { awardBadge, awardPuzzleMilestoneBadges } from "@/lib/awardBadge";
-import type { PieceType, Move, GameState } from "@/lib/chess";
+import type { PieceType } from "@/lib/chess";
 
 const FILES = "abcdefgh";
-
-function moveToUCI(move: Move): string {
-  const [fr, fc] = move.from;
-  const [tr, tc] = move.to;
-  return `${FILES[fc]}${8 - fr}${FILES[tc]}${8 - tr}${move.promotion?.toLowerCase() ?? ""}`;
-}
 
 function applyUCI(fen: string, uci: string): string | null {
   try {
@@ -31,10 +24,6 @@ function applyUCI(fen: string, uci: string): string | null {
   } catch {
     return null;
   }
-}
-
-function isCheckmate(state: GameState): boolean {
-  return getAllLegalMoves(state).length === 0 && isInCheck(state, state.turn);
 }
 
 function puzzlePoints(rating: number): number {
@@ -96,10 +85,8 @@ export async function POST(
   const afterUser = applyUCI(fen, userUCI);
   if (!afterUser) return NextResponse.json({ status: "invalid" });
 
-  const stateAfterUser = fromFEN(afterUser);
-
-  // ── Lichess / solution-based puzzles ──────────────────────────────────────
-  if (puzzle.source === "lichess" && puzzle.solution) {
+  // ── Solution-based puzzles (all puzzles with stored solution) ────────────
+  if (puzzle.solution) {
     const solution: string[] = JSON.parse(puzzle.solution);
     const moveIdx = moves.length - 1; // index of the new user move in full sequence
 
@@ -122,24 +109,6 @@ export async function POST(
     return NextResponse.json({ status: "continue", botMove: botMoveUCI, newFen: botFen });
   }
 
-  // ── Legacy checkmate-based puzzles (mate1 / mate2) ────────────────────────
-  const movesCount = puzzle.difficulty === "mate1" ? 1 : 2;
-
-  if (isCheckmate(stateAfterUser)) {
-    const { points, newBadges } = await handleSolve(id, puzzle.rating, userId);
-    return NextResponse.json({ status: "solved", points, newBadges });
-  }
-
-  const userMoveCount = Math.ceil(moves.length / 2);
-  if (userMoveCount >= movesCount) {
-    return NextResponse.json({ status: "failed" });
-  }
-
-  const botMove = getBotMove(stateAfterUser, "hard");
-  if (!botMove) return NextResponse.json({ status: "failed" });
-
-  const botUCI = moveToUCI(botMove);
-  const botFen = toFEN(applyMove(stateAfterUser, botMove));
-
-  return NextResponse.json({ status: "continue", botMove: botUCI, newFen: botFen });
+  // No stored solution — puzzle data is incomplete
+  return NextResponse.json({ status: "invalid" });
 }

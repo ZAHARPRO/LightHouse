@@ -827,9 +827,9 @@ model UserPuzzleSolve {
   solvedAt DateTime @default(now())
 
   userId   String
-  user     User        @relation(fields: [userId],   references: [id], onDelete: Cascade)
-  puzzleId String
-  puzzle   ChessPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId],   references: [id], onDelete: Cascade)
+  puzzleId String?
+  puzzle   ChessPuzzle? @relation(fields: [puzzleId], references: [id], onDelete: SetNull)
 
   @@unique([userId, puzzleId])
 }

@@ -128,17 +128,15 @@ export async function fetchLichessDailyPuzzle(): Promise<LichessPuzzleRow | null
     const { game, puzzle } = data;
     if (!puzzle?.id || !puzzle.solution?.length || !game?.pgn) return null;
 
-    // Replay PGN to initialPly — that position IS the puzzle start (player to move)
     const chess = new Chess();
     chess.loadPgn(game.pgn);
     const history = chess.history({ verbose: true });
 
     const replay = new Chess();
-    for (let i = 0; i < puzzle.initialPly && i < history.length; i++) {
+    for (let i = 0; i <= puzzle.initialPly && i < history.length; i++) {
       replay.move(history[i]);
     }
 
-    // solution[0] is the player's first correct move (not a setup move)
     return {
       lichessId: puzzle.id,
       fen: replay.fen(),
@@ -175,7 +173,7 @@ async function fetchPuzzleByAngle(
     chess.loadPgn(game.pgn);
     const history = chess.history({ verbose: true });
     const replay = new Chess();
-    for (let i = 0; i < puzzle.initialPly && i < history.length; i++) {
+    for (let i = 0; i <= puzzle.initialPly && i < history.length; i++) {
       replay.move(history[i]);
     }
     return {

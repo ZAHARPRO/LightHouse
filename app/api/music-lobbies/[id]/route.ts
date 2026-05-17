@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sseBroadcast } from "@/lib/lobby-sse";
 
 const MEMBER_TTL  = 30_000;
 const EMPTY_CLOSE = 5 * 60 * 1000; // 5 minutes
@@ -66,6 +67,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   if (lobby.hostId === session.user.id) {
     await prisma.musicLobby.update({ where: { id }, data: { status: "CLOSED" } });
+    sseBroadcast(id, { closed: true });
   } else {
     const existing = await prisma.musicLobby.findUnique({
       where: { id }, select: { membersJson: true },

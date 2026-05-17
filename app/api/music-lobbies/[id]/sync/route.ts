@@ -30,6 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     positionMs?: number;
     isPlaying?: boolean;
     queue?: { videoId: string; title: string; channel: string; thumbnail: string }[];
+    sourceId?: string;
   };
 
   // Append to history when a new track starts (different videoId, near position 0)
@@ -80,6 +81,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     positionMs:  body.positionMs  ?? 0,
     isPlaying:   body.isPlaying   ?? false,
     syncedAt:    syncedAt.toISOString(),
+    sourceId:    session.user.id,
     ...(broadcastQueue !== undefined ? { queue: broadcastQueue } : {}),
   });
 

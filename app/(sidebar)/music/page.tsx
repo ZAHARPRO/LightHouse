@@ -240,13 +240,17 @@ export default function MusicPage() {
   const heartbeatRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const seekSyncRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sseRef        = useRef<EventSource | null>(null);
-  const syncedTrackRef   = useRef<string | null>(null);
-  const prevIsPlayingRef = useRef<boolean | null>(null);
-  const lastLocalActionRef = useRef<number>(0);
-  const lastSyncRef = useRef<{ playing: boolean | null; pos: number }>({ playing: null, pos: 0 });
-  const isHostRef = useRef(false);
+  const syncedTrackRef        = useRef<string | null>(null);
+  const prevIsPlayingRef      = useRef<boolean | null>(null);
+  const lastLocalActionRef    = useRef<number>(0);
+  const lastSyncRef           = useRef<{ playing: boolean | null; pos: number }>({ playing: null, pos: 0 });
+  const incomingSyncTrackRef2 = useRef<string | null>(null);
+  const incomingSyncQueueRef2 = useRef<string | null>(null);
+  const sessionIdRef2         = useRef<string | undefined>(undefined);
+  const isHostRef             = useRef(false);
   const isHost = activeLobby?.host.id === session?.user?.id;
-  isHostRef.current = isHost;
+  isHostRef.current     = isHost;
+  sessionIdRef2.current = session?.user?.id;
 
   useEffect(() => {
     if (!music.activeLobbyId) return;
@@ -259,19 +263,19 @@ export default function MusicPage() {
       }).catch(() => {});
   }, []); // eslint-disable-line
 
-  const applyLobbySync = useCallback((d: Partial<ActiveLobby>, fromLocalAction = false) => {
-    if (!fromLocalAction && Date.now() - lastLocalActionRef.current < 800) return;
-    const hostReceivingSSE = isHostRef.current && !fromLocalAction;
+  const applyLobbySync = useCallback((d: Partial<ActiveLobby> & { sourceId?: string }, fromLocalAction = false) => {
+    if (!fromLocalAction && d.sourceId && d.sourceId === sessionIdRef2.current) return;
     if (!d.trackUri) {
-      if (syncedTrackRef.current && !hostReceivingSSE) { syncedTrackRef.current = null; prevIsPlayingRef.current = null; music.pause(); music.clearQueue(); }
+      if (syncedTrackRef.current) { syncedTrackRef.current = null; prevIsPlayingRef.current = null; music.pause(); music.clearQueue(); }
       return;
     }
     const serverPos = () => (d.positionMs ?? 0) + (d.isPlaying ? Date.now() - new Date(d.syncedAt!).getTime() : 0);
     if (d.trackUri !== syncedTrackRef.current) {
       syncedTrackRef.current = d.trackUri;
       prevIsPlayingRef.current = d.isPlaying ?? null;
-      if (!hostReceivingSSE) music.play({ videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" }, serverPos());
-    } else if (!hostReceivingSSE) {
+      incomingSyncTrackRef2.current = d.trackUri;
+      music.play({ videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" }, serverPos());
+    } else {
       const locallyPlaying = music.playerRef.current ? (music.playerRef.current as { getPlayerState?: () => number }).getPlayerState?.() === 1 : prevIsPlayingRef.current === true;
       if (!d.isPlaying && locallyPlaying) { prevIsPlayingRef.current = false; music.pause(); }
       else if (d.isPlaying && !locallyPlaying) {
@@ -286,7 +290,8 @@ export default function MusicPage() {
       }
     }
 
-    if (!hostReceivingSSE && Array.isArray(d.queue)) {
+    if (Array.isArray(d.queue)) {
+      incomingSyncQueueRef2.current = JSON.stringify(d.queue);
       music.reorderQueue(d.queue);
     }
   }, []); // eslint-disable-line
@@ -297,7 +302,13 @@ export default function MusicPage() {
     sseRef.current = es;
     es.onmessage = (e) => {
       try {
-        const d = JSON.parse(e.data as string) as Partial<ActiveLobby>;
+        const d = JSON.parse(e.data as string) as Partial<ActiveLobby> & { closed?: boolean };
+        if (d.closed) {
+          es.close(); sseRef.current = null;
+          music.pause(); music.setActiveLobbyId(null);
+          setActiveLobby(null); music.clearQueue();
+          return;
+        }
         setActiveLobby(prev => prev ? { ...prev, ...d } : prev);
         applyLobbySync(d);
       } catch {}
@@ -315,20 +326,25 @@ export default function MusicPage() {
 
   const prevTrackIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isHost || !activeLobby || !music.track) return;
+    if (!activeLobby || !music.track) return;
     if (music.track.videoId === prevTrackIdRef.current) return;
     prevTrackIdRef.current = music.track.videoId;
+    if (incomingSyncTrackRef2.current === music.track.videoId) {
+      incomingSyncTrackRef2.current = null;
+      return;
+    }
     hostSync(music.track, 0, true);
   }, [music.track?.videoId]); // eslint-disable-line
 
   function hostSync(item: YTItem | null, posMs = 0, playing = true, queue?: YTItem[]) {
     if (!activeLobby) return;
     const q = queue ?? activeQueue;
+    const sourceId = session?.user?.id;
     fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(item
-        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing, queue: q }
-        : { trackUri: null, isPlaying: false, positionMs: 0, queue: [] }
+        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing, queue: q, sourceId }
+        : { trackUri: null, isPlaying: false, positionMs: 0, queue: [], sourceId }
       ),
     }).catch(() => {});
   }
@@ -341,13 +357,17 @@ export default function MusicPage() {
     hostSync(music.track, pos, playing);
   }
 
-  // Host pushes queue to lobby whenever it changes
+  // Any member pushes queue changes to lobby
   const prevQueueRef2 = useRef<string>("");
   useEffect(() => {
-    if (!isHost || !activeLobby || !music.track) return;
+    if (!activeLobby || !music.track) return;
     const serialized = JSON.stringify(music.queue);
     if (serialized === prevQueueRef2.current) return;
     prevQueueRef2.current = serialized;
+    if (incomingSyncQueueRef2.current === serialized) {
+      incomingSyncQueueRef2.current = null;
+      return;
+    }
     hostSync(music.track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, music.isPlaying, music.queue);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [music.queue]);

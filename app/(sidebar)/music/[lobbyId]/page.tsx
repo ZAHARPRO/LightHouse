@@ -83,18 +83,28 @@ export default function MusicLobbyPage() {
   const [expandedPl, setExpandedPl]       = useState<string | null>(null);
 
   const isHost = lobby?.host.id === session?.user?.id;
-  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const syncRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef              = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncRef              = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sseRef               = useRef<EventSource | null>(null);
+  const prevTrackIdRef       = useRef<string | null>(null);
+  const incomingSyncTrackRef = useRef<string | null>(null);
+
+  const handleLobbyClosed = useCallback(() => {
+    music.pause(); music.setActiveLobbyId(null);
+    setLobby(null);
+    router.push("/music");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Fetch lobby ────────────────────────────────────────────────────────────
   const fetchLobby = useCallback(async () => {
     const res = await fetch(`/api/music-lobbies/${lobbyId}`, { cache: "no-store" });
-    if (!res.ok) { setError("Lobby not found or closed."); return; }
+    if (!res.ok) { handleLobbyClosed(); return; }
     const data = await res.json() as LobbyData;
-    if (data.status !== "ACTIVE") { setError("This lobby has been closed."); return; }
+    if (data.status !== "ACTIVE") { handleLobbyClosed(); return; }
     setLobby(data);
-  }, [lobbyId]);
+  }, [lobbyId, handleLobbyClosed]);
 
   useEffect(() => {
     if (authStatus === "loading" || !session?.user?.id) return;
@@ -106,6 +116,20 @@ export default function MusicLobbyPage() {
     pollRef.current = setInterval(fetchLobby, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [session?.user?.id, fetchLobby]);
+
+  // ── SSE — instant kick on lobby close ─────────────────────────────────────
+  useEffect(() => {
+    if (!lobbyId || !session?.user?.id) return;
+    const es = new EventSource(`/api/music-lobbies/${lobbyId}/sse`);
+    sseRef.current = es;
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data as string) as { closed?: boolean };
+        if (d.closed) { es.close(); handleLobbyClosed(); }
+      } catch {}
+    };
+    return () => { es.close(); sseRef.current = null; };
+  }, [lobbyId, session?.user?.id, handleLobbyClosed]);
 
   // ── Context active lobby ───────────────────────────────────────────────────
   useEffect(() => {
@@ -120,6 +144,7 @@ export default function MusicLobbyPage() {
     if (!lobby || isHost || !lobby.trackUri) return;
     if (music.track?.videoId === lobby.trackUri) return;
     const estimated = lobby.positionMs + (lobby.isPlaying ? lobby.elapsedMs : 0);
+    incomingSyncTrackRef.current = lobby.trackUri; // mark so the member-sync effect doesn't echo
     music.play(
       { videoId: lobby.trackUri, title: lobby.trackName ?? "", channel: lobby.trackArtist ?? "", thumbnail: lobby.trackImage ?? "" },
       estimated
@@ -134,6 +159,19 @@ export default function MusicLobbyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(lobby?.queue), isHost]);
 
+  // ── Any member: immediate sync on track change ────────────────────────────
+  useEffect(() => {
+    if (!joined || !music.track) return;
+    if (music.track.videoId === prevTrackIdRef.current) return;
+    prevTrackIdRef.current = music.track.videoId;
+    if (incomingSyncTrackRef.current === music.track.videoId) {
+      incomingSyncTrackRef.current = null;
+      return; // came from server poll, don't echo back
+    }
+    syncTrack(music.track, 0, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [music.track?.videoId]);
+
   // ── Host: push state every 5s ──────────────────────────────────────────────
   useEffect(() => {
     if (!isHost || !joined) return;
@@ -146,7 +184,7 @@ export default function MusicLobbyPage() {
           trackUri: music.track.videoId, trackName: music.track.title,
           trackArtist: music.track.channel, trackImage: music.track.thumbnail,
           positionMs: music.positionMs, isPlaying: music.isPlaying,
-          queue: music.queue,
+          queue: music.queue, sourceId: session?.user?.id,
         }),
       });
     };
@@ -287,7 +325,15 @@ export default function MusicLobbyPage() {
   function syncTrack(item: YTItem, positionMs: number, isPlaying: boolean, queue?: YTItem[]) {
     fetch(`/api/music-lobbies/${lobbyId}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs, isPlaying, queue: queue ?? music.queue }),
+      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs, isPlaying, queue: queue ?? music.queue, sourceId: session?.user?.id }),
+    });
+  }
+
+  function stopSync() {
+    music.pause(); music.clearQueue();
+    fetch(`/api/music-lobbies/${lobbyId}/sync`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackUri: null, isPlaying: false, positionMs: 0, queue: [], sourceId: session?.user?.id }),
     });
   }
 
@@ -570,9 +616,11 @@ export default function MusicLobbyPage() {
               {isHost && (
                 <>
                   <div className="flex items-center justify-center gap-5 mb-4">
-                    <button onClick={music.prev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={22} /></button>
-                    <button onClick={music.isPlaying ? music.pause : music.resume}
-                      className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
+                    <button onClick={() => music.prev()} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipBack size={22} /></button>
+                    <button onClick={() => {
+                      if (music.isPlaying) { music.pause(); if (music.track) syncTrack(music.track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, false); }
+                      else { music.resume(); if (music.track) syncTrack(music.track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, true); }
+                    }} className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
                       {music.isPlaying ? <Pause size={20} /> : <Play size={20} />}
                     </button>
                     <button onClick={() => {
@@ -582,8 +630,13 @@ export default function MusicLobbyPage() {
                         const item = activeQueue[next];
                         music.play({ videoId: item.videoId, title: item.title, channel: item.channel, thumbnail: item.thumbnail });
                         syncTrack(item, 0, true);
-                      } else music.next();
+                      } else music.next(); // track change effect will sync automatically
                     }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><SkipForward size={22} /></button>
+                  </div>
+                  <div className="flex justify-end mb-3">
+                    <button onClick={stopSync} className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[0.6rem] font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-500/40 transition-colors">
+                      <X size={9} /> Close song
+                    </button>
                   </div>
                   <div className="flex items-center gap-2">
                     <Volume2 size={13} className="text-[var(--text-muted)] shrink-0" />

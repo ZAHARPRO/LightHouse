@@ -29,6 +29,7 @@ type ActiveLobby = {
   host: { id: string; name: string | null; image: string | null };
   members: Member[];
   history: HistoryItem[];
+  queue: YTItem[];
   trackUri: string | null; trackName: string | null; trackArtist: string | null; trackImage: string | null;
   isPlaying: boolean; positionMs: number; syncedAt: string;
 };
@@ -274,6 +275,11 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
         if (drift > 1500 && drift < 60000) music.seek(serverPos());
       }
     }
+
+    // Sync queue — guests adopt host queue; host ignores incoming queue echoes
+    if (!hostReceivingSSE && Array.isArray(d.queue)) {
+      music.reorderQueue(d.queue);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -343,6 +349,17 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     hostSync(track, 0, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.videoId]);
+
+  // Host pushes queue to lobby whenever it changes
+  const prevQueueRef = useRef<string>("");
+  useEffect(() => {
+    if (!isHost || !activeLobby || !track) return;
+    const serialized = JSON.stringify(activeQueue);
+    if (serialized === prevQueueRef.current) return;
+    prevQueueRef.current = serialized;
+    hostSync(track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, isPlaying, activeQueue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQueue]);
 
   // ── Lobby list ─────────────────────────────────────────────────────────────
   const fetchLobbies = useCallback(async () => {
@@ -451,13 +468,14 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  function hostSync(item: YTItem | null, posMs = 0, playing = true) {
+  function hostSync(item: YTItem | null, posMs = 0, playing = true, queue?: YTItem[]) {
     if (!activeLobby) return;
+    const q = queue ?? activeQueue;
     fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(item
-        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing }
-        : { trackUri: null, isPlaying: false, positionMs: 0 }
+        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing, queue: q }
+        : { trackUri: null, isPlaying: false, positionMs: 0, queue: [] }
       ),
     }).catch(() => {});
   }
@@ -1033,15 +1051,15 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top"
-                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ChevronsUp size={9} /></button>
+                          className="p-0.5 text-[var(--text-muted)] hover:text-grey-400 disabled:opacity-20 transition-colors"><ChevronsUp size={18} /></button>
                         <button onClick={() => moveQueueItem(i, i - 1)} disabled={i === 0} title="Move up"
-                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ArrowUp size={9} /></button>
+                          className="p-0.5 text-[var(--text-muted)] hover:text-grey-400 disabled:opacity-20 transition-colors"><ArrowUp size={18} /></button>
                         <button onClick={() => moveQueueItem(i, i + 1)} disabled={i === activeQueue.length - 1} title="Move down"
-                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ArrowDown size={9} /></button>
+                          className="p-0.5 text-[var(--text-muted)] hover:text-grey-400 disabled:opacity-20 transition-colors"><ArrowDown size={18} /></button>
                         <button onClick={() => moveQueueItem(i, activeQueue.length - 1)} disabled={i === activeQueue.length - 1} title="To bottom"
-                          className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors"><ChevronsDown size={9} /></button>
+                          className="p-0.5 text-[var(--text-muted)] hover:text-grey-400 disabled:opacity-20 transition-colors"><ChevronsDown size={18} /></button>
                         <button onClick={() => removeFromQueue(i)} title="Remove"
-                          className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-colors"><X size={9} /></button>
+                          className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-colors"><X size={18} /></button>
                       </div>
                     </div>
                   ))}

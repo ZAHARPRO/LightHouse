@@ -24,6 +24,7 @@ type LobbyData = {
   positionMs: number; isPlaying: boolean; elapsedMs: number;
   members: Member[]; host: { id: string; name: string | null; image: string | null };
   history: HistoryItem[];
+  queue: YTItem[];
 };
 
 function fmtMs(ms: number) {
@@ -126,6 +127,13 @@ export default function MusicLobbyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lobby?.trackUri, isHost]);
 
+  // ── Guest: sync queue from host ────────────────────────────────────────────
+  useEffect(() => {
+    if (!lobby || isHost) return;
+    if (Array.isArray(lobby.queue)) music.reorderQueue(lobby.queue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(lobby?.queue), isHost]);
+
   // ── Host: push state every 5s ──────────────────────────────────────────────
   useEffect(() => {
     if (!isHost || !joined) return;
@@ -138,6 +146,7 @@ export default function MusicLobbyPage() {
           trackUri: music.track.videoId, trackName: music.track.title,
           trackArtist: music.track.channel, trackImage: music.track.thumbnail,
           positionMs: music.positionMs, isPlaying: music.isPlaying,
+          queue: music.queue,
         }),
       });
     };
@@ -275,10 +284,10 @@ export default function MusicLobbyPage() {
     if (isHost) syncTrack(item, 0, true);
   }
 
-  function syncTrack(item: YTItem, positionMs: number, isPlaying: boolean) {
+  function syncTrack(item: YTItem, positionMs: number, isPlaying: boolean, queue?: YTItem[]) {
     fetch(`/api/music-lobbies/${lobbyId}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs, isPlaying }),
+      body: JSON.stringify({ trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs, isPlaying, queue: queue ?? music.queue }),
     });
   }
 

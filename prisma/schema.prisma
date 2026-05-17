@@ -762,6 +762,7 @@ model MusicLobby {
   syncedAt     DateTime @default(now())
   membersJson  String?  @db.Text
   historyJson  String?  @db.Text
+  queueJson    String?  @db.Text
   status       String   @default("ACTIVE")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

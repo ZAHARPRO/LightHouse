@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       id: true, name: true, status: true,
       trackUri: true, trackName: true, trackArtist: true, trackImage: true,
       positionMs: true, isPlaying: true, syncedAt: true, membersJson: true,
-      historyJson: true, passwordHash: true, updatedAt: true,
+      historyJson: true, queueJson: true, passwordHash: true, updatedAt: true,
       host: { select: { id: true, name: true, image: true } },
     },
   });
@@ -38,16 +38,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const history = lobby.historyJson ? JSON.parse(lobby.historyJson) : [];
+  const queue   = lobby.queueJson   ? JSON.parse(lobby.queueJson)   : [];
 
   return NextResponse.json({
     ...lobby,
-    membersJson: undefined,
-    historyJson: undefined,
+    membersJson:  undefined,
+    historyJson:  undefined,
+    queueJson:    undefined,
     passwordHash: undefined,
-    updatedAt: undefined,
+    updatedAt:    undefined,
     hasPassword: !!lobby.passwordHash,
     members,
     history,
+    queue,
     elapsedMs: lobby.isPlaying ? now - new Date(lobby.syncedAt).getTime() : 0,
   });
 }

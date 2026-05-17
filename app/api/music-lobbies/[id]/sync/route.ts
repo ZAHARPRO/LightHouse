@@ -29,6 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     trackImage?: string;
     positionMs?: number;
     isPlaying?: boolean;
+    queue?: { videoId: string; title: string; channel: string; thumbnail: string }[];
   };
 
   // Append to history when a new track starts (different videoId, near position 0)
@@ -63,9 +64,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       positionMs:  body.positionMs  ?? 0,
       isPlaying:   body.isPlaying   ?? false,
       syncedAt,
+      ...(body.queue !== undefined ? { queueJson: JSON.stringify(body.queue) } : {}),
       ...(historyJson !== lobby.historyJson ? { historyJson } : {}),
     },
   });
+
+  const broadcastQueue = body.queue !== undefined ? body.queue : undefined;
 
   // Broadcast to all SSE subscribers of this lobby immediately
   sseBroadcast(id, {
@@ -76,6 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     positionMs:  body.positionMs  ?? 0,
     isPlaying:   body.isPlaying   ?? false,
     syncedAt:    syncedAt.toISOString(),
+    ...(broadcastQueue !== undefined ? { queue: broadcastQueue } : {}),
   });
 
   return NextResponse.json({ ok: true });

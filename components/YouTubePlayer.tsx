@@ -88,12 +88,14 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
   ) {
     const t = useTranslations("youtubePlayer");
 
-    const mountRef   = useRef<HTMLDivElement>(null);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-    const ytRef      = useRef<VPlayer | null>(null);
-    const readyRef   = useRef(false);
-    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const hideRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mountRef        = useRef<HTMLDivElement>(null);
+    const wrapperRef      = useRef<HTMLDivElement>(null);
+    const ytRef           = useRef<VPlayer | null>(null);
+    const readyRef        = useRef(false);
+    const pollingRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+    const hideRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Set to true before programmatic play/pause to suppress onPlayPause callback
+    const programmaticRef = useRef(false);
 
     const [playing, setPlaying]       = useState(false);
     const [buffering, setBuffering]   = useState(false);
@@ -171,12 +173,16 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
               const st = e.data;
               setBuffering(st === 3);
               if (st === 1) {
-                setPlaying(true); startPoll(); syncQualities(); onPlayPause?.(true);
+                setPlaying(true); startPoll(); syncQualities();
+                if (!programmaticRef.current) onPlayPause?.(true);
                 const d = ytRef.current?.getDuration() ?? 0;
                 setDur(d);
                 try { setIsLive(ytRef.current?.getVideoData().isLive ?? d === 0); } catch { setIsLive(d === 0); }
               }
-              if (st === 2 || st === 0) { setPlaying(false); stopPoll(); onPlayPause?.(false); }
+              if (st === 2 || st === 0) {
+                setPlaying(false); stopPoll();
+                if (!programmaticRef.current) onPlayPause?.(false);
+              }
               if (st === 0) onEnded?.();
               if (ytRef.current && st !== 1) setDur(ytRef.current.getDuration());
             },
@@ -212,8 +218,11 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
     // ── Controlled play/pause from parent ─────────────────────────────────────
     useEffect(() => {
       if (externalPlaying === undefined || !ytRef.current || !readyRef.current) return;
+      programmaticRef.current = true;
       if (externalPlaying) ytRef.current.playVideo();
       else ytRef.current.pauseVideo();
+      // Clear after a short delay to let the state-change event fire first
+      setTimeout(() => { programmaticRef.current = false; }, 300);
     }, [externalPlaying]);
 
     // ── Fullscreen detection ──────────────────────────────────────────────────

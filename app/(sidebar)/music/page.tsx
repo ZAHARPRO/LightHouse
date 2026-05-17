@@ -30,6 +30,7 @@ type ActiveLobby = {
   host: { id: string; name: string | null; image: string | null };
   members: Member[];
   history: HistItem[];
+  queue: YTItem[];
   trackUri: string | null; trackName: string | null; trackArtist: string | null; trackImage: string | null;
   isPlaying: boolean; positionMs: number; syncedAt: string;
 };
@@ -284,6 +285,10 @@ export default function MusicPage() {
         if (drift > 1500 && drift < 60000) music.seek(serverPos());
       }
     }
+
+    if (!hostReceivingSSE && Array.isArray(d.queue)) {
+      music.reorderQueue(d.queue);
+    }
   }, []); // eslint-disable-line
 
   useEffect(() => {
@@ -316,13 +321,14 @@ export default function MusicPage() {
     hostSync(music.track, 0, true);
   }, [music.track?.videoId]); // eslint-disable-line
 
-  function hostSync(item: YTItem | null, posMs = 0, playing = true) {
+  function hostSync(item: YTItem | null, posMs = 0, playing = true, queue?: YTItem[]) {
     if (!activeLobby) return;
+    const q = queue ?? activeQueue;
     fetch(`/api/music-lobbies/${activeLobby.id}/sync`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(item
-        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing }
-        : { trackUri: null, isPlaying: false, positionMs: 0 }
+        ? { trackUri: item.videoId, trackName: item.title, trackArtist: item.channel, trackImage: item.thumbnail, positionMs: posMs, isPlaying: playing, queue: q }
+        : { trackUri: null, isPlaying: false, positionMs: 0, queue: [] }
       ),
     }).catch(() => {});
   }
@@ -334,6 +340,17 @@ export default function MusicPage() {
     lastSyncRef.current = { playing, pos };
     hostSync(music.track, pos, playing);
   }
+
+  // Host pushes queue to lobby whenever it changes
+  const prevQueueRef2 = useRef<string>("");
+  useEffect(() => {
+    if (!isHost || !activeLobby || !music.track) return;
+    const serialized = JSON.stringify(music.queue);
+    if (serialized === prevQueueRef2.current) return;
+    prevQueueRef2.current = serialized;
+    hostSync(music.track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, music.isPlaying, music.queue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [music.queue]);
 
   async function enterLobby(id: string) {
     const res = await fetch(`/api/music-lobbies/${id}`);

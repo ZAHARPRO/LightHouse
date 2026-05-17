@@ -183,12 +183,10 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
           setActiveLobby(d as ActiveLobby);
           setSize({ w: 360 });
           setView("lobby");
-          applyLobbySync(d);
-          // Don't auto-play on fresh tab load — sessionStorage is cleared when tab is closed
-          if (!sessionStorage.getItem("lobby_session_active")) {
-            setTimeout(() => music.pause(), 800);
-          }
+          // On fresh tab load, cue without autoplaying (sessionStorage clears on tab close)
+          const freshTab = !sessionStorage.getItem("lobby_session_active");
           sessionStorage.setItem("lobby_session_active", "1");
+          applyLobbySync(d, false, freshTab);
         } else {
           music.setActiveLobbyId(null);
         }
@@ -235,7 +233,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   }, [showVideo, isPlaying, isLive]);
 
   // ── Apply a lobby sync payload (from SSE or initial fetch) ───────────────
-  const applyLobbySync = useCallback((d: Partial<ActiveLobby> & { sourceId?: string }, fromLocalAction = false) => {
+  const applyLobbySync = useCallback((d: Partial<ActiveLobby> & { sourceId?: string }, fromLocalAction = false, suppressPlay = false) => {
     // Ignore our own SSE echoes (server stamps sourceId = sender's userId)
     if (!fromLocalAction && d.sourceId && d.sourceId === sessionIdRef.current) return;
 
@@ -257,10 +255,17 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
       prevIsPlayingRef.current = d.isPlaying ?? null;
       // Mark as incoming so the track-change effect doesn't echo it back
       incomingSyncTrackRef.current = d.trackUri;
-      music.play(
-        { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
-        serverPos()
-      );
+      if (suppressPlay) {
+        music.cue(
+          { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
+          serverPos()
+        );
+      } else {
+        music.play(
+          { videoId: d.trackUri, title: d.trackName ?? "", channel: d.trackArtist ?? "", thumbnail: d.trackImage ?? "" },
+          serverPos()
+        );
+      }
     } else {
       // Sync play/pause state and drift-correct position
       const locallyPlaying = music.playerRef.current
@@ -270,7 +275,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
       if (!d.isPlaying && locallyPlaying) {
         prevIsPlayingRef.current = false;
         music.pause();
-      } else if (d.isPlaying && !locallyPlaying) {
+      } else if (d.isPlaying && !locallyPlaying && !suppressPlay) {
         prevIsPlayingRef.current = true;
         const localPos = music.playerRef.current
           ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;

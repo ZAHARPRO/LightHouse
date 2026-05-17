@@ -34,6 +34,7 @@ export interface YTPlayer {
   pauseVideo(): void;
   seekTo(s: number, allowSeek: boolean): void;
   loadVideoById(videoId: string, startSeconds?: number): void;
+  cueVideoById(videoId: string, startSeconds?: number): void;
   getPlayerState(): number;
   getCurrentTime(): number;
   getDuration(): number;
@@ -74,6 +75,8 @@ type MusicCtx = {
    * Use for lobby sync (non-host receives the host's current track).
    */
   play: (track: YTTrack, posMs?: number) => void;
+  /** Like play() but uses cueVideoById — loads without autoplaying. Use on tab restore. */
+  cue: (track: YTTrack, posMs?: number) => void;
   /** Play immediately; push current track to history, keep existing queue */
   playNow: (track: YTTrack) => void;
   /** Insert track at the front of the queue */
@@ -210,7 +213,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       ctx = new AudioCtx() as AudioContext;
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
-      gain.gain.value = 0.001;      // nearly silent — just enough to hold the session
+      gain.gain.value = 0;           // silent — zero output but keeps the audio session alive
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
@@ -338,11 +341,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
   // ── Raw play (lobby sync — no history mutation) ────────────────────────────
   const play = useCallback((t: YTTrack, posMs = 0) => {
-    // Only update currentTrack in state, leave history/queue untouched
     setEngState(s => ({ ...s, currentTrack: t }));
     engStateRef.current = { ...engStateRef.current, currentTrack: t };
     if (playerRef.current && playerReadyRef.current)
       playerRef.current.loadVideoById(t.videoId, posMs / 1000);
+  }, []);
+
+  // Like play() but uses cueVideoById — loads the video without autoplaying.
+  // Use when restoring lobby state on fresh tab load.
+  const cue = useCallback((t: YTTrack, posMs = 0) => {
+    setEngState(s => ({ ...s, currentTrack: t }));
+    engStateRef.current = { ...engStateRef.current, currentTrack: t };
+    if (playerRef.current && playerReadyRef.current)
+      playerRef.current.cueVideoById(t.videoId, posMs / 1000);
   }, []);
 
   const pause     = useCallback(() => playerRef.current?.pauseVideo(),              []);
@@ -366,7 +377,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       smartShuffle: engState.smartShuffle,
       smartLoading,
 
-      play,
+      play, cue,
       playNow:      (t)  => dispatch({ type: "PLAY_NOW",      track: t }),
       playNext:     (t)  => dispatch({ type: "PLAY_NEXT",     track: t }),
       addToQueue:   (t)  => dispatch({ type: "ADD_TO_QUEUE",  track: t }),

@@ -221,8 +221,8 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
       programmaticRef.current = true;
       if (externalPlaying) ytRef.current.playVideo();
       else ytRef.current.pauseVideo();
-      // Clear after a short delay to let the state-change event fire first
-      setTimeout(() => { programmaticRef.current = false; }, 300);
+      // 1 500 ms gives enough room for slow connections to fire onStateChange before we unblock
+      setTimeout(() => { programmaticRef.current = false; }, 1500);
     }, [externalPlaying]);
 
     // ── Fullscreen detection ──────────────────────────────────────────────────

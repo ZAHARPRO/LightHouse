@@ -184,6 +184,11 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
           setSize({ w: 360 });
           setView("lobby");
           applyLobbySync(d);
+          // Don't auto-play on fresh tab load — sessionStorage is cleared when tab is closed
+          if (!sessionStorage.getItem("lobby_session_active")) {
+            setTimeout(() => music.pause(), 800);
+          }
+          sessionStorage.setItem("lobby_session_active", "1");
         } else {
           music.setActiveLobbyId(null);
         }
@@ -762,9 +767,9 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                 </button>
                 <button
                   onClick={() => playTrack(r)}
-                  title="Replace current track"
+                  title="Play now"
                   className="px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-muted)] text-[0.58rem] font-bold flex items-center gap-0.5 hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors">
-                  <Play size={8} />Replace
+                  <Play size={8} />Play Now
                 </button>
                 <FavBtn item={r} size={10} />
                 <AddPlBtn item={r} sz={10} />
@@ -1083,6 +1088,17 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                         <p className="text-[0.52rem] text-[var(--text-muted)] truncate">{t.channel}</p>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => {
+                          const item = t;
+                          const newQueue = activeQueue.filter((_, idx) => idx !== i);
+                          music.playNow(item);
+                          removeFromQueue(i);
+                          if (activeLobby) {
+                            incomingSyncTrackRef.current = item.videoId;
+                            incomingSyncQueueRef.current = JSON.stringify(newQueue);
+                            hostSync(item, 0, true, newQueue);
+                          }
+                        }} title="Play now" className="p-0.5 text-green-400 hover:text-green-300 transition-colors"><Play size={12} /></button>
                         <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top"
                           className="p-0.5 text-white hover:text-grey-400 disabled:opacity-20 transition-colors"><ChevronsUp size={18} /></button>
                         <button onClick={() => moveQueueItem(i, i - 1)} disabled={i === 0} title="Move up"

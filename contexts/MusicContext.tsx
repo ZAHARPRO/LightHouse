@@ -198,6 +198,89 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState]);
 
+  // ── Silent AudioContext — keeps the audio session alive on iOS lock screen ─
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AudioCtx = (window as any).AudioContext ?? (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    let ctx: AudioContext | null = null;
+    let keepAlive: ReturnType<typeof setInterval> | null = null;
+    const unlock = () => {
+      if (ctx) return;
+      ctx = new AudioCtx() as AudioContext;
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.001;      // nearly silent — just enough to hold the session
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      keepAlive = setInterval(() => {
+        if (ctx?.state === "suspended") ctx.resume();
+      }, 30_000);
+    };
+    document.addEventListener("click",     unlock, { once: true });
+    document.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      if (keepAlive) clearInterval(keepAlive);
+      ctx?.close();
+      document.removeEventListener("click",     unlock);
+      document.removeEventListener("touchstart", unlock);
+    };
+  }, []);
+
+  // ── Media Session API — lock-screen controls + phone volume/media buttons ──
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const track = engState.currentTrack;
+    if (!track) { navigator.mediaSession.playbackState = "none"; return; }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:   track.title,
+      artist:  track.channel,
+      artwork: [{ src: track.thumbnail, sizes: "480x360", type: "image/jpeg" }],
+    });
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [engState.currentTrack, isPlaying]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("play",           () => playerRef.current?.playVideo());
+    ms.setActionHandler("pause",          () => playerRef.current?.pauseVideo());
+    ms.setActionHandler("nexttrack",      () => dispatch({ type: "NEXT" }));
+    ms.setActionHandler("previoustrack",  () => {
+      const ms2 = playerRef.current ? Math.floor(playerRef.current.getCurrentTime() * 1000) : 0;
+      dispatch({ type: "PREV", positionMs: ms2 });
+    });
+    ms.setActionHandler("seekbackward", (d) => {
+      const by = d.seekOffset ?? 10;
+      if (playerRef.current) playerRef.current.seekTo(Math.max(0, playerRef.current.getCurrentTime() - by), true);
+    });
+    ms.setActionHandler("seekforward", (d) => {
+      const by = d.seekOffset ?? 10;
+      if (playerRef.current) playerRef.current.seekTo(playerRef.current.getCurrentTime() + by, true);
+    });
+    return () => {
+      (["play","pause","nexttrack","previoustrack","seekbackward","seekforward"] as const)
+        .forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch {} });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update Media Session position state (enables seek bar on lock screen)
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !playerReady) return;
+    try {
+      const dur = playerRef.current?.getDuration?.() ?? 0;
+      if (dur > 0) {
+        navigator.mediaSession.setPositionState({
+          duration:     dur,
+          playbackRate: 1,
+          position:     Math.min(positionMs / 1000, dur),
+        });
+      }
+    } catch {}
+  }, [positionMs, playerReady]);
+
   // ── Command executor ───────────────────────────────────────────────────────
   function execCommand(cmd: PlayCommand | null) {
     if (!cmd) return;

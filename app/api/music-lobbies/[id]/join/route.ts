@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { sseBroadcast } from "@/lib/lobby-sse";
 
 const MEMBER_TTL   = 30_000;
 const REJOIN_GRACE = 300_000; // 5 min — skip password if recently was a member
@@ -42,6 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     data: { membersJson: JSON.stringify(members) },
   });
+
+  sseBroadcast(id, { members });
 
   return NextResponse.json({ ok: true });
 }

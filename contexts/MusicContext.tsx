@@ -137,10 +137,22 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const engStateRef     = useRef(engState);
   const playerReadyRef  = useRef(playerReady);
   const smartLoadingRef = useRef(false);
+  // Queued load when play/cue is called before the player is ready
+  const pendingLoadRef  = useRef<{ videoId: string; posMs: number; autoplay: boolean } | null>(null);
 
   // Keep refs in sync on every render (no useEffect delay needed for refs)
   engStateRef.current    = engState;
   playerReadyRef.current = playerReady;
+
+  // Execute any load that was queued before the player was ready
+  useEffect(() => {
+    if (!playerReady) return;
+    const p = pendingLoadRef.current;
+    pendingLoadRef.current = null;
+    if (!p || !playerRef.current) return;
+    if (p.autoplay) playerRef.current.loadVideoById(p.videoId, p.posMs / 1000);
+    else             playerRef.current.cueVideoById(p.videoId, p.posMs / 1000);
+  }, [playerReady]);
 
   // ── YouTube container (outside React tree to avoid reconciliation issues) ─
   useEffect(() => {
@@ -343,8 +355,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const play = useCallback((t: YTTrack, posMs = 0) => {
     setEngState(s => ({ ...s, currentTrack: t }));
     engStateRef.current = { ...engStateRef.current, currentTrack: t };
-    if (playerRef.current && playerReadyRef.current)
+    if (playerRef.current && playerReadyRef.current) {
       playerRef.current.loadVideoById(t.videoId, posMs / 1000);
+    } else {
+      // Player not ready yet — queue for execution once onReady fires
+      pendingLoadRef.current = { videoId: t.videoId, posMs, autoplay: true };
+    }
   }, []);
 
   // Like play() but uses cueVideoById — loads the video without autoplaying.
@@ -352,8 +368,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const cue = useCallback((t: YTTrack, posMs = 0) => {
     setEngState(s => ({ ...s, currentTrack: t }));
     engStateRef.current = { ...engStateRef.current, currentTrack: t };
-    if (playerRef.current && playerReadyRef.current)
+    if (playerRef.current && playerReadyRef.current) {
       playerRef.current.cueVideoById(t.videoId, posMs / 1000);
+    } else {
+      pendingLoadRef.current = { videoId: t.videoId, posMs, autoplay: false };
+    }
   }, []);
 
   const pause     = useCallback(() => playerRef.current?.pauseVideo(),              []);

@@ -7,7 +7,7 @@ import {
   Volume2, Search, Plus, Lock, Users, Loader2, ExternalLink, Check, Copy,
   History, ListMusic, Trash2, Download, ChevronRight, Youtube, Heart,
   Shuffle, Sparkles, MonitorPlay, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
-  ListOrdered, Save, RefreshCw,
+  ListOrdered, Save,
 } from "lucide-react";
 import YouTubePlayer, { type YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import Image from "next/image";
@@ -362,7 +362,8 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     if (view !== "lobby" || !activeLobby) return;
     const t = setInterval(refreshLobby, 30_000);
     return () => clearInterval(t);
-  }, [view, refreshLobby, activeLobby]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, refreshLobby, activeLobby?.id]);
 
   // ── Heartbeat ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -644,16 +645,6 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     setActiveLobby(null);
     music.clearQueue();
     setView("lobbies");
-  }
-
-  async function refreshSync() {
-    if (!activeLobby) return;
-    const res = await fetch(`/api/music-lobbies/${activeLobby.id}`).catch(() => null);
-    if (!res?.ok) return;
-    const d = await res.json() as ActiveLobby;
-    setActiveLobby(d);
-    syncedTrackRef.current = null; // force re-apply even if trackUri hasn't changed
-    applyLobbySync(d);
   }
 
   function pushSync(playing: boolean, overridePosMs?: number) {
@@ -1034,12 +1025,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
             <Users size={13} />
           </button>
         )}
-        {activeLobby && (
-          <button onClick={refreshSync} title="Re-sync with lobby"
-            className="text-[var(--text-muted)] hover:text-blue-400 transition-colors p-0.5">
-            <RefreshCw size={12} />
-          </button>
-        )}
+
         <button onClick={() => setMin(m => !m)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
           {minimized ? <ChevronDown size={13} /> : <Minus size={13} />}
         </button>

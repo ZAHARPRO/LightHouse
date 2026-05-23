@@ -352,6 +352,7 @@ export default function BilliardsOnlineRoom() {
   const [submitting, setSubmitting] = useState(false);
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const [animBalls, setAnimBalls] = useState<Ball[] | null>(null);
+  const [viewingOpponentResult, setViewingOpponentResult] = useState(false);
   const [copied, setCopied] = useState(false);
   // Live countdown state — synced from server, ticks between polls
   const [liveHostMs, setLiveHostMs] = useState<number | null>(null);
@@ -366,11 +367,14 @@ export default function BilliardsOnlineRoom() {
   const lastAnimatedCountRef = useRef(0);
   // Prevents replaying existing shots when first joining a room
   const initializedAnimRef = useRef(false);
-  const shotQueueRef = useRef<Array<{ frames: Ball[][]; sound: SoundKey; angle: number; power: number }>>([]);
+  // Authoritative state tracking — synced from server, avoids re-simulating the full history
+  const confirmedStateRef = useRef<import("@/lib/billiards").BilliardsState>(initialState());
+  const shotQueueRef = useRef<Array<{ frames: Ball[][]; sound: SoundKey; angle: number; power: number; byOpponent: boolean }>>([]);
   const animatingRef = useRef(false);
   const animIdRef = useRef(0);
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
+  const opponentResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const processQueue = useCallback(() => {
     if (animatingRef.current || shotQueueRef.current.length === 0) return;
@@ -381,6 +385,7 @@ export default function BilliardsOnlineRoom() {
     animShotRef.current = { angle: item.angle, power: item.power, cx: cueBallFrame0?.x ?? TABLE_W * 0.25, cy: cueBallFrame0?.y ?? TABLE_H / 2 };
     animFrameIdxRef.current = 0;
     const myId = ++animIdRef.current;
+    const wasOpponent = item.byOpponent;
     let i = 0; let lastFrameTime = -1;
     function tick(now: number) {
       if (animIdRef.current !== myId) return;
@@ -394,7 +399,14 @@ export default function BilliardsOnlineRoom() {
       }
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
-        processQueue(); return;
+        if (shotQueueRef.current.length > 0) {
+          processQueue();
+        } else if (wasOpponent) {
+          // Show the opponent's shot result for 2 seconds before enabling the player's turn
+          setViewingOpponentResult(true);
+          opponentResultTimerRef.current = setTimeout(() => setViewingOpponentResult(false), 2000);
+        }
+        return;
       }
       const t = Math.min(1, (now - lastFrameTime) / 17);
       const next = item.frames[i + 1];
@@ -404,8 +416,8 @@ export default function BilliardsOnlineRoom() {
     rafRef.current = requestAnimationFrame(tick);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const enqueueAnimation = useCallback((frames: Ball[][], sound: SoundKey, angle: number, power: number) => {
-    shotQueueRef.current.push({ frames, sound, angle, power });
+  const enqueueAnimation = useCallback((frames: Ball[][], sound: SoundKey, angle: number, power: number, byOpponent = false) => {
+    shotQueueRef.current.push({ frames, sound, angle, power, byOpponent });
     processQueue();
   }, [processQueue]);
 
@@ -426,7 +438,10 @@ export default function BilliardsOnlineRoom() {
 
   useEffect(() => { preloadSounds(); fetchRoom(); }, [fetchRoom]);
   useEffect(() => { const t = setInterval(fetchRoom, 400); return () => clearInterval(t); }, [fetchRoom]);
-  useEffect(() => () => { cancelAnimationFrame(rafRef.current); }, []);
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    if (opponentResultTimerRef.current) clearTimeout(opponentResultTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -470,24 +485,31 @@ export default function BilliardsOnlineRoom() {
   // Animate shots that arrived from the server (opponent moves)
   useEffect(() => {
     if (!room || room.status !== "PLAYING" || replayIdx !== null) return;
-    // On first load skip existing shots — only animate new ones going forward
+    // On first load skip existing shots — sync confirmedState to server state, skip animation
     if (!initializedAnimRef.current) {
       initializedAnimRef.current = true;
       lastAnimatedCountRef.current = shots.length;
+      if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
       return;
     }
-    if (shots.length <= lastAnimatedCountRef.current) return;
+    if (shots.length <= lastAnimatedCountRef.current) {
+      // No new shots — resync confirmed state with server to prevent drift
+      if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
+      return;
+    }
 
-    let state = initialState();
-    for (let i = 0; i < lastAnimatedCountRef.current; i++) state = simulateShot(state, shots[i].shot).newState;
+    // Animate only the new shots, starting from the last confirmed state
+    let state = confirmedStateRef.current;
     for (let idx = lastAnimatedCountRef.current; idx < shots.length; idx++) {
       const rec = shots[idx];
+      const byOpponent = rec.by !== room.myRole;
       const frames = animateShot(state, rec.shot, 1);
       const sound: SoundKey = rec.pocketed.filter(id => id !== 0).length > 0 ? "bl_pocket"
         : rec.foul ? "bl_scratch" : "bl_ball_hit";
-      enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power);
+      enqueueAnimation(frames, sound, rec.shot.angle, rec.shot.power, byOpponent);
       state = simulateShot(state, rec.shot).newState;
     }
+    confirmedStateRef.current = state;
     lastAnimatedCountRef.current = shots.length;
   }, [room?.shotsJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -622,7 +644,7 @@ export default function BilliardsOnlineRoom() {
   }
 
   const isMyTurnNow = room?.myRole !== "spectator" && room?.currentTurn === room?.myRole
-    && room?.status === "PLAYING" && replayIdx === null && !animBalls && !submitting;
+    && room?.status === "PLAYING" && replayIdx === null && !animBalls && !submitting && !viewingOpponentResult;
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isMyTurnNow) return;
@@ -705,7 +727,8 @@ export default function BilliardsOnlineRoom() {
     setPower(0); setPullback(0); setCueHandPos(null);
     const frames = animateShot(displayState, shot, 1);
     lastAnimatedCountRef.current++;
-    enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power);
+    confirmedStateRef.current = simulateShot(displayState, shot).newState;
+    enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power, false);
     setSubmitting(true);
     try {
       const res = await fetch(`/api/billiards-rooms/${roomId}/move`, {
@@ -740,9 +763,8 @@ export default function BilliardsOnlineRoom() {
   const myEloDelta = isHost ? room.hostEloDelta : room.guestEloDelta;
   const myGroup    = isHost ? room.hostGroup    : room.guestGroup;
   const oppGroup   = isHost ? room.guestGroup   : room.hostGroup;
-  const myTimeMs      = isHost ? liveHostMs  : liveGuestMs;
-  const oppTimeMs     = isHost ? liveGuestMs : liveHostMs;
-  const oppDraftPower = isHost ? room.guestDraftPower : room.hostDraftPower;
+  const myTimeMs  = isHost ? liveHostMs  : liveGuestMs;
+  const oppTimeMs = isHost ? liveGuestMs : liveHostMs;
   const myRank  = myElo  ? getRank(myElo)  : null;
   const oppRank = oppElo ? getRank(oppElo) : null;
   const myRemaining  = myGroup  ? remainingBalls(displayState, myGroup)  : [];
@@ -901,18 +923,10 @@ export default function BilliardsOnlineRoom() {
               {room.currentTurn !== room.myRole && !opponentAnimating && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
             </div>
           </div>
-          {/* Opponent tension bar */}
-          {oppDraftPower !== null && oppDraftPower > 0 && room.currentTurn !== room.myRole && !opponentAnimating && (
-            <div className="flex items-center gap-2 w-full px-1">
-              <span className="text-[0.65rem] text-[var(--text-muted)] shrink-0">tension</span>
-              <div className="flex-1 h-1.5 rounded-full bg-[var(--bg-secondary)] overflow-hidden">
-                <div className="h-full rounded-full transition-[width] duration-100"
-                  style={{ width: `${oppDraftPower * 100}%`, background: oppDraftPower >= 0.85 ? "#f87171" : oppDraftPower >= 0.6 ? "#fb923c" : oppDraftPower >= 0.3 ? "#facc15" : "#4ade80" }} />
-              </div>
-              <span className="text-[0.65rem] font-mono font-bold w-7 text-right shrink-0"
-                style={{ color: oppDraftPower >= 0.85 ? "#f87171" : oppDraftPower >= 0.6 ? "#fb923c" : oppDraftPower >= 0.3 ? "#facc15" : "#4ade80" }}>
-                {Math.round(oppDraftPower * 100)}%
-              </span>
+          {/* Opponent shot result viewing window */}
+          {viewingOpponentResult && (
+            <div className="flex items-center justify-center gap-2 w-full px-1 py-1 rounded-lg bg-blue-500/10 border border-blue-500/25">
+              <span className="text-[0.7rem] text-blue-300 font-bold">Opponent shot — your turn in a moment…</span>
             </div>
           )}
 

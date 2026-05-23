@@ -100,11 +100,16 @@ export default async function PublicProfilePage({
   const isViewerStaff = ["ADMIN", "OPERATOR", "STAFF"].includes(session?.user?.role ?? "");
 
   let isBlockedByMe = false;
+  let myTier = "FREE";
   if (session?.user?.id && !isMe) {
-    const block = await prisma.block.findUnique({
-      where: { blockerId_blockedId: { blockerId: session.user.id, blockedId: id } },
-    });
+    const [block, me] = await Promise.all([
+      prisma.block.findUnique({
+        where: { blockerId_blockedId: { blockerId: session.user.id, blockedId: id } },
+      }),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { tier: true } }),
+    ]);
     isBlockedByMe = !!block;
+    myTier = me?.tier ?? "FREE";
   }
 
   const displayHandle = user.username ? `@${user.username}` : (user.name ?? "Unknown");
@@ -178,7 +183,7 @@ export default async function PublicProfilePage({
                 ) : session?.user ? (
                   <>
                     <SubscribeButton creatorId={id} initialFollowing={isFollowing} />
-                    <MessageButton targetId={id} />
+                    <MessageButton targetId={id} myTier={myTier} />
                     <BlockButton targetId={id} targetName={user.name ?? "user"} initialBlocked={isBlockedByMe} />
                     {!isViewerStaff && <ReportButton targetId={id} targetName={user.name ?? "user"} />}
                   </>

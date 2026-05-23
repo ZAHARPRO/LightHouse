@@ -388,7 +388,10 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
       incomingSyncTrackRef.current = null;
       return; // track was applied from incoming SSE — don't echo back
     }
-    hostSync(track, 0, true);
+    // Mark the current queue as already-synced so the queue effect doesn't fire a second
+    // hostSync in the same render cycle (e.g. after auto-advance) with stale isPlaying=false
+    incomingSyncQueueRef.current = JSON.stringify(activeQueue);
+    hostSync(track, 0, true, activeQueue);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.videoId]);
 

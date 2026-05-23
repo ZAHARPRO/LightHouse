@@ -66,10 +66,46 @@ function interpFrames(a: Ball[], b: Ball[], t: number): Ball[] {
 
 function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   const W = TABLE_W * scale, H = TABLE_H * scale;
-  ctx.fillStyle = "#1a7a3c"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = "#0f5628";
+  const pad = CANVAS_PAD * scale;
+  // Wood surround
+  const wg = ctx.createLinearGradient(-pad, -pad, pad * 0.5, pad * 0.5);
+  wg.addColorStop(0, "#6b3c14"); wg.addColorStop(0.35, "#8b5020");
+  wg.addColorStop(0.65, "#6b3c14"); wg.addColorStop(1, "#4a2a0c");
+  ctx.fillStyle = wg;
+  ctx.fillRect(-pad, -pad, W + pad * 2, H + pad * 2);
+  ctx.save();
+  ctx.globalAlpha = 0.06; ctx.strokeStyle = "#c8804a"; ctx.lineWidth = 1.2 * scale;
+  for (let i = -5; i < 25; i++) {
+    const xi = -pad + (i / 20) * (W + pad * 2);
+    ctx.beginPath(); ctx.moveTo(xi, -pad); ctx.lineTo(xi + 8 * scale, H + pad); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.22; ctx.strokeStyle = "#c8804a"; ctx.lineWidth = 2 * scale;
+  ctx.strokeRect(-pad + 3 * scale, -pad + 3 * scale, W + pad * 2 - 6 * scale, H + pad * 2 - 6 * scale);
+  ctx.globalAlpha = 1; ctx.restore();
+  // Felt
+  const fg = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.65);
+  fg.addColorStop(0, "#228845"); fg.addColorStop(0.55, "#1a7a3c"); fg.addColorStop(1, "#124f28");
+  ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+  // Cushions
+  ctx.fillStyle = "#0d4820";
   ctx.fillRect(0, 0, W, PF_TOP * scale); ctx.fillRect(0, (TABLE_H - PF_TOP) * scale, W, PF_TOP * scale);
   ctx.fillRect(0, 0, PF_LEFT * scale, H); ctx.fillRect((TABLE_W - PF_LEFT) * scale, 0, PF_LEFT * scale, H);
+  // Cushion depth shadows
+  const sh = 7 * scale; let g: CanvasGradient;
+  g = ctx.createLinearGradient(0, PF_TOP * scale, 0, PF_TOP * scale + sh);
+  g.addColorStop(0, "rgba(0,0,0,0.28)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(PF_LEFT * scale, PF_TOP * scale, (PF_RIGHT - PF_LEFT) * scale, sh);
+  g = ctx.createLinearGradient(0, PF_BOTTOM * scale, 0, PF_BOTTOM * scale - sh);
+  g.addColorStop(0, "rgba(0,0,0,0.28)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(PF_LEFT * scale, PF_BOTTOM * scale - sh, (PF_RIGHT - PF_LEFT) * scale, sh);
+  g = ctx.createLinearGradient(PF_LEFT * scale, 0, PF_LEFT * scale + sh, 0);
+  g.addColorStop(0, "rgba(0,0,0,0.28)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(PF_LEFT * scale, PF_TOP * scale, sh, (PF_BOTTOM - PF_TOP) * scale);
+  g = ctx.createLinearGradient(PF_RIGHT * scale, 0, PF_RIGHT * scale - sh, 0);
+  g.addColorStop(0, "rgba(0,0,0,0.28)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(PF_RIGHT * scale - sh, PF_TOP * scale, sh, (PF_BOTTOM - PF_TOP) * scale);
   ctx.setLineDash([3 * scale, 5 * scale]);
   ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 0.7 * scale;
   ctx.beginPath(); ctx.moveTo(TABLE_W * 0.25 * scale, PF_TOP * scale); ctx.lineTo(TABLE_W * 0.25 * scale, PF_BOTTOM * scale); ctx.stroke();
@@ -78,11 +114,46 @@ function drawTable(ctx: CanvasRenderingContext2D, scale: number) {
   ctx.strokeRect(PF_LEFT * scale, PF_TOP * scale, (PF_RIGHT - PF_LEFT) * scale, (PF_BOTTOM - PF_TOP) * scale);
 }
 function drawPockets(ctx: CanvasRenderingContext2D, scale: number) {
-  ctx.fillStyle = "#0a0a0a";
-  for (const [px, py] of POCKETS) { ctx.beginPath(); ctx.arc(px * scale, py * scale, POCKET_R * scale, 0, Math.PI * 2); ctx.fill(); }
+  for (const [px, py] of POCKETS) {
+    const cx = px * scale, cy = py * scale, r = POCKET_R * scale;
+    // Leather rim base
+    ctx.beginPath(); ctx.arc(cx, cy, r + 3.5 * scale, 0, Math.PI * 2);
+    const rim = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r + 3.5 * scale);
+    rim.addColorStop(0, "#2e1608"); rim.addColorStop(0.55, "#1c0d04"); rim.addColorStop(1, "#0a0502");
+    ctx.fillStyle = rim; ctx.fill();
+    // Rim highlight (leather sheen at top-left)
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    const hl = ctx.createRadialGradient(cx - r * 0.55, cy - r * 0.55, 0, cx - r * 0.55, cy - r * 0.55, r * 0.65);
+    hl.addColorStop(0, "#ffffff"); hl.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = hl;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1; ctx.restore();
+    // Outer rim ring
+    ctx.beginPath(); ctx.arc(cx, cy, r + 3.5 * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(80,45,10,0.6)"; ctx.lineWidth = 1 * scale; ctx.stroke();
+    // Inner pocket — deep black with subtle depth gradient
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,1)"; ctx.shadowBlur = 6 * scale;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    const pg = ctx.createRadialGradient(cx - r * 0.12, cy - r * 0.12, r * 0.04, cx + r * 0.08, cy + r * 0.08, r);
+    pg.addColorStop(0, "#050201"); pg.addColorStop(0.45, "#020100"); pg.addColorStop(1, "#000000");
+    ctx.fillStyle = pg; ctx.fill();
+    ctx.restore();
+    // Inner rim border
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(60,30,8,0.7)"; ctx.lineWidth = 1 * scale; ctx.stroke();
+  }
 }
 function drawBall(ctx: CanvasRenderingContext2D, id: number, x: number, y: number, scale: number) {
   const r = BALL_R * scale, cx = x * scale, cy = y * scale;
+  // Drop shadow
+  ctx.save();
+  const sdg = ctx.createRadialGradient(cx + r * 0.3, cy + r * 0.45, 0, cx + r * 0.3, cy + r * 0.45, r);
+  sdg.addColorStop(0, "rgba(0,0,0,0.28)"); sdg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = sdg;
+  ctx.beginPath(); ctx.ellipse(cx + r * 0.3, cy + r * 0.45, r * 0.9, r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
   const isStripe = id >= 9 && id <= 15;
   const color = id === 0 ? "#f0f0f0" : BALL_COLORS[id] ?? "#888";
   if (isStripe) {
@@ -315,17 +386,17 @@ export default function BilliardsOnlineRoom() {
       if (animIdRef.current !== myId) return;
       if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
       const elapsed = now - lastFrameTime;
-      if (elapsed >= 50) {
-        const steps = Math.floor(elapsed / 50);
+      if (elapsed >= 17) {
+        const steps = Math.floor(elapsed / 17);
         i = Math.min(i + steps, item.frames.length);
-        lastFrameTime += steps * 50;
+        lastFrameTime += steps * 17;
         animFrameIdxRef.current = i;
       }
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         processQueue(); return;
       }
-      const t = Math.min(1, (now - lastFrameTime) / 50);
+      const t = Math.min(1, (now - lastFrameTime) / 17);
       const next = item.frames[i + 1];
       setAnimBalls(next ? interpFrames(item.frames[i], next, t) : item.frames[i]);
       rafRef.current = requestAnimationFrame(tick);
@@ -446,17 +517,17 @@ export default function BilliardsOnlineRoom() {
       if (animIdRef.current !== myId) return;
       if (lastFrameTime < 0) { lastFrameTime = now; rafRef.current = requestAnimationFrame(tick); return; }
       const elapsed = now - lastFrameTime;
-      if (elapsed >= 50) {
-        const steps = Math.floor(elapsed / 50);
+      if (elapsed >= 17) {
+        const steps = Math.floor(elapsed / 17);
         i = Math.min(i + steps, frames.length);
-        lastFrameTime += steps * 50;
+        lastFrameTime += steps * 17;
         animFrameIdxRef.current = i;
       }
       if (i >= frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         processQueue(); return;
       }
-      const t = Math.min(1, (now - lastFrameTime) / 50);
+      const t = Math.min(1, (now - lastFrameTime) / 17);
       const next = frames[i + 1];
       setAnimBalls(next ? interpFrames(frames[i], next, t) : frames[i]);
       rafRef.current = requestAnimationFrame(tick);

@@ -143,6 +143,10 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   // Track changes arriving from SSE so the track/queue-change effects don't echo them back
   const incomingSyncTrackRef   = useRef<string | null>(null);
   const incomingSyncQueueRef   = useRef<string | null>(null);
+  // Set to true while applyLobbySync is executing so sync-echo effects don't fire mid-apply
+  const inLobbyApplyRef        = useRef(false);
+  // Tracks which lobbyId has already been force-synced on playerReady
+  const lastReadySyncLobbyRef  = useRef<string | null>(null);
   // Current session user ID (kept in a ref so applyLobbySync stale closure can read it)
   const sessionIdRef           = useRef<string | undefined>(undefined);
   sessionIdRef.current         = session?.user?.id;
@@ -170,6 +174,17 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     if (playerReady) setMusicVol(volume);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerReady]);
+
+  // When the YouTube player becomes ready while in a lobby, force a fresh sync
+  // so the track actually starts (fixes silent join-mid-playback bug)
+  useEffect(() => {
+    if (!playerReady || !activeLobby) return;
+    if (lastReadySyncLobbyRef.current === activeLobby.id) return;
+    lastReadySyncLobbyRef.current = activeLobby.id;
+    syncedTrackRef.current = null;
+    applyLobbySync(activeLobby);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerReady, activeLobby?.id]);
 
   function handleVol(v: number) { setVol(v); setMusicVol(v); localStorage.setItem("music_vol", String(v)); }
 
@@ -236,6 +251,10 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const applyLobbySync = useCallback((d: Partial<ActiveLobby> & { sourceId?: string }, fromLocalAction = false, suppressPlay = false) => {
     // Ignore our own SSE echoes (server stamps sourceId = sender's userId)
     if (!fromLocalAction && d.sourceId && d.sourceId === sessionIdRef.current) return;
+
+    // Block echo-back effects for the duration of this apply (including async state flushes)
+    inLobbyApplyRef.current = true;
+    setTimeout(() => { inLobbyApplyRef.current = false; }, 0);
 
     if (!d.trackUri) {
       if (syncedTrackRef.current) {
@@ -362,6 +381,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const prevTrackIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeLobby || !track) return;
+    if (inLobbyApplyRef.current) return;
     if (track.videoId === prevTrackIdRef.current) return;
     prevTrackIdRef.current = track.videoId;
     if (incomingSyncTrackRef.current === track.videoId) {
@@ -376,6 +396,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const prevQueueRef = useRef<string>("");
   useEffect(() => {
     if (!activeLobby || !track) return;
+    if (inLobbyApplyRef.current) return;
     const serialized = JSON.stringify(activeQueue);
     if (serialized === prevQueueRef.current) return;
     prevQueueRef.current = serialized;
@@ -1357,6 +1378,19 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                         </div>
                         {/* Reorder + remove buttons */}
                         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => {
+                            const item = t;
+                            const newQueue = activeQueue.filter((_, idx) => idx !== i);
+                            music.playNow(item);
+                            removeFromQueue(i);
+                            if (activeLobby) {
+                              incomingSyncTrackRef.current = item.videoId;
+                              incomingSyncQueueRef.current = JSON.stringify(newQueue);
+                              hostSync(item, 0, true, newQueue);
+                            }
+                          }} title="Play now" className="p-0.5 text-green-400 hover:text-green-300 transition-colors">
+                            <Play size={9} />
+                          </button>
                           <button onClick={() => moveQueueItem(i, 0)} disabled={i === 0} title="To top"
                             className="p-0.5 text-[var(--text-orange)] hover:text-[var(--text-primary)] disabled:opacity-20 transition-colors">
                             <ChevronsUp size={9} />

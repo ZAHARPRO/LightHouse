@@ -294,11 +294,13 @@ export default function GamesPage() {
                 style={{ gridTemplateColumns: "28px 36px 1fr 60px 60px 60px" }}>
                 <span />
                 <span />
-                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider">{t("player")}</span>
-                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("elo")}</span>
-                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center">{t("wins")}</span>
-                <span className="text-[0.65rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
-                  <Flame size={10} className="text-orange-400" /> {t("best")}
+                <span className="text-[0.65rem] font-display font-bold text-pink-400 uppercase tracking-wider">{t("player")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-pink-400 uppercase tracking-wider text-center">{t("elo")}</span>
+                <span className="text-[0.65rem] font-display font-bold text-pink-400 uppercase tracking-wider text-center gap-0.5">
+                  {t("wins")}
+                </span>
+                <span className="text-[0.65rem] font-display font-bold text-pink-400 uppercase tracking-wider text-center flex items-center justify-center gap-0.5">
+                  <Flame size={10} className="text-pink-400" /> {t("best")}
                 </span>
               </div>
 
@@ -320,7 +322,7 @@ export default function GamesPage() {
                       </span>
                       {u.image
                         ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
-                        : <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">
+                        : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">
                             {u.name?.[0] ?? "?"}
                           </div>
                       }

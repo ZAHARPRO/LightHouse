@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  Loader2, RotateCcw, Trophy, CheckCircle2, XCircle, ChevronLeft,
+  Loader2, RotateCcw, Trophy, XCircle, ChevronLeft,
   Puzzle, ChevronRight, Lightbulb, Play, X, Zap, Tag,
 } from "lucide-react";
 import YouTubePlayer, { type YouTubePlayerHandle } from "@/components/YouTubePlayer";
@@ -212,7 +212,7 @@ export default function PuzzleSolverPage() {
         setSelected(null);
         setDots([]);
         setStatus("playing");
-      }, 700);
+      }, 455);
       return;
     }
 
@@ -337,7 +337,7 @@ export default function PuzzleSolverPage() {
       </div>
 
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <span className="text-[0.7rem] font-display font-bold px-2 py-0.5 rounded-full border text-orange-400 bg-orange-500/10 border-orange-500/20">
+        <span className="text-[0.7rem] font-display font-bold px-2 py-0.5 rounded-full border text-pink-400 bg-pink-500/10 border-pink-500/20">
           {diffLabel}
         </span>
         <span className="text-sm text-[var(--text-muted)]">{turnLabel} {t("toPlay")}</span>
@@ -420,9 +420,16 @@ export default function PuzzleSolverPage() {
               </>
             ) : (
               <>
-                <CheckCircle2 size={24} className="text-violet-400"/>
-                <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{diffLabel}</p>
-                <p className="text-[var(--text-muted)] text-xs">{turnLabel} {t("toMove")}</p>
+                <div className={[
+                  "w-12 h-12 rounded-full flex items-center justify-center text-3xl border-2",
+                  state.turn === "w" ? "bg-white border-gray-300" : "bg-[#1a1a1a] border-gray-600",
+                ].join(" ")}>
+                  {state.turn === "w" ? "♔" : "♚"}
+                </div>
+                <p className={["font-display font-extrabold text-base", state.turn === "w" ? "text-white" : "text-gray-300"].join(" ")}>
+                  {state.turn === "w" ? t("white") : t("black")}
+                </p>
+                <p className="text-[var(--text-muted)] text-xs font-semibold tracking-wide uppercase">{t("toMove")}</p>
               </>
             )}
           </div>

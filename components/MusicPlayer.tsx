@@ -256,6 +256,9 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     inLobbyApplyRef.current = true;
     setTimeout(() => { inLobbyApplyRef.current = false; }, 0);
 
+    // trackUri absent means partial update (e.g. member list) — don't touch music
+    if (!('trackUri' in d)) return;
+
     if (!d.trackUri) {
       if (syncedTrackRef.current) {
         syncedTrackRef.current = null;

@@ -5,7 +5,7 @@ import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, VideoPreset } from "
 import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
-  Mic, MicOff, MousePointer, Mouse, ImagePlus, X,
+  Mic, MicOff, MousePointer, Mouse, ImagePlus, X, Clock,
 } from "lucide-react";
 
 type Status = "idle" | "connecting" | "live" | "error";
@@ -40,16 +40,22 @@ async function resizeImage(file: File): Promise<string> {
 }
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
-  const roomRef        = useRef<Room | null>(null);
-  const videoRef       = useRef<HTMLVideoElement>(null);
-  const previewRef     = useRef<HTMLVideoElement>(null);
-  const screenTrackRef = useRef<LocalVideoTrack | null>(null);
-  const streamIdRef    = useRef<string | null>(existingStreamId ?? null);
-  const dropdownRef    = useRef<HTMLDivElement>(null);
+  const roomRef             = useRef<Room | null>(null);
+  const videoRef            = useRef<HTMLVideoElement>(null);
+  const previewRef          = useRef<HTMLVideoElement>(null);
+  const screenTrackRef      = useRef<LocalVideoTrack | null>(null);
+  const streamIdRef         = useRef<string | null>(existingStreamId ?? null);
+  const dropdownRef         = useRef<HTMLDivElement>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const awayTimeoutRef      = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const awayTickRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hiddenAtRef         = useRef<number | null>(null);
+  const micTrackRef         = useRef<MediaStreamTrack | null>(null);
 
-  const [status,        setStatus]       = useState<Status>("idle");
-  const [error,         setError]        = useState<string | null>(null);
-  const [viewerCount,   setViewerCount]  = useState(0);
+  const [status,          setStatus]         = useState<Status>("idle");
+  const [error,           setError]          = useState<string | null>(null);
+  const [viewerCount,     setViewerCount]    = useState(0);
+  const [awaySecondsLeft, setAwaySecondsLeft] = useState<number | null>(null);
   const [streamTitle,   setStreamTitle]  = useState("");
   const [description,   setDescription] = useState("");
   const [thumbnail,     setThumbnail]   = useState<string | null>(null);
@@ -135,22 +141,22 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       await room.connect(wsUrl, token);
       updateViewers(room);
 
-      // 3. Capture screen using getDisplayMedia directly for cursor control
+      // 3. Capture screen — always request audio so browser shows "Share audio" option
       const preset720p30  = new VideoPreset(1280, 720,  3_000_000, 30);
       const preset1080p60 = new VideoPreset(1920, 1080, 8_000_000, 60);
 
-      const mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           frameRate: 60,
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           cursor: captureCursor ? "always" : "never",
         } as VideoConstraintsExt,
-        audio: captureAudio,
+        audio: true, // browser shows native "Share audio" checkbox
       } as DisplayMediaStreamOptions);
 
-      // Create and publish video track
-      const videoMediaTrack = mediaStream.getVideoTracks()[0];
+      // Publish video track
+      const videoMediaTrack = displayStream.getVideoTracks()[0];
       const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, false);
       screenTrackRef.current = screenTrack;
 
@@ -161,12 +167,25 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       if (videoRef.current) screenTrack.attach(videoRef.current);
 
-      // Publish audio track if requested
+      // Publish system/screen audio if the user enabled it in the browser dialog
+      const screenAudioTracks = displayStream.getAudioTracks();
+      if (screenAudioTracks.length > 0) {
+        const screenAudioTrack = new LocalAudioTrack(screenAudioTracks[0], undefined, false);
+        await room.localParticipant.publishTrack(screenAudioTrack);
+      }
+
+      // Publish microphone audio separately if toggled on
       if (captureAudio) {
-        const audioTracks = mediaStream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          const audioTrack = new LocalAudioTrack(audioTracks[0], undefined, false);
-          await room.localParticipant.publishTrack(audioTrack);
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const micMediaTrack = micStream.getAudioTracks()[0];
+          if (micMediaTrack) {
+            micTrackRef.current = micMediaTrack;
+            const micAudioTrack = new LocalAudioTrack(micMediaTrack, undefined, false);
+            await room.localParticipant.publishTrack(micAudioTrack);
+          }
+        } catch {
+          // Mic permission denied — continue streaming without mic
         }
       }
 
@@ -199,6 +218,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     // Detach preview first
     setShowPreview(false);
     screenTrackRef.current = null;
+
+    // Stop microphone track so the OS mic indicator turns off
+    micTrackRef.current?.stop();
+    micTrackRef.current = null;
 
     if (roomRef.current) {
       const pubs = [...roomRef.current.localParticipant.trackPublications.values()];
@@ -237,6 +260,73 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     } catch { /* ignore */ }
     e.target.value = "";
   }
+
+  const sendHeartbeat = useCallback(() => {
+    const id = streamIdRef.current;
+    if (!id) return;
+    fetch(`/api/streams/${id}/heartbeat`, { method: "POST" }).catch(() => {});
+  }, []);
+
+  // Heartbeat + tab-visibility auto-end while live
+  useEffect(() => {
+    if (status !== "live") return;
+
+    const TIMEOUT_S = 5 * 60;
+
+    sendHeartbeat();
+    heartbeatIntervalRef.current = setInterval(sendHeartbeat, 25_000);
+
+    function onVisibilityChange() {
+      if (document.hidden) {
+        // Tab is now hidden — stop heartbeats, start 5-min away countdown
+        clearInterval(heartbeatIntervalRef.current!);
+        heartbeatIntervalRef.current = null;
+        hiddenAtRef.current = Date.now();
+
+        let left = TIMEOUT_S;
+        setAwaySecondsLeft(left);
+
+        awayTickRef.current = setInterval(() => {
+          left -= 1;
+          setAwaySecondsLeft(left);
+          if (left <= 0) {
+            clearInterval(awayTickRef.current!);
+            awayTickRef.current = null;
+          }
+        }, 1_000);
+
+        awayTimeoutRef.current = setTimeout(() => {
+          clearInterval(awayTickRef.current!);
+          awayTickRef.current = null;
+          setAwaySecondsLeft(null);
+          stopStream();
+        }, TIMEOUT_S * 1_000);
+      } else {
+        // Tab is visible again — cancel away timers, resume heartbeats
+        clearTimeout(awayTimeoutRef.current!);
+        clearInterval(awayTickRef.current!);
+        awayTimeoutRef.current = null;
+        awayTickRef.current = null;
+        hiddenAtRef.current = null;
+        setAwaySecondsLeft(null);
+
+        sendHeartbeat();
+        heartbeatIntervalRef.current = setInterval(sendHeartbeat, 25_000);
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearInterval(heartbeatIntervalRef.current!);
+      clearTimeout(awayTimeoutRef.current!);
+      clearInterval(awayTickRef.current!);
+      heartbeatIntervalRef.current = null;
+      awayTimeoutRef.current = null;
+      awayTickRef.current = null;
+      setAwaySecondsLeft(null);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [status, sendHeartbeat, stopStream]);
 
   useEffect(() => { return () => { roomRef.current?.disconnect(); }; }, []);
 
@@ -320,7 +410,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                   }}
                 >
                   {captureAudio ? <Mic size={13} /> : <MicOff size={13} />}
-                  {captureAudio ? "Mic on" : "Mic off"}
+                  {captureAudio ? "Microphone on" : "Microphone off"}
                 </button>
 
                 <button
@@ -443,6 +533,22 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           <p className="text-center text-[0.6875rem] text-[var(--text-muted)] py-2">
             This is exactly what viewers see
           </p>
+        </div>
+      )}
+
+      {/* Away warning — tab is in background while live */}
+      {awaySecondsLeft !== null && status === "live" && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-[10px] border border-amber-500/30 bg-amber-500/8 text-amber-300">
+          <Clock size={15} className="shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[0.8125rem] font-display font-semibold">
+              Tab is inactive — stream ends in{" "}
+              {String(Math.floor(awaySecondsLeft / 60)).padStart(2, "0")}:{String(awaySecondsLeft % 60).padStart(2, "0")}
+            </span>
+            <span className="text-[0.75rem] text-amber-400/70">
+              Return to this tab to keep streaming
+            </span>
+          </div>
         </div>
       )}
 

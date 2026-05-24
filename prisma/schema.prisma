@@ -98,10 +98,11 @@ model Stream {
   title       String    @default("Live Stream")
   description String?   @db.Text
   thumbnail   String?   @db.Text
-  isActive    Boolean   @default(true)
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  viewerCount Int       @default(0)
+  isActive      Boolean   @default(true)
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  viewerCount   Int       @default(0)
+  lastHeartbeat DateTime?
 
   adminId      String
   admin        User               @relation("StreamAdmin", fields: [adminId], references: [id], onDelete: Cascade)

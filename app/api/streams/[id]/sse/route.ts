@@ -1,7 +1,10 @@
-import { streamSseSubscribe, streamSseUnsubscribe } from "@/lib/stream-sse";
+import { prisma } from "@/lib/prisma";
+import { streamSseSubscribe, streamSseUnsubscribe, streamSseBroadcast } from "@/lib/stream-sse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function GET(
   req: Request,
@@ -18,8 +21,29 @@ export async function GET(
       ctrl = controller;
       streamSseSubscribe(id, ctrl);
       controller.enqueue(enc.encode(": connected\n\n"));
-      ping = setInterval(() => {
-        try { controller.enqueue(enc.encode(": ping\n\n")); } catch { clearInterval(ping); }
+
+      ping = setInterval(async () => {
+        try {
+          // Check if broadcaster went away (no heartbeat for 5 min)
+          const s = await prisma.stream.findUnique({
+            where: { id },
+            select: { isActive: true, lastHeartbeat: true },
+          }).catch(() => null);
+
+          if (s?.isActive && s.lastHeartbeat) {
+            const age = Date.now() - s.lastHeartbeat.getTime();
+            if (age > HEARTBEAT_TIMEOUT_MS) {
+              await prisma.stream
+                .update({ where: { id }, data: { isActive: false, endedAt: new Date() } })
+                .catch(() => {});
+              streamSseBroadcast(id, { type: "stream_ended" });
+            }
+          }
+
+          controller.enqueue(enc.encode(": ping\n\n"));
+        } catch {
+          clearInterval(ping);
+        }
       }, 30_000);
     },
     cancel() {

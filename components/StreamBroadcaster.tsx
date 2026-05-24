@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, VideoPreset } from "livekit-client";
+import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, Track } from "livekit-client";
 import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
@@ -107,11 +107,14 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const awayTimeoutRef          = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const awayTickRef             = useRef<ReturnType<typeof setInterval> | null>(null);
   const hiddenAtRef             = useRef<number | null>(null);
-  const micRawTrackRef          = useRef<MediaStreamTrack | null>(null);
-  const micLiveTrackRef         = useRef<LocalAudioTrack | null>(null);
-  const screenAudioRawTrackRef  = useRef<MediaStreamTrack | null>(null);
-  const screenAudioLiveTrackRef = useRef<LocalAudioTrack | null>(null);
-  const previewAudioRef         = useRef<HTMLAudioElement | null>(null);
+  const micRawTrackRef           = useRef<MediaStreamTrack | null>(null);
+  const micLiveTrackRef          = useRef<LocalAudioTrack | null>(null);
+  const screenAudioRawTrackRef   = useRef<MediaStreamTrack | null>(null);
+  const screenAudioLiveTrackRef  = useRef<LocalAudioTrack | null>(null);
+  const rawScreenVideoTrackRef   = useRef<MediaStreamTrack | null>(null);
+  // Cleanup fn that removes the "ended" listener from the current raw video track
+  const videoEndedCleanupRef     = useRef<(() => void) | null>(null);
+  const previewAudioRef          = useRef<HTMLAudioElement | null>(null);
 
   const [status,            setStatus]           = useState<Status>("idle");
   const [error,             setError]            = useState<string | null>(null);
@@ -158,7 +161,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setViewerCount(room.remoteParticipants.size);
   }, []);
 
-  // Helper: publish screen audio track and store refs
+  // Helper: publish screen audio — userProvidedTrack=true prevents LiveKit from
+  // re-acquiring the track via getUserMedia (which would re-enable noise suppression)
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
     await rawTrack.applyConstraints({
@@ -167,9 +171,11 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       autoGainControl: false,
     }).catch(() => {});
     screenAudioRawTrackRef.current = rawTrack;
-    const liveTrack = new LocalAudioTrack(rawTrack, undefined, false);
+    const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
-    await roomRef.current.localParticipant.publishTrack(liveTrack);
+    await roomRef.current.localParticipant.publishTrack(liveTrack, {
+      source: Track.Source.ScreenShareAudio,
+    });
   }, []);
 
   // Helper: publish mic track and store refs
@@ -180,9 +186,11 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const rawTrack = micStream.getAudioTracks()[0];
       if (!rawTrack) return false;
       micRawTrackRef.current = rawTrack;
-      const liveTrack = new LocalAudioTrack(rawTrack, undefined, false);
+      const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
       micLiveTrackRef.current = liveTrack;
-      await roomRef.current.localParticipant.publishTrack(liveTrack);
+      await roomRef.current.localParticipant.publishTrack(liveTrack, {
+        source: Track.Source.Microphone,
+      });
       return true;
     } catch {
       return false;
@@ -238,22 +246,26 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       updateViewers(room);
 
       // 3. Capture screen
-      const preset720p30  = new VideoPreset(1280, 720,  3_000_000, 30);
-      const preset1080p60 = new VideoPreset(1920, 1080, 8_000_000, 60);
-
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: SCREEN_VIDEO_OPTS(captureCursor),
         audio: SCREEN_AUDIO_OPTS,
       } as DisplayMediaStreamOptions);
 
-      // Publish video
+      // Hint the encoder that this is screen content (sharp edges/text, not motion)
       const videoMediaTrack = displayStream.getVideoTracks()[0];
-      const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, false);
+      (videoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+      rawScreenVideoTrackRef.current = videoMediaTrack;
+
+      // userProvidedTrack=true — we manage the track lifecycle so LiveKit won't
+      // stop it on unpublishTrack (which would fire "ended" and kill the stream)
+      const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, true);
       screenTrackRef.current = screenTrack;
 
+      // No simulcast for screen share — simulcast degrades sharp text/edges.
+      // Use a single high-quality layer with a realistic bitrate cap.
       await room.localParticipant.publishTrack(screenTrack, {
-        videoSimulcastLayers: [preset720p30, preset1080p60],
-        screenShareEncoding: preset1080p60.encoding,
+        source: Track.Source.ScreenShare,
+        screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: "high" },
       });
 
       if (videoRef.current) screenTrack.attach(videoRef.current);
@@ -270,7 +282,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         setMicMuted(false);
       }
 
-      videoMediaTrack.addEventListener("ended", () => stopStream());
+      // "ended" fires only when the user clicks "Stop sharing" in the browser UI
+      const endedHandler = () => stopStream();
+      videoMediaTrack.addEventListener("ended", endedHandler);
+      videoEndedCleanupRef.current = () => videoMediaTrack.removeEventListener("ended", endedHandler);
 
       setStatus("live");
     } catch (e) {
@@ -296,6 +311,12 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
   const stopStream = useCallback(async () => {
     setShowPreview(false);
+
+    // Remove "ended" listener before stopping the raw track
+    videoEndedCleanupRef.current?.();
+    videoEndedCleanupRef.current = null;
+    rawScreenVideoTrackRef.current?.stop();
+    rawScreenVideoTrackRef.current = null;
     screenTrackRef.current = null;
 
     micRawTrackRef.current?.stop();
@@ -361,34 +382,40 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         audio: SCREEN_AUDIO_OPTS,
       } as DisplayMediaStreamOptions);
 
-      const preset720p30  = new VideoPreset(1280, 720,  3_000_000, 30);
-      const preset1080p60 = new VideoPreset(1920, 1080, 8_000_000, 60);
+      // Remove "ended" listener from old raw track BEFORE unpublishing.
+      // unpublishTrack would stop the track (even with userProvidedTrack=true in some
+      // LiveKit versions), so we guard against stopStream() firing mid-switch.
+      videoEndedCleanupRef.current?.();
+      videoEndedCleanupRef.current = null;
 
-      // Unpublish old video track
+      // Detach + unpublish old video track
       const oldScreenTrack = screenTrackRef.current;
       if (oldScreenTrack) {
         if (videoRef.current) oldScreenTrack.detach(videoRef.current);
         await roomRef.current.localParticipant.unpublishTrack(oldScreenTrack);
       }
+      // Stop the old raw track now (safe — listener already removed)
+      rawScreenVideoTrackRef.current?.stop();
+      rawScreenVideoTrackRef.current = null;
 
       // Publish new video track
       const newVideoMediaTrack = displayStream.getVideoTracks()[0];
-      const newScreenTrack = new LocalVideoTrack(newVideoMediaTrack, undefined, false);
+      (newVideoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+      rawScreenVideoTrackRef.current = newVideoMediaTrack;
+
+      const newScreenTrack = new LocalVideoTrack(newVideoMediaTrack, undefined, true);
       screenTrackRef.current = newScreenTrack;
 
       await roomRef.current.localParticipant.publishTrack(newScreenTrack, {
-        videoSimulcastLayers: [preset720p30, preset1080p60],
-        screenShareEncoding: preset1080p60.encoding,
+        source: Track.Source.ScreenShare,
+        screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: "high" },
       });
       if (videoRef.current) newScreenTrack.attach(videoRef.current);
-
-      // Re-attach to inline preview if open
       if (showPreview && previewRef.current) newScreenTrack.attach(previewRef.current);
 
       // Handle new screen audio
       const newScreenAudioTracks = displayStream.getAudioTracks();
       if (newScreenAudioTracks.length > 0) {
-        // Unpublish old screen audio
         if (screenAudioLiveTrackRef.current) {
           await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
           screenAudioRawTrackRef.current?.stop();
@@ -397,14 +424,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         }
         await publishScreenAudio(newScreenAudioTracks[0]);
       } else if (screenAudioLiveTrackRef.current) {
-        // New capture has no audio — unpublish old screen audio
         await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
         screenAudioRawTrackRef.current?.stop();
         screenAudioLiveTrackRef.current = null;
         screenAudioRawTrackRef.current = null;
       }
 
-      newVideoMediaTrack.addEventListener("ended", () => stopStream());
+      // Wire up new "ended" listener
+      const endedHandler = () => stopStream();
+      newVideoMediaTrack.addEventListener("ended", endedHandler);
+      videoEndedCleanupRef.current = () => newVideoMediaTrack.removeEventListener("ended", endedHandler);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (!msg.toLowerCase().includes("cancel") && !msg.includes("NotAllowedError")) {

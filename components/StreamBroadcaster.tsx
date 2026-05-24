@@ -6,7 +6,7 @@ import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
   Mic, MicOff, MousePointer, Mouse, ImagePlus, X, Clock,
-  Volume2, VolumeX, RefreshCw,
+  Volume2, VolumeX, RefreshCw, Gamepad2, Info,
 } from "lucide-react";
 
 type Status = "idle" | "connecting" | "live" | "error";
@@ -82,8 +82,8 @@ async function resizeImage(file: File): Promise<string> {
   });
 }
 
-const SCREEN_VIDEO_OPTS = (captureCursor: boolean) => ({
-  frameRate: 60,
+const SCREEN_VIDEO_OPTS = (captureCursor: boolean, fps: number) => ({
+  frameRate: { ideal: fps, max: fps },
   width: { ideal: 1920 },
   height: { ideal: 1080 },
   cursor: captureCursor ? "always" : "never",
@@ -130,6 +130,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [thumbnail,         setThumbnail]        = useState<string | null>(null);
   const [captureAudio,      setCaptureAudio]     = useState(true);
   const [captureCursor,     setCaptureCursor]    = useState(true);
+  const [gameMode,          setGameMode]         = useState(false);
   const [showDropdown,      setShowDropdown]     = useState(false);
   const [showPreview,       setShowPreview]      = useState(false);
   const [copied,            setCopied]           = useState(false);
@@ -138,6 +139,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [switchingScreen,   setSwitchingScreen]  = useState(false);
   const [isReconnecting,    setIsReconnecting]   = useState(false);
   const [poorConnection,    setPoorConnection]   = useState(false);
+  const [noScreenAudio,     setNoScreenAudio]    = useState(false);
 
   // Attach/detach track to inline preview
   useEffect(() => {
@@ -268,33 +270,38 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           .catch(() => null);
       }
 
+      // Game mode vs screen/app mode:
+      // Game  → H.264 (hardware encoder: NVENC/QuickSync/AMF) + "motion" hint + 30fps/4Mbps
+      // Screen → VP9 (better compression for static content) + "detail" hint + 24fps/2.5Mbps
+      const captureFps   = gameMode ? 30 : 24;
+      const maxBitrate   = gameMode ? 4_000_000 : 2_500_000;
+      const videoCodec   = gameMode ? "h264" : "vp9";
+      const contentHint  = gameMode ? "motion" : "detail";
+
       // 4. Capture screen
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: SCREEN_VIDEO_OPTS(captureCursor),
-        // audio: true — let browser show "Share audio" natively without constraints.
-        // Passing constraints here causes Chrome to silently drop audio for
-        // whole-screen capture (OS loopback can't satisfy sampleRate etc.).
-        // Processing constraints are applied via applyConstraints() afterward.
+        video: SCREEN_VIDEO_OPTS(captureCursor, captureFps),
+        // audio: true — let browser show "Share audio" natively.
+        // Passing constraints causes Chrome to silently drop audio for whole-screen
+        // capture (OS loopback can't satisfy sampleRate etc.).
         audio: true,
       } as DisplayMediaStreamOptions);
 
-      // Hint the encoder: screen content has sharp edges/text, not smooth motion
       const videoMediaTrack = displayStream.getVideoTracks()[0];
-      (videoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+      // contentHint tells the encoder to optimise for text/edges vs. motion
+      (videoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = contentHint;
       rawScreenVideoTrackRef.current = videoMediaTrack;
 
-      // userProvidedTrack=true — we control the track lifecycle so LiveKit won't
-      // stop it on unpublishTrack (which would fire "ended" and kill the stream)
+      // userProvidedTrack=true — we manage the lifecycle so LiveKit won't stop it
+      // on unpublishTrack (which would fire "ended" and kill the stream)
       const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, true);
       screenTrackRef.current = screenTrack;
 
-      // No simulcast — degrades sharp text/edges on screen content.
-      // VP9: ~40% better compression than VP8 for screen content (solid colors, text).
-      // 2.5 Mbps / 24 fps: more stable on typical upload speeds than 3.5 Mbps / 30 fps.
+      // No simulcast — degrades sharp text/edges and wastes upload bandwidth
       await room.localParticipant.publishTrack(screenTrack, {
         source: Track.Source.ScreenShare,
-        videoCodec: "vp9",
-        screenShareEncoding: { maxBitrate: 2_500_000, maxFramerate: 24, priority: "high" },
+        videoCodec,
+        screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
 
       if (videoRef.current) screenTrack.attach(videoRef.current);
@@ -303,6 +310,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const screenAudioTracks = displayStream.getAudioTracks();
       if (screenAudioTracks.length > 0) {
         await publishScreenAudio(screenAudioTracks[0]);
+        setNoScreenAudio(false);
+      } else {
+        // No screen audio — show a tip (especially relevant for game/window capture)
+        setNoScreenAudio(true);
       }
 
       // Publish pre-captured mic (secured before screen dialog to avoid audio conflicts)
@@ -345,7 +356,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       roomRef.current = null;
       screenTrackRef.current = null;
     }
-  }, [existingStreamId, streamTitle, description, thumbnail, captureAudio, captureCursor, updateViewers, onStreamChange, publishScreenAudio]);
+  }, [existingStreamId, streamTitle, description, thumbnail, captureAudio, captureCursor, gameMode, updateViewers, onStreamChange, publishScreenAudio]);
 
   const stopStream = useCallback(async () => {
     setShowPreview(false);
@@ -418,12 +429,13 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setError(null);
 
     try {
+      const captureFps  = gameMode ? 30 : 24;
+      const maxBitrate  = gameMode ? 4_000_000 : 2_500_000;
+      const videoCodec  = gameMode ? "h264" : "vp9";
+      const contentHint = gameMode ? "motion" : "detail";
+
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: SCREEN_VIDEO_OPTS(captureCursor),
-        // audio: true — let browser show "Share audio" natively without constraints.
-        // Constraints passed here can cause Chrome to silently drop audio for
-        // whole-screen capture (OS loopback doesn't satisfy sampleRate etc.).
-        // We apply processing constraints on the track afterward via applyConstraints.
+        video: SCREEN_VIDEO_OPTS(captureCursor, captureFps),
         audio: true,
       } as DisplayMediaStreamOptions);
 
@@ -445,7 +457,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       // Publish new video track
       const newVideoMediaTrack = displayStream.getVideoTracks()[0];
-      (newVideoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+      (newVideoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = contentHint;
       rawScreenVideoTrackRef.current = newVideoMediaTrack;
 
       const newScreenTrack = new LocalVideoTrack(newVideoMediaTrack, undefined, true);
@@ -453,8 +465,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       await roomRef.current.localParticipant.publishTrack(newScreenTrack, {
         source: Track.Source.ScreenShare,
-        videoCodec: "vp9",
-        screenShareEncoding: { maxBitrate: 2_500_000, maxFramerate: 24, priority: "high" },
+        videoCodec,
+        screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
       if (videoRef.current) newScreenTrack.attach(videoRef.current);
       if (showPreview && previewRef.current) newScreenTrack.attach(previewRef.current);
@@ -469,11 +481,15 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           screenAudioRawTrackRef.current = null;
         }
         await publishScreenAudio(newScreenAudioTracks[0]);
-      } else if (screenAudioLiveTrackRef.current) {
-        await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
-        screenAudioRawTrackRef.current?.stop();
-        screenAudioLiveTrackRef.current = null;
-        screenAudioRawTrackRef.current = null;
+        setNoScreenAudio(false);
+      } else {
+        if (screenAudioLiveTrackRef.current) {
+          await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
+          screenAudioRawTrackRef.current?.stop();
+          screenAudioLiveTrackRef.current = null;
+          screenAudioRawTrackRef.current = null;
+        }
+        setNoScreenAudio(true);
       }
 
       // Wire up new "ended" listener
@@ -488,7 +504,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     } finally {
       setSwitchingScreen(false);
     }
-  }, [captureCursor, showPreview, publishScreenAudio, stopStream]);
+  }, [captureCursor, gameMode, showPreview, publishScreenAudio, stopStream]);
 
   async function copyLink() {
     const id = streamIdRef.current;
@@ -683,7 +699,30 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                   {captureCursor ? <MousePointer size={13} /> : <Mouse size={13} />}
                   {captureCursor ? "Cursor visible" : "Cursor hidden"}
                 </button>
+
+                <button
+                  onClick={() => setGameMode((v) => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border text-[0.8125rem] font-display font-semibold transition-colors"
+                  style={{
+                    borderColor: gameMode ? "rgba(234,179,8,0.4)" : "var(--border-subtle)",
+                    background:  gameMode ? "rgba(234,179,8,0.08)" : "var(--bg-card)",
+                    color:       gameMode ? "#eab308" : "var(--text-muted)",
+                  }}
+                >
+                  <Gamepad2 size={13} />
+                  {gameMode ? "Game mode" : "Screen mode"}
+                </button>
               </div>
+
+              {gameMode && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-[8px] bg-yellow-500/6 border border-yellow-500/20 text-yellow-300/80 text-[0.75rem] leading-relaxed">
+                  <Info size={13} className="shrink-0 mt-0.5" />
+                  <span>
+                    <b>Game mode</b>: uses H.264 hardware encoding (less CPU) and 30 fps.
+                    For game audio, select <b>Entire Screen</b> in the browser dialog and check <b>Share system audio</b>.
+                  </span>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -852,6 +891,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           <p className="text-center text-[0.6875rem] text-[var(--text-muted)] py-2">
             This is exactly what viewers see · Adjust volume above to monitor audio
           </p>
+        </div>
+      )}
+
+      {/* No screen audio tip */}
+      {noScreenAudio && status === "live" && (
+        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-[10px] border border-blue-500/20 bg-blue-500/6 text-blue-300/80 text-[0.75rem] leading-relaxed">
+          <Info size={13} className="shrink-0 mt-0.5" />
+          <span>
+            No screen audio detected. For game/app audio, restart and select <b>Entire Screen</b> instead of a window, then check <b>Share system audio</b> in the browser dialog.
+          </span>
         </div>
       )}
 

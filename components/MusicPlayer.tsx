@@ -147,6 +147,8 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const inLobbyApplyRef        = useRef(false);
   // Tracks which lobbyId has already been force-synced on playerReady
   const lastReadySyncLobbyRef  = useRef<string | null>(null);
+  // Set when lobby was playing on a fresh-tab load; cleared once the user opens the player
+  const pendingAutoplayRef     = useRef(false);
   // Current session user ID (kept in a ref so applyLobbySync stale closure can read it)
   const sessionIdRef           = useRef<string | undefined>(undefined);
   sessionIdRef.current         = session?.user?.id;
@@ -204,12 +206,27 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
           const freshTab = !sessionStorage.getItem("lobby_session_active");
           sessionStorage.setItem("lobby_session_active", "1");
           applyLobbySync(d, false, freshTab);
+          if (freshTab && d.isPlaying) pendingAutoplayRef.current = true;
         } else {
           music.setActiveLobbyId(null);
         }
       }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Auto-play when user opens the player after returning from a closed tab ─
+  useEffect(() => {
+    if (!isOpen || !pendingAutoplayRef.current) return;
+    if (!activeLobby || !playerReady) return;
+    pendingAutoplayRef.current = false;
+    fetch(`/api/music-lobbies/${activeLobby.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ActiveLobby | null) => {
+        if (!d?.isPlaying) return;
+        applyLobbySync(d, false, false);
+      }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, playerReady]);
 
   // ── Fetch favorites on mount ───────────────────────────────────────────────
   useEffect(() => {

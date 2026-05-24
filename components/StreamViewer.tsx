@@ -34,6 +34,11 @@ interface Props {
 export default function StreamViewer({ streamId }: Props) {
   const roomRef      = useRef<Room | null>(null);
   const videoRef     = useRef<HTMLVideoElement>(null);
+  // Separate audio element — multiple audio tracks (mic + screen) coexist here.
+  // LiveKit's track.attach(videoEl) removes existing audio of the same kind, so
+  // attaching mic after screen audio silently kills screen audio. By using a
+  // dedicated <audio> element and manually managing its MediaStream we keep all tracks.
+  const audioRef     = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activePubRef = useRef<RemoteTrackPublication | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,10 +50,9 @@ export default function StreamViewer({ streamId }: Props) {
   const [prevVolume,   setPrevVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [quality,      setQuality]    = useState<Quality>("medium");
-  const [showQuality,    setShowQuality]    = useState(false);
-  const [showControls,   setShowControls]   = useState(true);
-  const [reconnecting,   setReconnecting]   = useState(false);
-  // True on desktop (mouse/trackpad), false on touch-only devices
+  const [showQuality,  setShowQuality]    = useState(false);
+  const [showControls, setShowControls]   = useState(true);
+  const [reconnecting, setReconnecting]   = useState(false);
   const [hasFinePointer, setHasFinePointer] = useState(true);
 
   useEffect(() => {
@@ -59,11 +63,13 @@ export default function StreamViewer({ streamId }: Props) {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Sync mute/volume → video element
+  // Sync mute/volume → dedicated audio element only.
+  // Video element stays muted (it carries video track only).
   useEffect(() => {
-    if (!videoRef.current) return;
-    videoRef.current.muted  = muted;
-    videoRef.current.volume = volume;
+    const el = audioRef.current;
+    if (!el) return;
+    el.muted  = muted;
+    el.volume = volume;
   }, [muted, volume]);
 
   // Fullscreen detection — standard + webkit (iOS)
@@ -74,7 +80,6 @@ export default function StreamViewer({ streamId }: Props) {
         !!(document as unknown as Record<string, unknown>).webkitFullscreenElement
       );
     }
-    // iOS fires these on the video element itself
     function onVideoFsChange() {
       const vid = videoRef.current as (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }) | null;
       setIsFullscreen(!!vid?.webkitDisplayingFullscreen);
@@ -92,7 +97,6 @@ export default function StreamViewer({ streamId }: Props) {
     };
   }, []);
 
-  // F key fullscreen on desktop
   useEffect(() => {
     if (!hasFinePointer) return;
     function onKey(e: KeyboardEvent) {
@@ -105,7 +109,6 @@ export default function StreamViewer({ streamId }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullscreen, hasFinePointer]);
 
-  // Auto-hide controls in fullscreen
   function resetHideTimer() {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     setShowControls(true);
@@ -126,28 +129,44 @@ export default function StreamViewer({ streamId }: Props) {
   }, []);
 
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
-    const el = videoRef.current;
-    if (!el) return;
     if (track.kind === Track.Kind.Video) {
+      const el = videoRef.current;
+      if (!el) return;
+      // Let LiveKit manage the video element normally
       track.attach(el);
       if (pub) activePubRef.current = pub;
       applyQuality(quality);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      track.attach(el);
+      const el = audioRef.current;
+      if (!el) return;
+      // Manually add audio track to the shared MediaStream WITHOUT removing others.
+      // This allows screen audio + mic to coexist — browser mixes them automatically.
+      const ms = (el.srcObject instanceof MediaStream) ? el.srcObject : new MediaStream();
+      const alreadyPresent = ms.getAudioTracks().some(t => t.id === track.mediaStreamTrack.id);
+      if (!alreadyPresent) {
+        ms.addTrack(track.mediaStreamTrack);
+        el.srcObject = ms;
+      }
+      // Nudge playback in case autoplay was deferred
+      el.play().catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
 
   const detachTrack = useCallback((track: RemoteTrack) => {
-    const el = videoRef.current;
-    if (!el) return;
     if (track.kind === Track.Kind.Video) {
+      const el = videoRef.current;
+      if (!el) return;
       track.detach(el);
       activePubRef.current = null;
       setStatus("offline");
     } else if (track.kind === Track.Kind.Audio) {
-      track.detach(el);
+      // Remove only this specific track — leave other audio tracks playing
+      const el = audioRef.current;
+      if (el?.srcObject instanceof MediaStream) {
+        el.srcObject.removeTrack(track.mediaStreamTrack);
+      }
     }
   }, []);
 
@@ -170,8 +189,8 @@ export default function StreamViewer({ streamId }: Props) {
         if (!wsUrl) throw new Error("LiveKit URL not configured");
 
         const room = new Room({
-          adaptiveStream: true,  // auto-adjusts incoming quality to viewer's bandwidth
-          dynacast: true,        // only consumes layers the viewer actually renders
+          adaptiveStream: true,
+          dynacast: true,
         });
         if (cancelled) return;
         roomRef.current = room;
@@ -183,7 +202,6 @@ export default function StreamViewer({ streamId }: Props) {
         room.on(RoomEvent.Reconnecting, () => setReconnecting(true));
         room.on(RoomEvent.Reconnected, () => {
           setReconnecting(false);
-          // Re-attach any tracks that are still live after the reconnect
           let hasVideo = false;
           room.remoteParticipants.forEach((p: RemoteParticipant) => {
             p.trackPublications.forEach((pub) => {
@@ -241,6 +259,7 @@ export default function StreamViewer({ streamId }: Props) {
         if (data.type === "stream_ended") {
           setStatus("ended");
           if (videoRef.current) videoRef.current.srcObject = null;
+          if (audioRef.current) { audioRef.current.srcObject = null; }
         }
       } catch { /* ignore */ }
     };
@@ -249,22 +268,18 @@ export default function StreamViewer({ streamId }: Props) {
 
   function toggleFullscreen() {
     const container = containerRef.current;
-    const vid = videoRef.current as (HTMLVideoElement & {
-      webkitEnterFullscreen?: () => void;
-    }) | null;
+    const vid = videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
 
     if (document.fullscreenElement || (document as unknown as Record<string, unknown>).webkitFullscreenElement) {
       (document.exitFullscreen || (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen)
         .call(document);
       return;
     }
-
     if (container?.requestFullscreen) {
       container.requestFullscreen();
     } else if ((container as unknown as { webkitRequestFullscreen?: () => void })?.webkitRequestFullscreen) {
       (container as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen();
     } else if (vid?.webkitEnterFullscreen) {
-      // iOS Safari — fullscreen only works on the <video> element directly
       vid.webkitEnterFullscreen();
     }
   }
@@ -312,6 +327,9 @@ export default function StreamViewer({ streamId }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+
       <div
         ref={containerRef}
         onMouseMove={resetHideTimer}
@@ -320,9 +338,11 @@ export default function StreamViewer({ streamId }: Props) {
         className="w-full aspect-video rounded-[10px] sm:rounded-[14px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a] relative flex items-center justify-center select-none"
         style={{ cursor: isFullscreen && !showControls ? "none" : "default" }}
       >
+        {/* Video element — carries video track only, always muted */}
         <video
           ref={videoRef}
           autoPlay
+          muted
           playsInline
           className="absolute inset-0 w-full h-full object-contain"
           style={{ display: isLive ? "block" : "none" }}
@@ -341,7 +361,7 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* Reconnecting overlay — sits on top of the last frozen video frame */}
+        {/* Reconnecting overlay — sits on top of last frozen video frame */}
         {reconnecting && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-10">
             <Loader2 size={32} className="animate-spin text-white/80" strokeWidth={1.5} />
@@ -380,13 +400,9 @@ export default function StreamViewer({ streamId }: Props) {
         >
           {isLive && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />}
           <div className="relative flex items-center gap-1.5 px-2.5 py-2">
-
-            {/* Mute button — always visible */}
             <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} className="text-white/80 hover:text-white transition-colors p-1 shrink-0">
               <VolumeIcon />
             </button>
-
-            {/* Volume slider — only on pointer-fine devices (desktop/laptop) */}
             {hasFinePointer && (
               <div className="relative flex items-center w-16 shrink-0">
                 <input type="range" min={0} max={1} step={0.02}
@@ -396,9 +412,7 @@ export default function StreamViewer({ streamId }: Props) {
                 />
               </div>
             )}
-
             <div className="flex-1" />
-
             <button
               onClick={() => setShowQuality((v) => !v)}
               title="Quality"
@@ -407,7 +421,6 @@ export default function StreamViewer({ streamId }: Props) {
               <Settings size={13} />
               <span className="text-[0.6875rem] font-display font-semibold hidden xs:inline">{QUALITY_LABEL[quality]}</span>
             </button>
-
             <button onClick={toggleFullscreen}
               title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
               className="text-white/80 hover:text-white transition-colors p-1 shrink-0"
@@ -418,7 +431,6 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       </div>
 
-      {/* Pre-stream quality picker */}
       {!isLive && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[0.75rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-[0.05em]">Quality:</span>
@@ -437,7 +449,6 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       )}
 
-      {/* Status bar */}
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
         {isLive ? (
           <>

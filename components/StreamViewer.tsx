@@ -23,8 +23,8 @@ const QUALITY_LK: Record<Quality, VideoQuality> = {
 
 const QUALITY_LABEL: Record<Quality, string> = {
   low:    "360p",
-  medium: "720p 30fps",
-  high:   "1080p 60fps",
+  medium: "720p",
+  high:   "1080p",
 };
 
 interface Props {
@@ -47,23 +47,53 @@ export default function StreamViewer({ streamId }: Props) {
   const [quality,      setQuality]    = useState<Quality>("high");
   const [showQuality,  setShowQuality] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  // True on desktop (mouse/trackpad), false on touch-only devices
+  const [hasFinePointer, setHasFinePointer] = useState(true);
 
-  // Sync mute/volume → the single video element (which carries both video + audio tracks)
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: fine)");
+    setHasFinePointer(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setHasFinePointer(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Sync mute/volume → video element
   useEffect(() => {
     if (!videoRef.current) return;
     videoRef.current.muted  = muted;
     videoRef.current.volume = volume;
   }, [muted, volume]);
 
-  // Fullscreen detection
+  // Fullscreen detection — standard + webkit (iOS)
   useEffect(() => {
-    function onFsChange() { setIsFullscreen(!!document.fullscreenElement); }
+    function onFsChange() {
+      setIsFullscreen(
+        !!document.fullscreenElement ||
+        !!(document as unknown as Record<string, unknown>).webkitFullscreenElement
+      );
+    }
+    // iOS fires these on the video element itself
+    function onVideoFsChange() {
+      const vid = videoRef.current as (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }) | null;
+      setIsFullscreen(!!vid?.webkitDisplayingFullscreen);
+    }
     document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    videoRef.current?.addEventListener("webkitbeginfullscreen", onVideoFsChange);
+    videoRef.current?.addEventListener("webkitendfullscreen", onVideoFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+      videoRef.current?.removeEventListener("webkitbeginfullscreen", onVideoFsChange);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      videoRef.current?.removeEventListener("webkitendfullscreen", onVideoFsChange);
+    };
   }, []);
 
-  // F key fullscreen — e.code is layout-independent
+  // F key fullscreen on desktop
   useEffect(() => {
+    if (!hasFinePointer) return;
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -72,7 +102,7 @@ export default function StreamViewer({ streamId }: Props) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFullscreen]);
+  }, [isFullscreen, hasFinePointer]);
 
   // Auto-hide controls in fullscreen
   function resetHideTimer() {
@@ -94,20 +124,16 @@ export default function StreamViewer({ streamId }: Props) {
     activePubRef.current?.setVideoQuality(QUALITY_LK[q]);
   }, []);
 
-  // Attach both video AND audio tracks to the same <video> element.
-  // LiveKit's track.attach(el) adds the track to the element's srcObject MediaStream,
-  // so audio is part of the already-playing video stream — no autoplay blocking.
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
     const el = videoRef.current;
     if (!el) return;
-
     if (track.kind === Track.Kind.Video) {
       track.attach(el);
       if (pub) activePubRef.current = pub;
       applyQuality(quality);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      track.attach(el); // adds audio track to the same MediaStream already on el
+      track.attach(el);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
@@ -115,7 +141,6 @@ export default function StreamViewer({ streamId }: Props) {
   const detachTrack = useCallback((track: RemoteTrack) => {
     const el = videoRef.current;
     if (!el) return;
-
     if (track.kind === Track.Kind.Video) {
       track.detach(el);
       activePubRef.current = null;
@@ -155,7 +180,6 @@ export default function StreamViewer({ streamId }: Props) {
         await room.connect(wsUrl, token);
         if (cancelled) { room.disconnect(); return; }
 
-        // Attach any tracks already published when we joined
         let foundVideo = false;
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           p.trackPublications.forEach((pub) => {
@@ -186,7 +210,7 @@ export default function StreamViewer({ streamId }: Props) {
     };
   }, [streamId, attachTrack, detachTrack]);
 
-  // SSE for stream_ended event
+  // SSE for stream_ended
   useEffect(() => {
     if (!streamId) return;
     const es = new EventSource(`/api/streams/${streamId}/sse`);
@@ -203,9 +227,25 @@ export default function StreamViewer({ streamId }: Props) {
   }, [streamId]);
 
   function toggleFullscreen() {
-    if (!containerRef.current) return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else containerRef.current.requestFullscreen();
+    const container = containerRef.current;
+    const vid = videoRef.current as (HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void;
+    }) | null;
+
+    if (document.fullscreenElement || (document as unknown as Record<string, unknown>).webkitFullscreenElement) {
+      (document.exitFullscreen || (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen)
+        .call(document);
+      return;
+    }
+
+    if (container?.requestFullscreen) {
+      container.requestFullscreen();
+    } else if ((container as unknown as { webkitRequestFullscreen?: () => void })?.webkitRequestFullscreen) {
+      (container as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen();
+    } else if (vid?.webkitEnterFullscreen) {
+      // iOS Safari — fullscreen only works on the <video> element directly
+      vid.webkitEnterFullscreen();
+    }
   }
 
   function toggleMute() {
@@ -250,15 +290,15 @@ export default function StreamViewer({ streamId }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div
         ref={containerRef}
         onMouseMove={resetHideTimer}
+        onTouchStart={resetHideTimer}
         onMouseLeave={() => { if (!isFullscreen) setShowControls(true); }}
-        className="w-full aspect-video rounded-[14px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a] relative flex items-center justify-center select-none"
+        className="w-full aspect-video rounded-[10px] sm:rounded-[14px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a] relative flex items-center justify-center select-none"
         style={{ cursor: isFullscreen && !showControls ? "none" : "default" }}
       >
-        {/* Single video element — carries both video + audio tracks in one MediaStream */}
         <video
           ref={videoRef}
           autoPlay
@@ -270,8 +310,8 @@ export default function StreamViewer({ streamId }: Props) {
         {!isLive && (
           <div className="flex flex-col items-center gap-3 text-[var(--text-muted)]">
             {status === "connecting"
-              ? <Loader2 size={40} strokeWidth={1.2} className="animate-spin" />
-              : <Monitor size={48} strokeWidth={1.2} />}
+              ? <Loader2 size={36} strokeWidth={1.2} className="animate-spin" />
+              : <Monitor size={40} strokeWidth={1.2} />}
             <span className="text-sm font-display">
               {status === "connecting" && "Connecting…"}
               {status === "offline"    && "No active stream"}
@@ -281,7 +321,7 @@ export default function StreamViewer({ streamId }: Props) {
         )}
 
         {isLive && (
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 rounded-[5px] py-[0.2rem] px-2.5 z-10 pointer-events-none">
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 bg-red-600 rounded-[5px] py-[0.2rem] px-2.5 z-10 pointer-events-none">
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
           </div>
@@ -289,7 +329,7 @@ export default function StreamViewer({ streamId }: Props) {
 
         {showQuality && (
           <div
-            className="absolute bottom-14 right-3 z-30 bg-[#111]/95 backdrop-blur-sm border border-white/10 rounded-[10px] overflow-hidden shadow-xl"
+            className="absolute bottom-14 right-2.5 z-30 bg-[#111]/95 backdrop-blur-sm border border-white/10 rounded-[10px] overflow-hidden shadow-xl"
             onMouseLeave={() => setShowQuality(false)}
           >
             <p className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-white/40 px-3 pt-2.5 pb-1">Quality</p>
@@ -304,33 +344,43 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
+        {/* Controls overlay */}
         <div
           className="absolute inset-x-0 bottom-0 z-20 transition-opacity duration-200"
           style={{ opacity: (isLive && showControls) || !isLive ? 1 : 0, pointerEvents: showControls || !isLive ? "auto" : "none" }}
         >
           {isLive && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />}
-          <div className="relative flex items-center gap-2 px-3 py-2.5">
+          <div className="relative flex items-center gap-1.5 px-2.5 py-2">
+
+            {/* Mute button — always visible */}
             <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} className="text-white/80 hover:text-white transition-colors p-1 shrink-0">
               <VolumeIcon />
             </button>
-            <div className="relative flex items-center w-20 shrink-0">
-              <input type="range" min={0} max={1} step={0.02}
-                value={muted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="volume-slider w-full"
-              />
-            </div>
+
+            {/* Volume slider — only on pointer-fine devices (desktop/laptop) */}
+            {hasFinePointer && (
+              <div className="relative flex items-center w-16 shrink-0">
+                <input type="range" min={0} max={1} step={0.02}
+                  value={muted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="volume-slider w-full"
+                />
+              </div>
+            )}
+
             <div className="flex-1" />
+
             <button
               onClick={() => setShowQuality((v) => !v)}
               title="Quality"
               className="flex items-center gap-1 text-white/70 hover:text-white transition-colors p-1"
             >
               <Settings size={13} />
-              <span className="text-[0.6875rem] font-display font-semibold">{QUALITY_LABEL[quality]}</span>
+              <span className="text-[0.6875rem] font-display font-semibold hidden xs:inline">{QUALITY_LABEL[quality]}</span>
             </button>
+
             <button onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
               className="text-white/80 hover:text-white transition-colors p-1 shrink-0"
             >
               {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
@@ -339,9 +389,10 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       </div>
 
+      {/* Pre-stream quality picker */}
       {!isLive && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[0.75rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-[0.05em]">Quality when stream starts:</span>
+          <span className="text-[0.75rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-[0.05em]">Quality:</span>
           {(["high", "medium", "low"] as Quality[]).map((q) => (
             <button key={q} onClick={() => setQuality(q)}
               className="text-[0.75rem] font-display font-semibold px-2.5 py-1 rounded-[6px] border transition-colors"
@@ -357,10 +408,21 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       )}
 
+      {/* Status bar */}
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-        {isLive
-          ? <><Wifi size={12} className="text-emerald-400" /> Live — press <kbd className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded px-1 py-px text-[0.625rem] mx-0.5">F</kbd> for fullscreen</>
-          : <><WifiOff size={12} /> Waiting for admin to start a stream</>}
+        {isLive ? (
+          <>
+            <Wifi size={12} className="text-emerald-400" />
+            <span>Live</span>
+            {hasFinePointer && (
+              <span className="ml-1">
+                — press <kbd className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded px-1 py-px text-[0.625rem] mx-0.5">F</kbd> for fullscreen
+              </span>
+            )}
+          </>
+        ) : (
+          <><WifiOff size={12} /> Waiting for stream</>
+        )}
       </div>
 
       <style>{`

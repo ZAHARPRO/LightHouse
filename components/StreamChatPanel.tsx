@@ -64,7 +64,7 @@ export default function StreamChatPanel({
   }
 
   return (
-    <div className="flex flex-col bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[14px] overflow-hidden h-full min-h-[400px]">
+    <div className="flex flex-col bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[14px] overflow-hidden h-[360px] sm:h-[420px] lg:h-[calc(100vh-180px)] lg:min-h-[400px] lg:max-h-[800px]">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-subtle)] shrink-0">
         <MessageSquare size={14} className="text-[var(--accent-orange)]" />

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PROTECTED = [
-  "/profile", "/chat","/dm","/music", "/upload", "/history",
+  "/profile", "/chat","/dm","/music", "/upload", "/history", "/stream",
   "/games/chess/online",
   "/games/checkers/online",
   "/games/billiards/online",

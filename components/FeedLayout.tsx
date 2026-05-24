@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Play, Lock, MessageSquare, ArrowUp } from "lucide-react";
+import { Play, Lock, MessageSquare, ArrowUp, Radio } from "lucide-react";
 import ChatPopup from "./ChatPopup";
 import UserAvatar from "./UserAvatar";
 import { useTranslations } from "next-intl";
@@ -57,12 +57,70 @@ type CommunityPost = {
   author: { id: string; name: string | null; image: string | null; tier: string };
 };
 
+type ActiveStream = {
+  id: string;
+  title: string;
+  thumbnail?: string | null;
+  startedAt: string;
+  viewerCount: number;
+  admin: { id: string; name: string | null; image: string | null };
+};
+
 interface Props {
   videos: Video[];
   userTier: string | null;
   subs: Sub[];
   communityPosts: CommunityPost[];
   isLoggedIn: boolean;
+  activeStreams?: ActiveStream[];
+}
+
+/* ── Live stream card ── */
+function StreamCard({ stream }: { stream: ActiveStream }) {
+  const elapsed = (() => {
+    const s = Math.floor((Date.now() - new Date(stream.startedAt).getTime()) / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
+
+  return (
+    <Link
+      href={`/stream/${stream.id}`}
+      className="shrink-0 w-[200px] sm:w-[220px] block no-underline rounded-[12px] overflow-hidden border border-red-500/25 bg-[var(--bg-card)] hover:border-red-500/50 transition-colors group"
+    >
+      {/* Thumbnail area */}
+      <div className="relative aspect-video bg-gradient-to-br from-[#1a0505] to-[#2a0a0a] flex items-center justify-center overflow-hidden">
+        {stream.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={stream.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-red-600/20 border border-red-500/30 flex items-center justify-center group-hover:bg-red-600/30 transition-colors">
+            <Radio size={20} className="text-red-400" />
+          </div>
+        )}
+        {/* LIVE badge */}
+        <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-600 rounded-[4px] py-[0.15rem] px-1.5 z-10">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+          <span className="text-[0.6rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
+        </div>
+        {/* Elapsed */}
+        <div className="absolute bottom-2 right-2 bg-black/75 rounded-[4px] py-[0.15rem] px-1.5 z-10">
+          <span className="text-[0.6rem] text-white font-mono">{elapsed}</span>
+        </div>
+      </div>
+      {/* Info */}
+      <div className="px-3 py-2.5">
+        <p className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] leading-tight truncate">
+          {stream.title}
+        </p>
+        <p className="text-[0.75rem] text-[var(--text-muted)] mt-0.5 truncate">
+          {stream.admin.name}
+        </p>
+        <p className="text-[0.6875rem] text-red-400 mt-0.5">{stream.viewerCount} watching</p>
+      </div>
+    </Link>
+  );
 }
 
 /* ── YouTube-style video card ── */
@@ -286,7 +344,7 @@ function timeAgo(date: Date): string {
 }
 
 /* ── Main layout ── */
-export default function FeedLayout({ videos, userTier, subs, communityPosts, isLoggedIn }: Props) {
+export default function FeedLayout({ videos, userTier, subs, communityPosts, isLoggedIn, activeStreams = [] }: Props) {
   const tf = useTranslations("feed");
   const tc = useTranslations("community");
   const tCommon = useTranslations("common");
@@ -375,6 +433,19 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
           </div>
         )}
 
+        {/* Live streams row (mobile) */}
+        {activeStreams.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] uppercase tracking-[0.06em]">Live Now</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {activeStreams.map((s) => <StreamCard key={s.id} stream={s} />)}
+            </div>
+          </div>
+        )}
+
         {/* Hero card — first video */}
         {hero && <HeroCard video={hero} index={0} userTier={userTier} />}
 
@@ -458,6 +529,19 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
         </div>
 
         <CategoryChips active={activeCategory} setActive={setActiveCategory} />
+
+        {/* Live streams row (desktop) */}
+        {activeStreams.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-display font-bold text-[0.8125rem] text-[var(--text-primary)] uppercase tracking-[0.06em]">Live Now</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {activeStreams.map((s) => <StreamCard key={s.id} stream={s} />)}
+            </div>
+          </div>
+        )}
 
         {hero && <HeroCard video={hero} index={0} userTier={userTier} />}
 

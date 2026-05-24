@@ -87,6 +87,24 @@ export default async function FeedPage() {
     communityPosts = MOCK_COMMUNITY_POSTS;
   }
 
+  // Active live streams
+  type ActiveStream = {
+    id: string; title: string; thumbnail: string | null; startedAt: Date; viewerCount: number;
+    admin: { id: string; name: string | null; image: string | null };
+  };
+  let activeStreams: ActiveStream[] = [];
+  try {
+    activeStreams = await prisma.stream.findMany({
+      where: { isActive: true },
+      orderBy: { startedAt: "desc" },
+      take: 10,
+      select: {
+        id: true, title: true, thumbnail: true, startedAt: true, viewerCount: true,
+        admin: { select: { id: true, name: true, image: true } },
+      },
+    }) as ActiveStream[];
+  } catch { /* ignore */ }
+
   return (
     <FeedLayout
       videos={videos}
@@ -94,6 +112,7 @@ export default async function FeedPage() {
       subs={subs}
       communityPosts={communityPosts}
       isLoggedIn={!!session}
+      activeStreams={activeStreams.map((s) => ({ ...s, startedAt: s.startedAt.toISOString() }))}
     />
   );
 }

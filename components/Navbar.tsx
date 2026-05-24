@@ -6,7 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Zap, Bell, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2, Settings, ChevronDown, Gamepad2, CreditCard, Mail, Rss, MessageCircle,
+  Zap, Bell, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2, Settings, ChevronDown, Gamepad2, CreditCard, Mail, Rss, MessageCircle, Radio,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
@@ -522,8 +522,11 @@ export default function Navbar() {
                     style={{ animation: "slideDownIn 0.15s ease both" }}
                   >
                     {[
-                      { href: "/upload", icon: Video, label: "Upload Video" },
-                      { href: "/post/new", icon: FileText, label: "Write Post" },
+                      { href: "/upload",   icon: Video,     label: "Upload Video" },
+                      { href: "/post/new", icon: FileText,  label: "Write Post" },
+                      ...(session.user?.role === "ADMIN"
+                        ? [{ href: "/stream", icon: Radio, label: "Go Live" }]
+                        : []),
                     ].map(({ href, icon: Icon, label }) => (
                       <Link
                         key={href}
@@ -531,7 +534,7 @@ export default function Navbar() {
                         onClick={() => setCreateOpen(false)}
                         className="flex items-center gap-[0.625rem] px-4 py-3 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
                       >
-                        <Icon size={15} className="text-[var(--accent-orange)]" />
+                        <Icon size={15} className={href === "/stream" ? "text-red-400" : "text-[var(--accent-orange)]"} />
                         {label}
                       </Link>
                     ))}

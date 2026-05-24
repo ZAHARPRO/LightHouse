@@ -86,6 +86,54 @@ model User {
 
   watchHistory WatchHistory[]
   savedVideos SavedVideo[]
+
+  streams            Stream[]            @relation("StreamAdmin")
+  streamChatMessages StreamChatMessage[]
+  streamReactions    StreamReaction[]
+}
+
+
+model Stream {
+  id          String    @id @default(cuid())
+  title       String    @default("Live Stream")
+  description String?   @db.Text
+  thumbnail   String?   @db.Text
+  isActive    Boolean   @default(true)
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  viewerCount Int       @default(0)
+
+  adminId      String
+  admin        User               @relation("StreamAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  chatMessages StreamChatMessage[]
+  reactions    StreamReaction[]
+}
+
+model StreamChatMessage {
+  id        String   @id @default(cuid())
+  text      String
+  userName  String
+  isSupport Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  streamId String
+  stream   Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StreamReaction {
+  id        String   @id @default(cuid())
+  type      LikeType
+  createdAt DateTime @default(now())
+
+  userId   String
+  streamId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream   Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, streamId])
 }
 
 

@@ -49,7 +49,7 @@ export default function StreamViewer({ streamId }: Props) {
   const [volume,       setVolume]     = useState(1);
   const [prevVolume,   setPrevVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [quality,      setQuality]    = useState<Quality>("medium");
+  const [quality,      setQuality]    = useState<Quality>("high");
   const [showQuality,  setShowQuality]    = useState(false);
   const [showControls, setShowControls]   = useState(true);
   const [reconnecting, setReconnecting]   = useState(false);

@@ -290,6 +290,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const videoMediaTrack = displayStream.getVideoTracks()[0];
       // contentHint tells the encoder to optimise for text/edges vs. motion
       (videoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = contentHint;
+      // Screen: prefer sharp resolution over framerate; game: prefer smooth framerate over resolution
+      await videoMediaTrack.applyConstraints(
+        { degradationPreference: gameMode ? "maintain-framerate" : "maintain-resolution" } as MediaTrackConstraints
+      ).catch(() => {});
       rawScreenVideoTrackRef.current = videoMediaTrack;
 
       // userProvidedTrack=true — we manage the lifecycle so LiveKit won't stop it
@@ -298,9 +302,15 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       screenTrackRef.current = screenTrack;
 
       // No simulcast — degrades sharp text/edges and wastes upload bandwidth
+      // scalabilityMode L1T3 (screen) = VP9 SVC temporal layers: SFU delivers the right
+      // layer per viewer bandwidth without extra encode cost. H.264 doesn't support SVC.
       await room.localParticipant.publishTrack(screenTrack, {
         source: Track.Source.ScreenShare,
         videoCodec,
+        ...(gameMode
+          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+        ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
 
@@ -458,6 +468,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       // Publish new video track
       const newVideoMediaTrack = displayStream.getVideoTracks()[0];
       (newVideoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = contentHint;
+      await newVideoMediaTrack.applyConstraints(
+        { degradationPreference: gameMode ? "maintain-framerate" : "maintain-resolution" } as MediaTrackConstraints
+      ).catch(() => {});
       rawScreenVideoTrackRef.current = newVideoMediaTrack;
 
       const newScreenTrack = new LocalVideoTrack(newVideoMediaTrack, undefined, true);
@@ -466,6 +479,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       await roomRef.current.localParticipant.publishTrack(newScreenTrack, {
         source: Track.Source.ScreenShare,
         videoCodec,
+        ...(gameMode
+          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+        ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
       if (videoRef.current) newScreenTrack.attach(videoRef.current);

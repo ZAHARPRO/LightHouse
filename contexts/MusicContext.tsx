@@ -131,7 +131,27 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [smartLoading, setSmartLoading]   = useState(false);
 
   // Engine state — the authoritative source for queue / history / playlist
-  const [engState, setEngState] = useState<PlayerState>(initialPlayerState);
+  const [engState, setEngState] = useState<PlayerState>(() => {
+    if (typeof window === "undefined") return initialPlayerState;
+    try {
+      const saved = localStorage.getItem("music_player_state");
+      if (!saved) return initialPlayerState;
+      const p = JSON.parse(saved) as Partial<PlayerState>;
+      return {
+        ...initialPlayerState,
+        currentTrack:  p.currentTrack  ?? null,
+        queue:         Array.isArray(p.queue)         ? p.queue         : [],
+        activePlId:    p.activePlId    ?? null,
+        activePlName:  p.activePlName  ?? null,
+        isShuffled:    p.isShuffled    ?? false,
+        originalQueue: Array.isArray(p.originalQueue) ? p.originalQueue : [],
+        repeatMode:    p.repeatMode    ?? "none",
+        smartShuffle:  p.smartShuffle  ?? false,
+      };
+    } catch {
+      return initialPlayerState;
+    }
+  });
 
   // Refs for stale-closure-safe access inside effects / async functions
   const engStateRef     = useRef(engState);
@@ -143,6 +163,23 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Keep refs in sync on every render (no useEffect delay needed for refs)
   engStateRef.current    = engState;
   playerReadyRef.current = playerReady;
+
+  // On mount: schedule a cue for any track restored from localStorage (no autoplay)
+  useEffect(() => {
+    const t = engStateRef.current.currentTrack;
+    if (t) pendingLoadRef.current = { videoId: t.videoId, posMs: 0, autoplay: false };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist queue + current track to localStorage whenever engine state changes
+  useEffect(() => {
+    try {
+      const { currentTrack, queue, activePlId, activePlName, isShuffled, originalQueue, repeatMode, smartShuffle } = engState;
+      localStorage.setItem("music_player_state", JSON.stringify({
+        currentTrack, queue, activePlId, activePlName, isShuffled, originalQueue, repeatMode, smartShuffle,
+      }));
+    } catch {}
+  }, [engState]);
 
   // Execute any load that was queued before the player was ready
   useEffect(() => {

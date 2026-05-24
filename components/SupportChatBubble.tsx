@@ -98,7 +98,7 @@ export default function SupportChatBubble() {
       {/* Floating bubble */}
       <button
         onClick={() => open ? handleClose() : setOpen(true)}
-        className="fixed bottom-6 right-6 z-[4000] w-14 h-14 rounded-full bg-[var(--accent-orange)] text-white flex items-center justify-center shadow-[0_4px_24px_rgba(249,115,22,0.45)] transition-transform duration-200 hover:scale-110 border-none cursor-pointer"
+        className="fixed bottom-6 right-6 z-[4000] w-14 h-14 rounded-full bg-[var(--accent-orange)] text-white flex items-center justify-center shadow-pink transition-transform duration-200 hover:scale-110 border-none cursor-pointer"
         title="Support chat"
       >
         {open ? <ChevronDown size={22} /> : <MessageCircle size={22} />}

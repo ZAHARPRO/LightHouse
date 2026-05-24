@@ -85,7 +85,7 @@ export default function PostManager({ initialPosts }: { initialPosts: Post[] }) 
 
             {/* Row */}
             <div className="flex items-center gap-[0.875rem] p-4">
-              <div className="w-[38px] h-[38px] rounded-lg shrink-0 flex items-center justify-center bg-orange-500/[0.08] border border-orange-500/15">
+              <div className="w-[38px] h-[38px] rounded-lg shrink-0 flex items-center justify-center bg-pink-500/[0.08] border border-pink-500/15">
                 <FileText size={16} className="text-[var(--accent-orange)]" />
               </div>
 

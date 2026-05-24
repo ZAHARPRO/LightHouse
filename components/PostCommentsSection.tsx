@@ -217,14 +217,14 @@ function PostCommentItem({
       <div className={[
         "rounded-[10px] px-4 py-[0.875rem]",
         isAuthorComment
-          ? "bg-orange-500/[0.05] border border-orange-500/15"
+          ? "bg-pink-500/[0.05] border border-pink-500/15"
           : "bg-transparent border border-transparent",
       ].join(" ")}>
         <div className="flex items-center gap-[0.625rem] mb-2">
           <Link href={`/profile/${comment.author.id}`} className={[
             "w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center font-display font-extrabold text-[0.6875rem]",
             isAuthorComment
-              ? "bg-orange-500/15 border-[1.5px] border-orange-500/40 text-[var(--accent-orange)]"
+              ? "bg-pink-500/15 border-[1.5px] border-pink-500/40 text-[var(--accent-orange)]"
               : "bg-[var(--bg-elevated)] border-[1.5px] border-[var(--border-default)] text-[var(--text-secondary)]",
           ].join(" ")}>
             {(comment.author.name ?? "?")[0].toUpperCase()}
@@ -233,7 +233,7 @@ function PostCommentItem({
             {comment.author.name}
           </Link>
           {isAuthorComment && (
-            <span className="text-[0.6875rem] font-bold px-2 py-[0.1rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/25 font-display">
+            <span className="text-[0.6875rem] font-bold px-2 py-[0.1rem] rounded-full bg-pink-500/10 text-[var(--accent-orange)] border border-pink-500/25 font-display">
               Author
             </span>
           )}
@@ -250,7 +250,7 @@ function PostCommentItem({
             disabled={!currentUserId}
             className={[
               "flex items-center gap-[0.3rem] px-2 py-1 rounded-md border-none font-display font-semibold text-[0.8rem] transition-all duration-150",
-              comment.userLiked ? "bg-orange-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
+              comment.userLiked ? "bg-pink-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
               currentUserId ? "cursor-pointer" : "cursor-default",
             ].join(" ")}
           >
@@ -273,7 +273,7 @@ function PostCommentItem({
               title={comment.isPinned ? "Unpin" : "Pin"}
               className={[
                 "ml-auto flex items-center gap-[0.3rem] px-2 py-1 rounded-md border-none font-display font-semibold text-xs cursor-pointer",
-                comment.isPinned ? "bg-orange-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
+                comment.isPinned ? "bg-pink-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
               ].join(" ")}
             >
               {comment.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
@@ -347,7 +347,7 @@ function PostCommentItem({
                         <Link href={`/profile/${reply.author.id}`} className={[
                           "w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-display font-extrabold text-[0.5625rem]",
                           isReplyAuthor
-                            ? "bg-orange-500/15 border-[1.5px] border-orange-500/40 text-[var(--accent-orange)]"
+                            ? "bg-pink-500/15 border-[1.5px] border-pink-500/40 text-[var(--accent-orange)]"
                             : "bg-[var(--bg-elevated)] border-[1.5px] border-[var(--border-subtle)] text-[var(--text-secondary)]",
                         ].join(" ")}>
                           {(reply.author.name ?? "?")[0].toUpperCase()}
@@ -356,7 +356,7 @@ function PostCommentItem({
                           {reply.author.name}
                         </Link>
                         {isReplyAuthor && (
-                          <span className="text-[0.625rem] font-bold px-[0.4rem] py-[0.1rem] rounded-full bg-orange-500/10 text-[var(--accent-orange)] border border-orange-500/25 font-display">
+                          <span className="text-[0.625rem] font-bold px-[0.4rem] py-[0.1rem] rounded-full bg-pink-500/10 text-[var(--accent-orange)] border border-pink-500/25 font-display">
                             Author
                           </span>
                         )}
@@ -378,7 +378,7 @@ function PostCommentItem({
                           disabled={!currentUserId}
                           className={[
                             "flex items-center gap-[0.3rem] px-[0.4rem] py-[0.2rem] rounded-[5px] border-none font-display font-semibold text-xs",
-                            reply.userLiked ? "bg-orange-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
+                            reply.userLiked ? "bg-pink-500/10 text-[var(--accent-orange)]" : "bg-transparent text-[var(--text-muted)]",
                             currentUserId ? "cursor-pointer" : "cursor-default",
                           ].join(" ")}
                         >

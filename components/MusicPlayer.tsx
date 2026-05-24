@@ -175,8 +175,10 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerReady]);
 
-  // When the YouTube player becomes ready while in a lobby, force a fresh sync
-  // so the track actually starts (fixes silent join-mid-playback bug)
+  // When the YouTube player becomes ready while in a lobby, force a fresh sync.
+  // Depends only on playerReady — mid-session joins are handled directly by enterLobby,
+  // and including activeLobby?.id here would fire a second loadVideoById that races with
+  // the first one from enterLobby and can leave the player in a blocked autoplay state.
   useEffect(() => {
     if (!playerReady || !activeLobby) return;
     if (lastReadySyncLobbyRef.current === activeLobby.id) return;
@@ -184,7 +186,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     syncedTrackRef.current = null;
     applyLobbySync(activeLobby);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerReady, activeLobby?.id]);
+  }, [playerReady]);
 
   function handleVol(v: number) { setVol(v); setMusicVol(v); localStorage.setItem("music_vol", String(v)); }
 
@@ -608,6 +610,8 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     setActiveLobby(d);
     setSize({ w: 360 });
     setView("lobby"); setLobbyTab("player");
+    // Mark this lobby as synced so the playerReady effect doesn't fire a duplicate load
+    lastReadySyncLobbyRef.current = id;
     // Apply current track immediately so guest doesn't wait for first SSE event
     applyLobbySync(d);
   }

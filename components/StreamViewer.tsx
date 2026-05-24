@@ -44,9 +44,10 @@ export default function StreamViewer({ streamId }: Props) {
   const [volume,       setVolume]     = useState(1);
   const [prevVolume,   setPrevVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [quality,      setQuality]    = useState<Quality>("high");
-  const [showQuality,  setShowQuality] = useState(false);
-  const [showControls, setShowControls] = useState(true);
+  const [quality,      setQuality]    = useState<Quality>("medium");
+  const [showQuality,    setShowQuality]    = useState(false);
+  const [showControls,   setShowControls]   = useState(true);
+  const [reconnecting,   setReconnecting]   = useState(false);
   // True on desktop (mouse/trackpad), false on touch-only devices
   const [hasFinePointer, setHasFinePointer] = useState(true);
 
@@ -168,7 +169,10 @@ export default function StreamViewer({ streamId }: Props) {
         const wsUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
         if (!wsUrl) throw new Error("LiveKit URL not configured");
 
-        const room = new Room();
+        const room = new Room({
+          adaptiveStream: true,  // auto-adjusts incoming quality to viewer's bandwidth
+          dynacast: true,        // only consumes layers the viewer actually renders
+        });
         if (cancelled) return;
         roomRef.current = room;
 
@@ -176,6 +180,23 @@ export default function StreamViewer({ streamId }: Props) {
           (track: RemoteTrack, pub: RemoteTrackPublication) => attachTrack(track, pub));
         room.on(RoomEvent.TrackUnsubscribed,
           (track: RemoteTrack) => detachTrack(track));
+        room.on(RoomEvent.Reconnecting, () => setReconnecting(true));
+        room.on(RoomEvent.Reconnected, () => {
+          setReconnecting(false);
+          // Re-attach any tracks that are still live after the reconnect
+          let hasVideo = false;
+          room.remoteParticipants.forEach((p: RemoteParticipant) => {
+            p.trackPublications.forEach((pub) => {
+              if (!pub.track) return;
+              if (pub.kind === Track.Kind.Video) { attachTrack(pub.track as RemoteTrack, pub); hasVideo = true; }
+              else if (pub.kind === Track.Kind.Audio) { attachTrack(pub.track as RemoteTrack); }
+            });
+          });
+          if (!hasVideo) setStatus("offline");
+        });
+        room.on(RoomEvent.Disconnected, () => {
+          if (!cancelled) { setReconnecting(false); setStatus("error"); }
+        });
 
         await room.connect(wsUrl, token);
         if (cancelled) { room.disconnect(); return; }
@@ -314,9 +335,17 @@ export default function StreamViewer({ streamId }: Props) {
               : <Monitor size={40} strokeWidth={1.2} />}
             <span className="text-sm font-display">
               {status === "connecting" && "Connecting…"}
-              {status === "offline"    && "No active stream"}
+              {status === "offline"    && "Waiting for stream"}
               {status === "error"      && (error ?? "Connection error")}
             </span>
+          </div>
+        )}
+
+        {/* Reconnecting overlay — sits on top of the last frozen video frame */}
+        {reconnecting && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-10">
+            <Loader2 size={32} className="animate-spin text-white/80" strokeWidth={1.5} />
+            <span className="text-sm font-display text-white/80">Reconnecting…</span>
           </div>
         )}
 

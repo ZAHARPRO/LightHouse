@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, Track } from "livekit-client";
+import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, Track, ConnectionQuality } from "livekit-client";
 import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
@@ -89,11 +89,13 @@ const SCREEN_VIDEO_OPTS = (captureCursor: boolean) => ({
   cursor: captureCursor ? "always" : "never",
 } as VideoConstraintsExt);
 
-const SCREEN_AUDIO_OPTS = {
+// Processing constraints applied AFTER capture — never passed to getDisplayMedia.
+// Passing constraints (esp. sampleRate) directly to getDisplayMedia causes Chrome to
+// silently drop the audio track for whole-screen capture (OS loopback can't satisfy them).
+const SCREEN_AUDIO_APPLY_CONSTRAINTS = {
   echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
-  sampleRate: 48000,
 };
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
@@ -107,6 +109,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const awayTimeoutRef          = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const awayTickRef             = useRef<ReturnType<typeof setInterval> | null>(null);
   const hiddenAtRef             = useRef<number | null>(null);
+  const stopStreamRef           = useRef<(() => void) | null>(null);
   const micRawTrackRef           = useRef<MediaStreamTrack | null>(null);
   const micLiveTrackRef          = useRef<LocalAudioTrack | null>(null);
   const screenAudioRawTrackRef   = useRef<MediaStreamTrack | null>(null);
@@ -133,6 +136,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   // Live controls
   const [micMuted,          setMicMuted]         = useState(false);
   const [switchingScreen,   setSwitchingScreen]  = useState(false);
+  const [isReconnecting,    setIsReconnecting]   = useState(false);
+  const [poorConnection,    setPoorConnection]   = useState(false);
 
   // Attach/detach track to inline preview
   useEffect(() => {
@@ -165,11 +170,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   // re-acquiring the track via getUserMedia (which would re-enable noise suppression)
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
-    await rawTrack.applyConstraints({
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    }).catch(() => {});
+    await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
     screenAudioRawTrackRef.current = rawTrack;
     const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
@@ -236,54 +237,91 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const wsUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
       if (!wsUrl) throw new Error("LiveKit URL not configured");
 
-      const room = new Room();
+      const room = new Room({
+        adaptiveStream: true,          // viewer auto-adjusts incoming quality to their bandwidth
+        dynacast: true,                // only publish layers that subscribers actually consume
+        stopLocalTrackOnUnpublish: false, // don't stop our tracks when unpublishing during screen switch
+      });
       roomRef.current = room;
 
       room.on(RoomEvent.ParticipantConnected,    () => updateViewers(room));
       room.on(RoomEvent.ParticipantDisconnected, () => updateViewers(room));
+      room.on(RoomEvent.Reconnecting,  () => setIsReconnecting(true));
+      room.on(RoomEvent.Reconnected,   () => setIsReconnecting(false));
+      room.on(RoomEvent.Disconnected,  () => { setIsReconnecting(false); });
+      room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+        if (participant === room.localParticipant) {
+          setPoorConnection(quality === ConnectionQuality.Poor || quality === ConnectionQuality.Lost);
+        }
+      });
 
       await room.connect(wsUrl, token);
       updateViewers(room);
 
-      // 3. Capture screen
+      // 3. Pre-capture mic BEFORE opening the screen share dialog.
+      // getUserMedia called after getDisplayMedia can fail on some OS/browser combos
+      // when a non-browser window is being shared (audio subsystem conflict).
+      let preMicStream: MediaStream | null = null;
+      if (captureAudio) {
+        preMicStream = await navigator.mediaDevices
+          .getUserMedia({ audio: true, video: false })
+          .catch(() => null);
+      }
+
+      // 4. Capture screen
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: SCREEN_VIDEO_OPTS(captureCursor),
-        audio: SCREEN_AUDIO_OPTS,
+        // audio: true — let browser show "Share audio" natively without constraints.
+        // Passing constraints here causes Chrome to silently drop audio for
+        // whole-screen capture (OS loopback can't satisfy sampleRate etc.).
+        // Processing constraints are applied via applyConstraints() afterward.
+        audio: true,
       } as DisplayMediaStreamOptions);
 
-      // Hint the encoder that this is screen content (sharp edges/text, not motion)
+      // Hint the encoder: screen content has sharp edges/text, not smooth motion
       const videoMediaTrack = displayStream.getVideoTracks()[0];
       (videoMediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
       rawScreenVideoTrackRef.current = videoMediaTrack;
 
-      // userProvidedTrack=true — we manage the track lifecycle so LiveKit won't
+      // userProvidedTrack=true — we control the track lifecycle so LiveKit won't
       // stop it on unpublishTrack (which would fire "ended" and kill the stream)
       const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, true);
       screenTrackRef.current = screenTrack;
 
-      // No simulcast for screen share — simulcast degrades sharp text/edges.
-      // Use a single high-quality layer with a realistic bitrate cap.
+      // No simulcast — degrades sharp text/edges on screen content.
+      // VP9: ~40% better compression than VP8 for screen content (solid colors, text).
+      // 2.5 Mbps / 24 fps: more stable on typical upload speeds than 3.5 Mbps / 30 fps.
       await room.localParticipant.publishTrack(screenTrack, {
         source: Track.Source.ScreenShare,
-        screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: "high" },
+        videoCodec: "vp9",
+        screenShareEncoding: { maxBitrate: 2_500_000, maxFramerate: 24, priority: "high" },
       });
 
       if (videoRef.current) screenTrack.attach(videoRef.current);
 
-      // Publish screen audio if user shared it
+      // Publish screen audio if the user opted in via the browser dialog
       const screenAudioTracks = displayStream.getAudioTracks();
       if (screenAudioTracks.length > 0) {
         await publishScreenAudio(screenAudioTracks[0]);
       }
 
-      // Publish mic if enabled
-      if (captureAudio) {
-        await publishMic();
-        setMicMuted(false);
+      // Publish pre-captured mic (secured before screen dialog to avoid audio conflicts)
+      if (preMicStream) {
+        const micRaw = preMicStream.getAudioTracks()[0];
+        if (micRaw && roomRef.current) {
+          micRawTrackRef.current = micRaw;
+          const micLive = new LocalAudioTrack(micRaw, undefined, true);
+          micLiveTrackRef.current = micLive;
+          await roomRef.current.localParticipant.publishTrack(micLive, {
+            source: Track.Source.Microphone,
+          });
+          setMicMuted(false);
+        }
       }
 
-      // "ended" fires only when the user clicks "Stop sharing" in the browser UI
-      const endedHandler = () => stopStream();
+      // "ended" fires only when the user clicks "Stop sharing" in the browser UI.
+      // Use the ref so we don't need stopStream in startStream's dep array.
+      const endedHandler = () => stopStreamRef.current?.();
       videoMediaTrack.addEventListener("ended", endedHandler);
       videoEndedCleanupRef.current = () => videoMediaTrack.removeEventListener("ended", endedHandler);
 
@@ -307,7 +345,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       roomRef.current = null;
       screenTrackRef.current = null;
     }
-  }, [existingStreamId, streamTitle, description, thumbnail, captureAudio, captureCursor, updateViewers, onStreamChange, publishScreenAudio, publishMic]);
+  }, [existingStreamId, streamTitle, description, thumbnail, captureAudio, captureCursor, updateViewers, onStreamChange, publishScreenAudio]);
 
   const stopStream = useCallback(async () => {
     setShowPreview(false);
@@ -349,6 +387,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setMicMuted(false);
   }, [existingStreamId, onStreamChange]);
 
+  // Keep stopStreamRef in sync so startStream can reference it without a dep cycle
+  useEffect(() => { stopStreamRef.current = stopStream; }, [stopStream]);
+
   // Toggle mic on/off while streaming
   const toggleMic = useCallback(async () => {
     if (!roomRef.current) return;
@@ -379,7 +420,11 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     try {
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: SCREEN_VIDEO_OPTS(captureCursor),
-        audio: SCREEN_AUDIO_OPTS,
+        // audio: true — let browser show "Share audio" natively without constraints.
+        // Constraints passed here can cause Chrome to silently drop audio for
+        // whole-screen capture (OS loopback doesn't satisfy sampleRate etc.).
+        // We apply processing constraints on the track afterward via applyConstraints.
+        audio: true,
       } as DisplayMediaStreamOptions);
 
       // Remove "ended" listener from old raw track BEFORE unpublishing.
@@ -408,7 +453,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       await roomRef.current.localParticipant.publishTrack(newScreenTrack, {
         source: Track.Source.ScreenShare,
-        screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: "high" },
+        videoCodec: "vp9",
+        screenShareEncoding: { maxBitrate: 2_500_000, maxFramerate: 24, priority: "high" },
       });
       if (videoRef.current) newScreenTrack.attach(videoRef.current);
       if (showPreview && previewRef.current) newScreenTrack.attach(previewRef.current);
@@ -431,7 +477,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       }
 
       // Wire up new "ended" listener
-      const endedHandler = () => stopStream();
+      const endedHandler = () => stopStreamRef.current?.();
       newVideoMediaTrack.addEventListener("ended", endedHandler);
       videoEndedCleanupRef.current = () => newVideoMediaTrack.removeEventListener("ended", endedHandler);
     } catch (e) {
@@ -806,6 +852,22 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           <p className="text-center text-[0.6875rem] text-[var(--text-muted)] py-2">
             This is exactly what viewers see · Adjust volume above to monitor audio
           </p>
+        </div>
+      )}
+
+      {/* Reconnecting banner */}
+      {isReconnecting && status === "live" && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-[10px] border border-blue-500/30 bg-blue-500/8 text-blue-300">
+          <Loader2 size={15} className="shrink-0 animate-spin" />
+          <span className="text-[0.8125rem] font-display font-semibold">Reconnecting to LiveKit…</span>
+        </div>
+      )}
+
+      {/* Poor connection warning */}
+      {poorConnection && !isReconnecting && status === "live" && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-[10px] border border-orange-500/30 bg-orange-500/8 text-orange-300">
+          <WifiOff size={15} className="shrink-0" />
+          <span className="text-[0.8125rem] font-display font-semibold">Poor connection — viewers may see lag</span>
         </div>
       )}
 

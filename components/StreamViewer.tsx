@@ -37,6 +37,11 @@ export default function StreamViewer({ streamId }: Props) {
   const containerRef   = useRef<HTMLDivElement>(null);
   const activePubRef   = useRef<RemoteTrackPublication | null>(null);
   const hideTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track all audio elements so we can sync volume/mute and clean up
+  const audioElemsRef  = useRef<HTMLAudioElement[]>([]);
+  // Refs to carry current volume/muted into callbacks without stale closure issues
+  const volumeRef      = useRef(1);
+  const mutedRef       = useRef(false);
 
   const [status,        setStatus]       = useState<Status>("connecting");
   const [error,         setError]        = useState<string | null>(null);
@@ -48,12 +53,29 @@ export default function StreamViewer({ streamId }: Props) {
   const [showQuality,   setShowQuality]  = useState(false);
   const [showControls,  setShowControls] = useState(true);
 
-  // Sync mute/volume → video element
+  // Keep refs in sync with state
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
+
+  // Sync mute/volume → video element AND all live audio elements
   useEffect(() => {
-    if (!videoRef.current) return;
-    videoRef.current.muted  = muted;
-    videoRef.current.volume = volume;
+    if (videoRef.current) {
+      videoRef.current.muted  = muted;
+      videoRef.current.volume = volume;
+    }
+    audioElemsRef.current.forEach((el) => {
+      el.muted  = muted;
+      el.volume = volume;
+    });
   }, [muted, volume]);
+
+  // Clean up audio elements when component unmounts
+  useEffect(() => {
+    return () => {
+      audioElemsRef.current.forEach((el) => { el.pause(); el.srcObject = null; el.remove(); });
+      audioElemsRef.current = [];
+    };
+  }, []);
 
   // Fullscreen detection
   useEffect(() => {
@@ -95,22 +117,41 @@ export default function StreamViewer({ streamId }: Props) {
   }, []);
 
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
-    if (track.kind !== Track.Kind.Video || !videoRef.current) return;
-    track.attach(videoRef.current);
-    if (pub) activePubRef.current = pub;
-    applyQuality(quality);
-    setStatus("live");
+    if (track.kind === Track.Kind.Video) {
+      if (!videoRef.current) return;
+      track.attach(videoRef.current);
+      if (pub) activePubRef.current = pub;
+      applyQuality(quality);
+      setStatus("live");
+    } else if (track.kind === Track.Kind.Audio) {
+      // Create a dedicated audio element for this track
+      const el = document.createElement("audio");
+      el.autoplay = true;
+      el.muted  = mutedRef.current;
+      el.volume = mutedRef.current ? 0 : volumeRef.current;
+      document.body.appendChild(el);
+      track.attach(el);
+      audioElemsRef.current.push(el);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
 
   const detachTrack = useCallback((track: RemoteTrack) => {
-    if (track.kind !== Track.Kind.Video || !videoRef.current) return;
-    track.detach(videoRef.current);
-    activePubRef.current = null;
-    setStatus("offline");
+    if (track.kind === Track.Kind.Video) {
+      if (!videoRef.current) return;
+      track.detach(videoRef.current);
+      activePubRef.current = null;
+      setStatus("offline");
+    } else if (track.kind === Track.Kind.Audio) {
+      const detached = track.detach();
+      detached.forEach((el) => { try { el.srcObject = null; el.remove(); } catch { /* ignore */ } });
+      audioElemsRef.current = audioElemsRef.current.filter(
+        (a) => !detached.includes(a),
+      );
+    }
   }, []);
 
-  // LiveKit connect — uses streamId for room name
+  // LiveKit connect
   useEffect(() => {
     if (!streamId) return;
     let cancelled = false;
@@ -137,18 +178,19 @@ export default function StreamViewer({ streamId }: Props) {
         room.on(RoomEvent.TrackUnsubscribed,
           (track: RemoteTrack) => detachTrack(track));
 
-        // SSE stream_ended event (from API) tells us to show ended state
-        // LiveKit disconnects automatically when broadcaster leaves room
-
         await room.connect(wsUrl, token);
         if (cancelled) { room.disconnect(); return; }
 
         let found = false;
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           p.trackPublications.forEach((pub) => {
-            if (pub.track && pub.kind === Track.Kind.Video) {
+            if (!pub.track) return;
+            if (pub.kind === Track.Kind.Video) {
               attachTrack(pub.track as RemoteTrack, pub);
               found = true;
+            } else if (pub.kind === Track.Kind.Audio) {
+              // Also attach any audio tracks already published
+              attachTrack(pub.track as RemoteTrack);
             }
           });
         });
@@ -165,6 +207,9 @@ export default function StreamViewer({ streamId }: Props) {
     connect();
     return () => {
       cancelled = true;
+      // Clean up audio elements before disconnecting
+      audioElemsRef.current.forEach((el) => { el.pause(); el.srcObject = null; el.remove(); });
+      audioElemsRef.current = [];
       roomRef.current?.disconnect();
       roomRef.current = null;
     };
@@ -233,10 +278,7 @@ export default function StreamViewer({ streamId }: Props) {
             The broadcast has finished. Thanks for watching!
           </p>
         </div>
-        <Link
-          href="/feed"
-          className="btn-primary no-underline py-2 px-6 text-sm"
-        >
+        <Link href="/feed" className="btn-primary no-underline py-2 px-6 text-sm">
           Back to Feed
         </Link>
       </div>

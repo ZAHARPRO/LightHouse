@@ -6,9 +6,54 @@ import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
   Mic, MicOff, MousePointer, Mouse, ImagePlus, X, Clock,
+  Volume2, VolumeX,
 } from "lucide-react";
 
 type Status = "idle" | "connecting" | "live" | "error";
+
+// ── Audio level bar (VU meter) ───────────────────────────────────────────────
+function AudioLevelBar({ track, label }: { track: MediaStreamTrack | null; label: string }) {
+  const [level, setLevel] = useState(0);
+
+  useEffect(() => {
+    if (!track || track.readyState !== "live") { setLevel(0); return; }
+    let ctx: AudioContext | undefined;
+    let raf = 0;
+    try {
+      ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      function tick() {
+        analyser.getByteFrequencyData(data);
+        setLevel(data.reduce((a, b) => a + b, 0) / data.length / 128);
+        raf = requestAnimationFrame(tick);
+      }
+      raf = requestAnimationFrame(tick);
+    } catch { /* ignore */ }
+    return () => { cancelAnimationFrame(raf); ctx?.close(); };
+  }, [track]);
+
+  const pct = Math.min(level * 100, 100);
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[44px]">
+      <span className="text-[0.5625rem] text-white/50 font-display uppercase tracking-wider">{label}</span>
+      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-75"
+          style={{
+            width: `${pct}%`,
+            background: pct > 80 ? "#ef4444" : pct > 50 ? "#fbbf24" : "#10b981",
+          }}
+        />
+      </div>
+      <span className="text-[0.5rem] text-white/30 font-mono text-right">
+        {level > 0.01 ? "●" : "○"}
+      </span>
+    </div>
+  );
+}
 
 interface Props {
   /** Pass an existing active stream ID to reconnect instead of creating a new one */
@@ -46,16 +91,20 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const screenTrackRef      = useRef<LocalVideoTrack | null>(null);
   const streamIdRef         = useRef<string | null>(existingStreamId ?? null);
   const dropdownRef         = useRef<HTMLDivElement>(null);
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const awayTimeoutRef      = useRef<ReturnType<typeof setTimeout>  | null>(null);
-  const awayTickRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hiddenAtRef         = useRef<number | null>(null);
-  const micTrackRef         = useRef<MediaStreamTrack | null>(null);
+  const heartbeatIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const awayTimeoutRef        = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const awayTickRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hiddenAtRef           = useRef<number | null>(null);
+  const micTrackRef           = useRef<MediaStreamTrack | null>(null);
+  const screenAudioTrackRef   = useRef<MediaStreamTrack | null>(null);
+  const previewAudioRef       = useRef<HTMLAudioElement | null>(null);
 
   const [status,          setStatus]         = useState<Status>("idle");
   const [error,           setError]          = useState<string | null>(null);
   const [viewerCount,     setViewerCount]    = useState(0);
-  const [awaySecondsLeft, setAwaySecondsLeft] = useState<number | null>(null);
+  const [awaySecondsLeft,   setAwaySecondsLeft]   = useState<number | null>(null);
+  const [previewAudioMuted, setPreviewAudioMuted] = useState(false);
+  const [previewAudioVol,   setPreviewAudioVol]   = useState(0.7);
   const [streamTitle,   setStreamTitle]  = useState("");
   const [description,   setDescription] = useState("");
   const [thumbnail,     setThumbnail]   = useState<string | null>(null);
@@ -170,6 +219,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       // Publish system/screen audio if the user enabled it in the browser dialog
       const screenAudioTracks = displayStream.getAudioTracks();
       if (screenAudioTracks.length > 0) {
+        screenAudioTrackRef.current = screenAudioTracks[0];
         const screenAudioTrack = new LocalAudioTrack(screenAudioTracks[0], undefined, false);
         await room.localParticipant.publishTrack(screenAudioTrack);
       }
@@ -219,9 +269,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setShowPreview(false);
     screenTrackRef.current = null;
 
-    // Stop microphone track so the OS mic indicator turns off
+    // Stop captured audio tracks so OS indicators turn off
     micTrackRef.current?.stop();
     micTrackRef.current = null;
+    screenAudioTrackRef.current?.stop();
+    screenAudioTrackRef.current = null;
+    // Stop preview audio
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.srcObject = null;
+    }
 
     if (roomRef.current) {
       const pubs = [...roomRef.current.localParticipant.trackPublications.values()];
@@ -329,6 +386,36 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   }, [status, sendHeartbeat, stopStream]);
 
   useEffect(() => { return () => { roomRef.current?.disconnect(); }; }, []);
+
+  // Sync preview audio element volume/mute imperatively
+  useEffect(() => {
+    const el = previewAudioRef.current;
+    if (!el) return;
+    el.muted  = previewAudioMuted;
+    el.volume = previewAudioMuted ? 0 : previewAudioVol;
+  }, [previewAudioMuted, previewAudioVol]);
+
+  // Wire/unwire captured audio into the preview <audio> element
+  useEffect(() => {
+    const el = previewAudioRef.current;
+    if (!showPreview || status !== "live" || !el) return;
+
+    const tracks: MediaStreamTrack[] = [];
+    if (screenAudioTrackRef.current?.readyState === "live") tracks.push(screenAudioTrackRef.current);
+    if (micTrackRef.current?.readyState === "live")        tracks.push(micTrackRef.current);
+
+    if (tracks.length === 0) return;
+    el.srcObject = new MediaStream(tracks);
+    el.muted  = previewAudioMuted;
+    el.volume = previewAudioMuted ? 0 : previewAudioVol;
+    el.play().catch(() => {});
+
+    return () => {
+      el.pause();
+      el.srcObject = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreview, status]);
 
   const isIdle = status === "idle" || status === "error";
   const buttonLabel = existingStreamId ? "Reconnect to Stream" : "Start Stream";
@@ -518,20 +605,56 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       {/* ── Inline viewer preview panel ── */}
       {showPreview && status === "live" && (
         <div className="rounded-[12px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a]">
-          <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)]">
-            <span className="text-[0.75rem] font-display font-semibold text-[var(--text-secondary)]">Viewer Preview</span>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)]">
+            <span className="text-[0.75rem] font-display font-semibold text-[var(--text-secondary)] shrink-0">Viewer Preview</span>
+
+            {/* Audio meters */}
+            <div className="flex items-end gap-3 flex-1">
+              <AudioLevelBar track={screenAudioTrackRef.current} label="Screen" />
+              <AudioLevelBar track={micTrackRef.current} label="Mic" />
+            </div>
+
+            {/* Preview volume controls */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setPreviewAudioMuted((v) => !v)}
+                className="text-white/60 hover:text-white transition-colors"
+                title={previewAudioMuted ? "Unmute preview" : "Mute preview"}
+              >
+                {previewAudioMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              </button>
+              <input
+                type="range" min={0} max={1} step={0.05}
+                value={previewAudioMuted ? 0 : previewAudioVol}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setPreviewAudioVol(v);
+                  setPreviewAudioMuted(v === 0);
+                }}
+                className="volume-slider w-14"
+              />
+            </div>
+
             <button
               onClick={() => setShowPreview(false)}
-              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0"
             >
               <X size={13} />
             </button>
           </div>
+
+          {/* Video */}
           <div className="aspect-video relative">
             <video ref={previewRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-contain" />
           </div>
+
+          {/* Hidden audio element for preview playback */}
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio ref={previewAudioRef} autoPlay />
+
           <p className="text-center text-[0.6875rem] text-[var(--text-muted)] py-2">
-            This is exactly what viewers see
+            This is exactly what viewers see · Adjust volume above to monitor audio
           </p>
         </div>
       )}

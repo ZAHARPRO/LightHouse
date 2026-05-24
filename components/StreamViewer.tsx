@@ -32,50 +32,28 @@ interface Props {
 }
 
 export default function StreamViewer({ streamId }: Props) {
-  const roomRef        = useRef<Room | null>(null);
-  const videoRef       = useRef<HTMLVideoElement>(null);
-  const containerRef   = useRef<HTMLDivElement>(null);
-  const activePubRef   = useRef<RemoteTrackPublication | null>(null);
-  const hideTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track all audio elements so we can sync volume/mute and clean up
-  const audioElemsRef  = useRef<HTMLAudioElement[]>([]);
-  // Refs to carry current volume/muted into callbacks without stale closure issues
-  const volumeRef      = useRef(1);
-  const mutedRef       = useRef(false);
+  const roomRef      = useRef<Room | null>(null);
+  const videoRef     = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activePubRef = useRef<RemoteTrackPublication | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [status,        setStatus]       = useState<Status>("connecting");
-  const [error,         setError]        = useState<string | null>(null);
-  const [muted,         setMuted]        = useState(false);
-  const [volume,        setVolume]       = useState(1);
-  const [prevVolume,    setPrevVolume]   = useState(1);
-  const [isFullscreen,  setIsFullscreen] = useState(false);
-  const [quality,       setQuality]      = useState<Quality>("high");
-  const [showQuality,   setShowQuality]  = useState(false);
-  const [showControls,  setShowControls] = useState(true);
+  const [status,       setStatus]     = useState<Status>("connecting");
+  const [error,        setError]      = useState<string | null>(null);
+  const [muted,        setMuted]      = useState(false);
+  const [volume,       setVolume]     = useState(1);
+  const [prevVolume,   setPrevVolume] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [quality,      setQuality]    = useState<Quality>("high");
+  const [showQuality,  setShowQuality] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
-  // Keep refs in sync with state
-  useEffect(() => { volumeRef.current = volume; }, [volume]);
-  useEffect(() => { mutedRef.current = muted; }, [muted]);
-
-  // Sync mute/volume → video element AND all live audio elements
+  // Sync mute/volume → the single video element (which carries both video + audio tracks)
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted  = muted;
-      videoRef.current.volume = volume;
-    }
-    audioElemsRef.current.forEach((el) => {
-      el.muted  = muted;
-      el.volume = volume;
-    });
+    if (!videoRef.current) return;
+    videoRef.current.muted  = muted;
+    videoRef.current.volume = volume;
   }, [muted, volume]);
-
-  // Clean up audio elements when component unmounts
-  useEffect(() => {
-    return () => {
-      audioElemsRef.current.forEach((el) => { el.pause(); el.srcObject = null; el.remove(); });
-      audioElemsRef.current = [];
-    };
-  }, []);
 
   // Fullscreen detection
   useEffect(() => {
@@ -84,7 +62,7 @@ export default function StreamViewer({ streamId }: Props) {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // F key fullscreen — e.code is layout-independent (works on any keyboard layout)
+  // F key fullscreen — e.code is layout-independent
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
@@ -116,38 +94,34 @@ export default function StreamViewer({ streamId }: Props) {
     activePubRef.current?.setVideoQuality(QUALITY_LK[q]);
   }, []);
 
+  // Attach both video AND audio tracks to the same <video> element.
+  // LiveKit's track.attach(el) adds the track to the element's srcObject MediaStream,
+  // so audio is part of the already-playing video stream — no autoplay blocking.
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
+    const el = videoRef.current;
+    if (!el) return;
+
     if (track.kind === Track.Kind.Video) {
-      if (!videoRef.current) return;
-      track.attach(videoRef.current);
+      track.attach(el);
       if (pub) activePubRef.current = pub;
       applyQuality(quality);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      // Create a dedicated audio element for this track
-      const el = document.createElement("audio");
-      el.autoplay = true;
-      el.muted  = mutedRef.current;
-      el.volume = mutedRef.current ? 0 : volumeRef.current;
-      document.body.appendChild(el);
-      track.attach(el);
-      audioElemsRef.current.push(el);
+      track.attach(el); // adds audio track to the same MediaStream already on el
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
 
   const detachTrack = useCallback((track: RemoteTrack) => {
+    const el = videoRef.current;
+    if (!el) return;
+
     if (track.kind === Track.Kind.Video) {
-      if (!videoRef.current) return;
-      track.detach(videoRef.current);
+      track.detach(el);
       activePubRef.current = null;
       setStatus("offline");
     } else if (track.kind === Track.Kind.Audio) {
-      const detached = track.detach();
-      detached.forEach((el) => { try { el.srcObject = null; el.remove(); } catch { /* ignore */ } });
-      audioElemsRef.current = audioElemsRef.current.filter(
-        (a) => !detached.includes(a),
-      );
+      track.detach(el);
     }
   }, []);
 
@@ -181,21 +155,21 @@ export default function StreamViewer({ streamId }: Props) {
         await room.connect(wsUrl, token);
         if (cancelled) { room.disconnect(); return; }
 
-        let found = false;
+        // Attach any tracks already published when we joined
+        let foundVideo = false;
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           p.trackPublications.forEach((pub) => {
             if (!pub.track) return;
             if (pub.kind === Track.Kind.Video) {
               attachTrack(pub.track as RemoteTrack, pub);
-              found = true;
+              foundVideo = true;
             } else if (pub.kind === Track.Kind.Audio) {
-              // Also attach any audio tracks already published
               attachTrack(pub.track as RemoteTrack);
             }
           });
         });
 
-        if (!found) setStatus("offline");
+        if (!foundVideo) setStatus("offline");
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Connection failed");
@@ -207,9 +181,6 @@ export default function StreamViewer({ streamId }: Props) {
     connect();
     return () => {
       cancelled = true;
-      // Clean up audio elements before disconnecting
-      audioElemsRef.current.forEach((el) => { el.pause(); el.srcObject = null; el.remove(); });
-      audioElemsRef.current = [];
       roomRef.current?.disconnect();
       roomRef.current = null;
     };
@@ -263,7 +234,6 @@ export default function StreamViewer({ streamId }: Props) {
 
   const isLive = status === "live";
 
-  // ── Stream ended state ─────────────────────────────────────────────────────
   if (status === "ended") {
     return (
       <div className="flex flex-col items-center justify-center gap-5 py-14 text-center">
@@ -271,23 +241,16 @@ export default function StreamViewer({ streamId }: Props) {
           <Radio size={28} className="text-[var(--text-muted)]" strokeWidth={1.2} />
         </div>
         <div>
-          <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-1">
-            Stream has ended
-          </p>
-          <p className="text-sm text-[var(--text-muted)]">
-            The broadcast has finished. Thanks for watching!
-          </p>
+          <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-1">Stream has ended</p>
+          <p className="text-sm text-[var(--text-muted)]">The broadcast has finished. Thanks for watching!</p>
         </div>
-        <Link href="/feed" className="btn-primary no-underline py-2 px-6 text-sm">
-          Back to Feed
-        </Link>
+        <Link href="/feed" className="btn-primary no-underline py-2 px-6 text-sm">Back to Feed</Link>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Player */}
       <div
         ref={containerRef}
         onMouseMove={resetHideTimer}
@@ -295,6 +258,7 @@ export default function StreamViewer({ streamId }: Props) {
         className="w-full aspect-video rounded-[14px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a] relative flex items-center justify-center select-none"
         style={{ cursor: isFullscreen && !showControls ? "none" : "default" }}
       >
+        {/* Single video element — carries both video + audio tracks in one MediaStream */}
         <video
           ref={videoRef}
           autoPlay
@@ -316,7 +280,6 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* LIVE badge */}
         {isLive && (
           <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 rounded-[5px] py-[0.2rem] px-2.5 z-10 pointer-events-none">
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -324,7 +287,6 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* Quality popup */}
         {showQuality && (
           <div
             className="absolute bottom-14 right-3 z-30 bg-[#111]/95 backdrop-blur-sm border border-white/10 rounded-[10px] overflow-hidden shadow-xl"
@@ -332,9 +294,7 @@ export default function StreamViewer({ streamId }: Props) {
           >
             <p className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-white/40 px-3 pt-2.5 pb-1">Quality</p>
             {(["high", "medium", "low"] as Quality[]).map((q) => (
-              <button
-                key={q}
-                onClick={() => handleQualityChange(q)}
+              <button key={q} onClick={() => handleQualityChange(q)}
                 className="flex items-center justify-between w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
               >
                 <span className="font-display font-semibold">{QUALITY_LABEL[q]}</span>
@@ -344,7 +304,6 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* Controls overlay */}
         <div
           className="absolute inset-x-0 bottom-0 z-20 transition-opacity duration-200"
           style={{ opacity: (isLive && showControls) || !isLive ? 1 : 0, pointerEvents: showControls || !isLive ? "auto" : "none" }}
@@ -362,18 +321,15 @@ export default function StreamViewer({ streamId }: Props) {
               />
             </div>
             <div className="flex-1" />
-            <div className="relative">
-              <button
-                onClick={() => setShowQuality((v) => !v)}
-                title="Quality"
-                className="flex items-center gap-1 text-white/70 hover:text-white transition-colors p-1"
-              >
-                <Settings size={13} />
-                <span className="text-[0.6875rem] font-display font-semibold">{QUALITY_LABEL[quality]}</span>
-              </button>
-            </div>
             <button
-              onClick={toggleFullscreen}
+              onClick={() => setShowQuality((v) => !v)}
+              title="Quality"
+              className="flex items-center gap-1 text-white/70 hover:text-white transition-colors p-1"
+            >
+              <Settings size={13} />
+              <span className="text-[0.6875rem] font-display font-semibold">{QUALITY_LABEL[quality]}</span>
+            </button>
+            <button onClick={toggleFullscreen}
               title={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
               className="text-white/80 hover:text-white transition-colors p-1 shrink-0"
             >
@@ -383,14 +339,11 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       </div>
 
-      {/* Pre-stream quality picker */}
       {!isLive && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[0.75rem] font-display font-semibold text-[var(--text-muted)] uppercase tracking-[0.05em]">Quality when stream starts:</span>
           {(["high", "medium", "low"] as Quality[]).map((q) => (
-            <button
-              key={q}
-              onClick={() => setQuality(q)}
+            <button key={q} onClick={() => setQuality(q)}
               className="text-[0.75rem] font-display font-semibold px-2.5 py-1 rounded-[6px] border transition-colors"
               style={{
                 borderColor: quality === q ? "rgba(249,115,22,0.5)" : "var(--border-subtle)",
@@ -404,7 +357,6 @@ export default function StreamViewer({ streamId }: Props) {
         </div>
       )}
 
-      {/* Status line */}
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
         {isLive
           ? <><Wifi size={12} className="text-emerald-400" /> Live — press <kbd className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded px-1 py-px text-[0.625rem] mx-0.5">F</kbd> for fullscreen</>
@@ -412,9 +364,9 @@ export default function StreamViewer({ streamId }: Props) {
       </div>
 
       <style>{`
-        .volume-slider { -webkit-appearance:none; appearance:none; height:3px; border-radius:3px; background:rgba(255,255,255,0.25); outline:none; cursor:pointer; }
-        .volume-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:11px; height:11px; border-radius:50%; background:white; cursor:pointer; }
-        .volume-slider::-moz-range-thumb { width:11px; height:11px; border-radius:50%; background:white; border:none; cursor:pointer; }
+        .volume-slider{-webkit-appearance:none;appearance:none;height:3px;border-radius:3px;background:rgba(255,255,255,0.25);outline:none;cursor:pointer}
+        .volume-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:11px;height:11px;border-radius:50%;background:white;cursor:pointer}
+        .volume-slider::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:white;border:none;cursor:pointer}
       `}</style>
     </div>
   );

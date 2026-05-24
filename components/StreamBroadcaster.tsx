@@ -108,7 +108,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [streamTitle,   setStreamTitle]  = useState("");
   const [description,   setDescription] = useState("");
   const [thumbnail,     setThumbnail]   = useState<string | null>(null);
-  const [captureAudio,  setCaptureAudio] = useState(false);
+  const [captureAudio,  setCaptureAudio] = useState(true);
   const [captureCursor, setCaptureCursor] = useState(true);
   const [showDropdown,  setShowDropdown] = useState(false);
   const [showPreview,   setShowPreview]  = useState(false);

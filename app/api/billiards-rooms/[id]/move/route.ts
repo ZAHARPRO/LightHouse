@@ -82,27 +82,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const winnerId = result.winner === "host" ? room.hostId : room.guestId!;
     const loserId  = result.winner === "host" ? room.guestId! : room.hostId;
 
-    await awardBadge(prisma, winnerId, "BILLIARDS_ONLINE_WIN");
+    // Wrap in try-catch so badge/ELO errors never block the 200 OK response.
+    // The room is already marked FINISHED above; the client must see that regardless.
+    try {
+      await awardBadge(prisma, winnerId, "BILLIARDS_ONLINE_WIN");
 
-    if (room.rated && room.guestId) {
-      const [winner, loser] = await Promise.all([
-        prisma.user.findUnique({ where: { id: winnerId }, select: { billiardsElo: true } }),
-        prisma.user.findUnique({ where: { id: loserId  }, select: { billiardsElo: true } }),
-      ]);
-      if (winner && loser) {
-        const [delta] = calculateEloDelta(winner.billiardsElo, loser.billiardsElo);
-        const hostIsWinner = winnerId === room.hostId;
-        const winnerNew = Math.max(100, winner.billiardsElo + delta);
-        await prisma.$transaction([
-          prisma.user.update({ where: { id: winnerId }, data: { billiardsElo: winnerNew } }),
-          prisma.user.update({ where: { id: loserId  }, data: { billiardsElo: Math.max(100, loser.billiardsElo - delta) } }),
-          prisma.billiardsRoom.update({ where: { id }, data: {
-            hostEloDelta:  hostIsWinner ?  delta : -delta,
-            guestEloDelta: hostIsWinner ? -delta :  delta,
-          }}),
+      if (room.rated && room.guestId) {
+        const [winnerUser, loserUser] = await Promise.all([
+          prisma.user.findUnique({ where: { id: winnerId }, select: { billiardsElo: true } }),
+          prisma.user.findUnique({ where: { id: loserId  }, select: { billiardsElo: true } }),
         ]);
-        await awardBilliardsEloBadges(prisma, winnerId, winnerNew);
+        if (winnerUser && loserUser) {
+          const [delta] = calculateEloDelta(winnerUser.billiardsElo, loserUser.billiardsElo);
+          const hostIsWinner = winnerId === room.hostId;
+          const winnerNew = Math.max(100, winnerUser.billiardsElo + delta);
+          await prisma.$transaction([
+            prisma.user.update({ where: { id: winnerId }, data: { billiardsElo: winnerNew } }),
+            prisma.user.update({ where: { id: loserId  }, data: { billiardsElo: Math.max(100, loserUser.billiardsElo - delta) } }),
+            prisma.billiardsRoom.update({ where: { id }, data: {
+              hostEloDelta:  hostIsWinner ?  delta : -delta,
+              guestEloDelta: hostIsWinner ? -delta :  delta,
+            }}),
+          ]);
+          await awardBilliardsEloBadges(prisma, winnerId, winnerNew);
+        }
       }
+    } catch (err) {
+      console.error("[billiards/move] post-win update failed:", err);
     }
   }
 

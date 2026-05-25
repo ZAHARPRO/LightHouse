@@ -754,22 +754,36 @@ export default function BilliardsOnlineRoom() {
   }
 
   const isHost = room.myRole === "host", isGuest = room.myRole === "guest";
+  const isSpectator = room.myRole === "spectator";
   const isPlayer = isHost || isGuest;
-  const isMyTurn = isPlayer && room.currentTurn === room.myRole && room.status === "PLAYING" && replayIdx === null;
-  const myName  = isHost ? room.hostName  : isGuest ? room.guestName  : null;
-  const oppName = isHost ? room.guestName : isGuest ? room.hostName   : null;
-  const myElo   = isHost ? room.hostElo   : room.guestElo;
-  const oppElo  = isHost ? room.guestElo  : room.hostElo;
   const myEloDelta = isHost ? room.hostEloDelta : room.guestEloDelta;
   const myGroup    = isHost ? room.hostGroup    : room.guestGroup;
-  const oppGroup   = isHost ? room.guestGroup   : room.hostGroup;
-  const myTimeMs  = isHost ? liveHostMs  : liveGuestMs;
-  const oppTimeMs = isHost ? liveGuestMs : liveHostMs;
-  const myRank  = myElo  ? getRank(myElo)  : null;
-  const oppRank = oppElo ? getRank(oppElo) : null;
-  const myRemaining  = myGroup  ? remainingBalls(displayState, myGroup)  : [];
-  const oppRemaining = oppGroup ? remainingBalls(displayState, oppGroup) : [];
   const isPerMove = room.timeControl.startsWith("pm");
+
+  // ── Neutral top/bottom player layout (works for all roles) ──────────────────
+  // Spectators: host always on top, guest on bottom.
+  // Players:    opponent on top, self on bottom (preserving existing feel).
+  const topIsHost  = isSpectator || isGuest; // host on top for spectator/guest view
+  const topName    = topIsHost ? room.hostName    : room.guestName;
+  const topImage   = topIsHost ? room.hostImage   : room.guestImage;
+  const topGroup   = topIsHost ? room.hostGroup   : room.guestGroup;
+  const topRole    = topIsHost ? "host" : "guest" as "host" | "guest";
+  const topTimeMs  = topIsHost ? liveHostMs       : liveGuestMs;
+  const topElo     = topIsHost ? room.hostElo     : room.guestElo;
+  const topRank    = topElo    ? getRank(topElo)  : null;
+  const topRemaining = topGroup ? remainingBalls(displayState, topGroup) : [];
+  const topIsActiveTurn = room.currentTurn === topRole;
+
+  const btmIsGuest = isSpectator || isHost; // guest on bottom for spectator/host view
+  const btmName    = btmIsGuest ? room.guestName  : room.hostName;
+  const btmImage   = btmIsGuest ? room.guestImage : room.hostImage;
+  const btmGroup   = btmIsGuest ? room.guestGroup : room.hostGroup;
+  const btmRole    = btmIsGuest ? "guest" : "host" as "host" | "guest";
+  const btmTimeMs  = btmIsGuest ? liveGuestMs     : liveHostMs;
+  const btmElo     = btmIsGuest ? room.guestElo   : room.hostElo;
+  const btmRank    = btmElo    ? getRank(btmElo)  : null;
+  const btmRemaining = btmGroup ? remainingBalls(displayState, btmGroup) : [];
+  const btmIsActiveTurn = room.currentTurn === btmRole;
 
   const roomUrl = typeof window !== "undefined" ? window.location.href : "";
   async function handleCopy() {
@@ -896,35 +910,35 @@ export default function BilliardsOnlineRoom() {
   }
 
   // ── PLAYING ──────────────────────────────────────────────────────────────────
-  const opponentAnimating = animBalls !== null && !isMyTurn;
+  const topAnimating = animBalls !== null && topIsActiveTurn;
   return (
     <main className="overflow-y-auto xl:overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
       <div className="flex flex-col xl:flex-row gap-3 p-3 xl:h-full items-center justify-center">
 
         {/* Table column */}
         <div className="flex flex-col items-center gap-2 shrink-0 w-full xl:w-auto">
-          {/* Opponent row */}
+          {/* Top player row */}
           <div className="flex items-center justify-between w-full px-1">
             <div className="flex items-center gap-2 min-w-0">
-              {(isHost ? room.guestImage : room.hostImage)
-                ? <Image src={(isHost ? room.guestImage : room.hostImage)!} alt="" width={28} height={28} className="rounded-full shrink-0" />
-                : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0">{oppName?.[0] ?? "?"}</div>}
-              <span className="text-sm font-display font-semibold text-[var(--text-secondary)] truncate">{oppName ?? "Opponent"}</span>
-              {oppRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${oppRank.color}22`, color: oppRank.color }}>{oppRank.label}</span>}
-              {oppGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{oppGroup} ({oppRemaining.length})</span>}
-              {opponentAnimating && <span className="text-xs text-blue-400 animate-pulse font-bold shrink-0">● shooting…</span>}
+              {topImage
+                ? <Image src={topImage} alt="" width={28} height={28} className="rounded-full shrink-0" />
+                : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0">{topName?.[0] ?? "?"}</div>}
+              <span className="text-sm font-display font-semibold text-[var(--text-secondary)] truncate">{topName ?? "Opponent"}</span>
+              {topRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${topRank.color}22`, color: topRank.color }}>{topRank.label}</span>}
+              {topGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{topGroup} ({topRemaining.length})</span>}
+              {topAnimating && <span className="text-xs text-blue-400 animate-pulse font-bold shrink-0">● shooting…</span>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {room.timeControl !== "none" && (
                 <span className={["font-mono text-sm font-bold tabular-nums",
-                  room.currentTurn !== room.myRole ? (isPerMove && (oppTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
-                ].join(" ")}>{fmtMs(oppTimeMs)}</span>
+                  topIsActiveTurn ? (isPerMove && (topTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
+                ].join(" ")}>{fmtMs(topTimeMs)}</span>
               )}
-              {room.currentTurn !== room.myRole && !opponentAnimating && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
+              {topIsActiveTurn && !topAnimating && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
             </div>
           </div>
-          {/* Opponent shot result viewing window */}
-          {viewingOpponentResult && (
+          {/* Opponent shot result banner (players only) */}
+          {isPlayer && viewingOpponentResult && (
             <div className="flex items-center justify-center gap-2 w-full px-1 py-1 rounded-lg bg-blue-500/10 border border-blue-500/25">
               <span className="text-[0.7rem] text-blue-300 font-bold">Opponent shot — your turn in a moment…</span>
             </div>
@@ -945,19 +959,27 @@ export default function BilliardsOnlineRoom() {
               ref={cueCanvasRef}
               style={{ position: "absolute", left: -OVER * scale, top: -OVER * scale, width: (TABLE_W + 2 * (CANVAS_PAD + OVER)) * scale, height: (TABLE_H + 2 * (CANVAS_PAD + OVER)) * scale, pointerEvents: "none", zIndex: 50 }}
             />
-            {myGroup && (
+            {topGroup && isSpectator && (
+              <div style={{ position: "absolute", top: 6, left: 6, zIndex: 45, pointerEvents: "none" }}>
+                <GroupBadge group={topGroup} remainingIds={topRemaining} scale={scale} />
+              </div>
+            )}
+            {btmGroup && (
               <div style={{ position: "absolute", top: 6, right: 6, zIndex: 45, pointerEvents: "none" }}>
-                <GroupBadge group={myGroup} remainingIds={myRemaining} scale={scale} />
+                <GroupBadge group={btmGroup} remainingIds={btmRemaining} scale={scale} />
               </div>
             )}
           </div>
 
-          {/* My row */}
+          {/* Bottom player row */}
           <div className="flex items-center justify-between w-full px-1">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{myName ?? "You"}</span>
-              {myRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${myRank.color}22`, color: myRank.color }}>{myRank.label}</span>}
-              {myGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{myGroup} ({myRemaining.length})</span>}
+              {btmImage
+                ? <Image src={btmImage} alt="" width={28} height={28} className="rounded-full shrink-0" />
+                : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs shrink-0">{btmName?.[0] ?? "?"}</div>}
+              <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{btmName ?? (isPlayer ? "You" : "Guest")}</span>
+              {btmRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${btmRank.color}22`, color: btmRank.color }}>{btmRank.label}</span>}
+              {btmGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{btmGroup} ({btmRemaining.length})</span>}
               {isMyTurnNow && displayState.phase === "cue_in_hand" && !cueHandPos && power === 0 && (
                 <span className="text-xs text-yellow-400 font-bold shrink-0">Place cue ball</span>
               )}
@@ -970,10 +992,11 @@ export default function BilliardsOnlineRoom() {
             <div className="flex items-center gap-2 shrink-0">
               {room.timeControl !== "none" && (
                 <span className={["font-mono text-sm font-bold tabular-nums",
-                  isMyTurn ? (isPerMove && (myTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
-                ].join(" ")}>{fmtMs(myTimeMs)}</span>
+                  btmIsActiveTurn ? (isPerMove && (btmTimeMs ?? 99999) < 10000 ? "text-red-400" : "text-[var(--accent-orange)]") : "text-[var(--text-muted)]"
+                ].join(" ")}>{fmtMs(btmTimeMs)}</span>
               )}
               {isMyTurnNow && power === 0 && <span className="text-xs text-green-400 font-bold">● Your turn</span>}
+              {btmIsActiveTurn && !isMyTurnNow && animBalls === null && isSpectator && <span className="text-xs text-[var(--accent-orange)] font-bold animate-pulse">●</span>}
               {submitting && <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />}
             </div>
           </div>

@@ -399,6 +399,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       if (!audioCtxRef.current) {
         // No screen audio was captured — create mixer and publish its output
         const ctx  = new AudioContext({ sampleRate: 48_000 });
+        if (ctx.state !== "running") await ctx.resume();
         audioCtxRef.current = ctx;
         const dest = ctx.createMediaStreamDestination();
         mixerDestRef.current  = dest;
@@ -438,6 +439,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     screenAudioRawTrackRef.current = rawTrack;
 
     const ctx  = new AudioContext({ sampleRate: 48_000 });
+    // Ensure the context is running — it can be "suspended" if the browser
+    // didn't consider this execution path a direct response to a user gesture.
+    if (ctx.state !== "running") await ctx.resume();
     audioCtxRef.current = ctx;
     const dest = ctx.createMediaStreamDestination();
     mixerDestRef.current  = dest;

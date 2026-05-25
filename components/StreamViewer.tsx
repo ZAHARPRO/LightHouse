@@ -54,6 +54,7 @@ export default function StreamViewer({ streamId }: Props) {
   const [showControls, setShowControls]   = useState(true);
   const [reconnecting, setReconnecting]   = useState(false);
   const [hasFinePointer, setHasFinePointer] = useState(true);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: fine)");
@@ -148,8 +149,10 @@ export default function StreamViewer({ streamId }: Props) {
         ms.addTrack(track.mediaStreamTrack);
         el.srcObject = ms;
       }
-      // Nudge playback in case autoplay was deferred
-      el.play().catch(() => {});
+      el.play().catch(() => {
+        // Browser blocked autoplay — show the user a button to unlock audio
+        setAudioBlocked(true);
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
@@ -284,7 +287,16 @@ export default function StreamViewer({ streamId }: Props) {
     }
   }
 
+  function unlockAudio() {
+    const el = audioRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.volume = volume;
+    el.play().then(() => setAudioBlocked(false)).catch(() => {});
+  }
+
   function toggleMute() {
+    if (audioBlocked) { unlockAudio(); return; }
     if (muted) { setMuted(false); setVolume(prevVolume || 1); }
     else { setPrevVolume(volume); setMuted(true); }
   }
@@ -374,6 +386,18 @@ export default function StreamViewer({ streamId }: Props) {
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
           </div>
+        )}
+
+        {audioBlocked && isLive && (
+          <button
+            onClick={unlockAudio}
+            className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 px-5 py-3 rounded-[12px] bg-black/80 border border-white/20 text-white font-display font-semibold text-sm backdrop-blur-sm">
+              <Volume2 size={18} />
+              Click to enable audio
+            </div>
+          </button>
         )}
 
         {showQuality && (

@@ -154,9 +154,6 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   sessionIdRef.current         = session?.user?.id;
 
   const isHost = activeLobby?.host.id === session?.user?.id;
-  // Ref so applyLobbySync (useCallback with [] deps) always sees fresh isHost value
-  const isHostRef = useRef(false);
-  isHostRef.current = isHost;
 
   const {
     track, isPlaying, positionMs, playerReady,
@@ -350,6 +347,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
         const d = JSON.parse(e.data as string) as Partial<ActiveLobby> & { closed?: boolean };
         if (d.closed) {
           es.close();
+          syncedTrackRef.current = null;
           music.pause(); music.setActiveLobbyId(null);
           setActiveLobby(null); setView("lobbies");
           return;
@@ -404,13 +402,16 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const prevTrackIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeLobby || !track) return;
-    if (inLobbyApplyRef.current) return;
     if (track.videoId === prevTrackIdRef.current) return;
+    // Always update the ref and clear the incoming marker so they stay accurate even
+    // when inLobbyApplyRef is true (a stale incomingSyncTrackRef would silently block
+    // the next time the non-host manually skips to that same track ID)
     prevTrackIdRef.current = track.videoId;
     if (incomingSyncTrackRef.current === track.videoId) {
       incomingSyncTrackRef.current = null;
       return; // track was applied from incoming SSE — don't echo back
     }
+    if (inLobbyApplyRef.current) return;
     // Mark the current queue as already-synced so the queue effect doesn't fire a second
     // hostSync in the same render cycle (e.g. after auto-advance) with stale isPlaying=false
     incomingSyncQueueRef.current = JSON.stringify(activeQueue);
@@ -422,14 +423,15 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   const prevQueueRef = useRef<string>("");
   useEffect(() => {
     if (!activeLobby || !track) return;
-    if (inLobbyApplyRef.current) return;
     const serialized = JSON.stringify(activeQueue);
     if (serialized === prevQueueRef.current) return;
+    // Always update prevQueueRef and clear the incoming marker before any early returns
     prevQueueRef.current = serialized;
     if (incomingSyncQueueRef.current === serialized) {
       incomingSyncQueueRef.current = null;
       return; // queue was applied from incoming SSE — don't echo back
     }
+    if (inLobbyApplyRef.current) return;
     hostSync(track, music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0, isPlaying, activeQueue);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeQueue]);
@@ -557,13 +559,13 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   function playTrack(item: YTItem) {
     setSearchOpen(false); setSearchQ("");
     music.playNow(item);
-    if (activeLobby) hostSync(item, 0, true);
+    if (activeLobby) hostSync(item, 0, true, activeQueue);
   }
 
   function startPlaylist(pl: Playlist) {
     if (!pl.tracks.length) return;
     music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks });
-    if (activeLobby) hostSync(pl.tracks[0], 0, true);
+    if (activeLobby) hostSync(pl.tracks[0], 0, true, pl.tracks.slice(1));
   }
 
   function copyLink(id: string) {
@@ -629,8 +631,21 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
     setView("lobby"); setLobbyTab("player");
     // Mark this lobby as synced so the playerReady effect doesn't fire a duplicate load
     lastReadySyncLobbyRef.current = id;
-    // Apply current track immediately so guest doesn't wait for first SSE event
-    applyLobbySync(d);
+    if (!d.trackUri && track) {
+      // Lobby is empty but we have a local track — push our state to the server so guests sync
+      const pos = music.playerRef.current ? Math.floor(music.playerRef.current.getCurrentTime() * 1000) : 0;
+      fetch(`/api/music-lobbies/${id}/sync`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackUri: track.videoId, trackName: track.title, trackArtist: track.channel,
+          trackImage: track.thumbnail, positionMs: pos, isPlaying: isPlaying,
+          queue: activeQueue, sourceId: session?.user?.id,
+        }),
+      }).catch(() => {});
+    } else {
+      // Apply current track immediately so guest doesn't wait for first SSE event
+      applyLobbySync(d);
+    }
   }
 
   async function createLobby() {
@@ -665,6 +680,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
   async function leaveLobby() {
     if (!activeLobby) return;
     await fetch(`/api/music-lobbies/${activeLobby.id}`, { method: "DELETE" }).catch(() => {});
+    syncedTrackRef.current = null;
     music.setActiveLobbyId(null); music.pause();
     setActiveLobby(null);
     music.clearQueue();
@@ -1472,7 +1488,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                             <span className="text-xs font-display font-semibold text-[var(--text-primary)] truncate">Favorites</span>
                             <span className="text-[0.55rem] text-[var(--text-muted)] shrink-0">{favTracks.length}</span>
                           </button>
-                          <button onClick={() => { music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks }); if (activeLobby) hostSync(favTracks[0], 0, true); }}
+                          <button onClick={() => { music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks }); if (activeLobby) hostSync(favTracks[0], 0, true, favTracks.slice(1)); }}
                             className={["shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.58rem] font-bold transition-colors",
                               activePlId === "__fav__" ? "bg-red-500 text-white" : "bg-red-500/15 text-red-400 hover:bg-red-500/25"].join(" ")}>
                             <Play size={7} />{activePlId === "__fav__" ? "Playing" : "Play all"}
@@ -1495,7 +1511,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                                     className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Plus size={9} /></button>
                                   <button onClick={() => {
                                     music.playPlaylist({ id: "__fav__", name: "Favorites", tracks: favTracks.slice(i) });
-                                    if (activeLobby) hostSync(t, 0, true);
+                                    if (activeLobby) hostSync(t, 0, true, favTracks.slice(i + 1));
                                   }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
                                 </div>
                               </div>
@@ -1551,7 +1567,7 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
                                       className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Plus size={9} /></button>
                                     <button onClick={() => {
                                       music.playPlaylist({ id: pl.id, name: pl.name, tracks: pl.tracks.slice(i) });
-                                      if (activeLobby) hostSync(t, 0, true);
+                                      if (activeLobby) hostSync(t, 0, true, pl.tracks.slice(i + 1));
                                     }} className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><Play size={9} /></button>
                                     <button onClick={() => removeFromPlaylist(pl.id, t.videoId)}
                                       className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5"><X size={9} /></button>

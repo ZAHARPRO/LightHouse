@@ -105,8 +105,6 @@ interface AudioSource {
   sourceNode: MediaStreamAudioSourceNode | null;
   gainNode: GainNode | null;
   muted: boolean;
-  /** True = published directly to LiveKit, not routed through Web Audio mixer */
-  direct: boolean;
 }
 
 async function resizeImage(file: File): Promise<string> {
@@ -181,7 +179,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const pauseRawTrackRef         = useRef<MediaStreamTrack | null>(null);
   const pauseEndTimeRef          = useRef<number>(0);
   const resumeFromPauseRef       = useRef<(() => Promise<void>) | null>(null);
-  const isInMixerModeRef         = useRef(false);
 
   const [status,            setStatus]           = useState<Status>("idle");
   const [error,             setError]            = useState<string | null>(null);
@@ -284,15 +281,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
     // Restore audio
     audioSourcesRef.current.forEach(src => {
-      if (src.direct) {
-        src.rawStream.getAudioTracks().forEach(t => { t.enabled = !src.muted; });
-      } else {
-        src.gainNode!.gain.value = src.muted ? 0 : 1;
-      }
+      src.gainNode!.gain.value = src.muted ? 0 : 1;
     });
-    if (!isInMixerModeRef.current && screenAudioLiveTrackRef.current) {
-      await screenAudioLiveTrackRef.current.unmute().catch(() => {});
-    }
     if (micLiveTrackRef.current && !micMuted) {
       await micLiveTrackRef.current.unmute().catch(() => {});
     }
@@ -338,15 +328,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
     // Silence all stream audio
     audioSourcesRef.current.forEach(src => {
-      if (src.direct) {
-        src.rawStream.getAudioTracks().forEach(t => { t.enabled = false; });
-      } else {
-        src.gainNode!.gain.value = 0;
-      }
+      src.gainNode!.gain.value = 0;
     });
-    if (!isInMixerModeRef.current && screenAudioLiveTrackRef.current) {
-      await screenAudioLiveTrackRef.current.mute().catch(() => {});
-    }
     if (micLiveTrackRef.current) await micLiveTrackRef.current.mute().catch(() => {});
 
     setIsPaused(true);
@@ -372,7 +355,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     gainNode.gain.value = 1;
     sourceNode.connect(gainNode);
     gainNode.connect(dest);
-    const src: AudioSource = { id, label, rawStream, sourceNode, gainNode, muted: false, direct: false };
+    const src: AudioSource = { id, label, rawStream, sourceNode, gainNode, muted: false };
     audioSourcesRef.current = [...audioSourcesRef.current, src];
     setAudioSources(audioSourcesRef.current);
   }, []);
@@ -380,31 +363,18 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const removeFromMixer = useCallback((id: string) => {
     const src = audioSourcesRef.current.find(s => s.id === id);
     if (!src) return;
-    if (!src.direct) {
-      try { src.gainNode?.disconnect();   } catch {}
-      try { src.sourceNode?.disconnect(); } catch {}
-    }
+    try { src.gainNode?.disconnect();   } catch {}
+    try { src.sourceNode?.disconnect(); } catch {}
     src.rawStream.getTracks().forEach(t => t.stop());
     audioSourcesRef.current = audioSourcesRef.current.filter(s => s.id !== id);
     setAudioSources([...audioSourcesRef.current]);
   }, []);
 
-  const toggleSourceMute = useCallback(async (id: string) => {
+  const toggleSourceMute = useCallback((id: string) => {
     const src = audioSourcesRef.current.find(s => s.id === id);
     if (!src) return;
     const newMuted = !src.muted;
-    if (src.direct) {
-      // Direct mode — toggle the raw track and LiveKit mute
-      src.rawStream.getAudioTracks().forEach(t => { t.enabled = !newMuted; });
-      if (screenAudioLiveTrackRef.current) {
-        await (newMuted
-          ? screenAudioLiveTrackRef.current.mute()
-          : screenAudioLiveTrackRef.current.unmute()
-        ).catch(() => {});
-      }
-    } else {
-      src.gainNode!.gain.value = newMuted ? 0 : 1;
-    }
+    src.gainNode!.gain.value = newMuted ? 0 : 1;
     audioSourcesRef.current = audioSourcesRef.current.map(s =>
       s.id === id ? { ...s, muted: newMuted } : s
     );
@@ -426,41 +396,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const id    = crypto.randomUUID();
       const label = audioTrack.label.replace(/^(audio for |system audio[: -]+)/i, "").trim() || "Tab Audio";
 
-      if (!isInMixerModeRef.current) {
-        // First extra source: migrate from direct → mixer mode
-        const ctx  = new AudioContext({ sampleRate: 48_000 });
-        audioCtxRef.current = ctx;
-        const dest = ctx.createMediaStreamDestination();
-        mixerDestRef.current  = dest;
-        mixedTrackRef.current = dest.stream.getAudioTracks()[0];
-
-        // Promote existing direct screen source into the mixer
-        const screenSrc = audioSourcesRef.current.find(s => s.id === "screen" && s.direct);
-        audioSourcesRef.current = audioSourcesRef.current.filter(s => !(s.id === "screen" && s.direct));
-        if (screenSrc) addToMixer("screen", "Screen Audio", screenSrc.rawStream);
-
-        // Add the new tab source
-        addToMixer(id, label, new MediaStream([audioTrack]));
-
-        // Replace the direct LiveKit track with mixer output
-        if (screenAudioLiveTrackRef.current && roomRef.current) {
-          await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
-        }
-        if (roomRef.current && mixedTrackRef.current) {
-          const mixerLiveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
-          screenAudioLiveTrackRef.current = mixerLiveTrack;
-          await roomRef.current.localParticipant.publishTrack(mixerLiveTrack, {
-            source: Track.Source.ScreenShareAudio,
-            audioPreset: { maxBitrate: 510_000 },
-            dtx: false,
-            forceStereo: true,
-            red: true,
-          });
-        }
-        isInMixerModeRef.current = true;
-        setNoScreenAudio(false);
-      } else if (!audioCtxRef.current) {
-        // Mixer mode but no audio context yet (no screen audio was captured)
+      if (!audioCtxRef.current) {
+        // No screen audio was captured — create mixer and publish its output
         const ctx  = new AudioContext({ sampleRate: 48_000 });
         audioCtxRef.current = ctx;
         const dest = ctx.createMediaStreamDestination();
@@ -480,6 +417,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           setNoScreenAudio(false);
         }
       } else {
+        // Mixer already running — just plug this source in
         addToMixer(id, label, new MediaStream([audioTrack]));
       }
 
@@ -491,14 +429,21 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     }
   }, [addToMixer, removeFromMixer]);
 
-  // Helper: publish screen audio directly — zero Web Audio processing.
-  // Mixer is only created on demand when the user adds a second tab source.
+  // Route screen audio through the Web Audio mixer at 48 kHz.
+  // The mixer destination always outputs stereo PCM, making forceStereo safe,
+  // and the 48 kHz AudioContext prevents resampling artifacts.
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
     await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
-
     screenAudioRawTrackRef.current = rawTrack;
-    const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
+
+    const ctx  = new AudioContext({ sampleRate: 48_000 });
+    audioCtxRef.current = ctx;
+    const dest = ctx.createMediaStreamDestination();
+    mixerDestRef.current  = dest;
+    mixedTrackRef.current = dest.stream.getAudioTracks()[0];
+
+    const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
@@ -508,17 +453,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       red: true,
     });
 
-    // Register as direct source for UI (no Web Audio nodes)
-    const src: AudioSource = {
-      id: "screen", label: "Screen Audio",
-      rawStream: new MediaStream([rawTrack]),
-      sourceNode: null, gainNode: null,
-      muted: false, direct: true,
-    };
-    audioSourcesRef.current = [...audioSourcesRef.current.filter(s => s.id !== "screen"), src];
-    setAudioSources(audioSourcesRef.current);
-    isInMixerModeRef.current = false;
-  }, []);
+    addToMixer("screen", "Screen Audio", new MediaStream([rawTrack]));
+  }, [addToMixer]);
 
   // Helper: publish mic track and store refs
   const publishMic = useCallback(async () => {
@@ -754,7 +690,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     mixerDestRef.current  = null;
     audioCtxRef.current?.close().catch(() => {});
     audioCtxRef.current = null;
-    isInMixerModeRef.current = false;
     screenAudioRawTrackRef.current = null;
     screenAudioLiveTrackRef.current = null;
 
@@ -864,24 +799,18 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       // Handle new screen audio
       const newScreenAudioTracks = displayStream.getAudioTracks();
       if (newScreenAudioTracks.length > 0) {
-        if (isInMixerModeRef.current) {
+        if (audioCtxRef.current) {
           // Mixer running — hot-swap screen source, no LiveKit republish needed
           removeFromMixer("screen");
           addToMixer("screen", "Screen Audio", new MediaStream([newScreenAudioTracks[0]]));
         } else {
-          // Direct mode — unpublish old direct track then publish new one directly
-          if (screenAudioLiveTrackRef.current && roomRef.current) {
-            await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
-            screenAudioLiveTrackRef.current = null;
-          }
-          screenAudioRawTrackRef.current?.stop();
-          screenAudioRawTrackRef.current = null;
+          // No mixer yet — publish fresh (creates mixer)
           await publishScreenAudio(newScreenAudioTracks[0]);
         }
         setNoScreenAudio(false);
       } else {
         // New capture has no audio
-        if (isInMixerModeRef.current) {
+        if (audioCtxRef.current) {
           removeFromMixer("screen");
         } else {
           if (screenAudioLiveTrackRef.current && roomRef.current) {
@@ -973,9 +902,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     if (!showPreview || status !== "live" || !el) return;
 
     const tracks: MediaStreamTrack[] = [];
-    // In direct mode mixedTrackRef is null — use the raw screen audio track instead
-    const screenAudioTrack = mixedTrackRef.current ?? screenAudioRawTrackRef.current;
-    if (screenAudioTrack?.readyState === "live") tracks.push(screenAudioTrack);
+    if (mixedTrackRef.current?.readyState === "live") tracks.push(mixedTrackRef.current);
     if (micRawTrackRef.current?.readyState === "live") tracks.push(micRawTrackRef.current);
 
     if (tracks.length === 0) return;
@@ -1333,7 +1260,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
             <span className="text-[0.75rem] font-display font-semibold text-[var(--text-secondary)] shrink-0">Viewer Preview</span>
 
             <div className="flex items-end gap-3 flex-1">
-              <AudioLevelBar track={mixedTrackRef.current ?? screenAudioRawTrackRef.current} label="Stream" />
+              <AudioLevelBar track={mixedTrackRef.current} label="Stream" />
               <AudioLevelBar track={micRawTrackRef.current} label="Mic" />
             </div>
 

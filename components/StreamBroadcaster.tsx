@@ -21,7 +21,7 @@ function AudioLevelBar({ track, label }: { track: MediaStreamTrack | null; label
     let ctx: AudioContext | undefined;
     let raf = 0;
     try {
-      ctx = new AudioContext();
+      ctx = new AudioContext({ sampleRate: 48_000 });
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
@@ -396,7 +396,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       if (!audioCtxRef.current) {
         // No mixer yet (stream started without screen audio) — create + publish now
-        const ctx  = new AudioContext();
+        const ctx  = new AudioContext({ sampleRate: 48_000 });
         audioCtxRef.current = ctx;
         const dest = ctx.createMediaStreamDestination();
         mixerDestRef.current  = dest;
@@ -407,7 +407,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           screenAudioLiveTrackRef.current = liveTrack;
           await roomRef.current.localParticipant.publishTrack(liveTrack, {
             source: Track.Source.ScreenShareAudio,
-            audioPreset: { maxBitrate: 256_000 },
+            audioPreset: { maxBitrate: 320_000 },
             dtx: false,
             forceStereo: true,
             red: true,
@@ -433,7 +433,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
 
     // Route through Web Audio mixer so additional tab sources can be added/muted later
-    const ctx  = new AudioContext();
+    const ctx  = new AudioContext({ sampleRate: 48_000 });
     audioCtxRef.current = ctx;
     const dest = ctx.createMediaStreamDestination();
     mixerDestRef.current  = dest;
@@ -445,7 +445,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     screenAudioLiveTrackRef.current = liveTrack;
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
-      audioPreset: { maxBitrate: 256_000 },
+      audioPreset: { maxBitrate: 320_000 },
       dtx: false,
       forceStereo: true,
       red: true,
@@ -464,7 +464,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       micLiveTrackRef.current = liveTrack;
       await roomRef.current.localParticipant.publishTrack(liveTrack, {
         source: Track.Source.Microphone,
-        audioPreset: { maxBitrate: 128_000 },
+        audioPreset: { maxBitrate: 256_000 },
         dtx: true,
         forceStereo: true,
         red: true,    // FEC: recovers lost packets
@@ -611,7 +611,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           micLiveTrackRef.current = micLive;
           await roomRef.current.localParticipant.publishTrack(micLive, {
             source: Track.Source.Microphone,
-            audioPreset: { maxBitrate: 128_000 },
+            audioPreset: { maxBitrate: 256_000 },
             dtx: true,
             forceStereo: true,
             red: true,

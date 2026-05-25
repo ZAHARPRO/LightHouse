@@ -6,7 +6,8 @@ import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
   Mic, MicOff, MousePointer, Mouse, ImagePlus, X,
-  Volume2, VolumeX, RefreshCw, Gamepad2, Info,
+  Volume2, VolumeX, RefreshCw, Gamepad2, Info, Plus,
+  Pause, Play, Timer,
 } from "lucide-react";
 
 type Status = "idle" | "connecting" | "live" | "error";
@@ -55,12 +56,56 @@ function AudioLevelBar({ track, label }: { track: MediaStreamTrack | null; label
   );
 }
 
+function drawPauseFrame(canvas: HTMLCanvasElement, secondsLeft: number) {
+  const ctx = canvas.getContext("2d")!;
+  const { width: w, height: h } = canvas;
+
+  ctx.fillStyle = "#0c0c0c";
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle radial glow
+  const glow = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.55);
+  glow.addColorStop(0, "rgba(249,115,22,0.10)");
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Main label
+  ctx.fillStyle = "#f97316";
+  ctx.font = `bold ${Math.round(w * 0.065)}px system-ui, sans-serif`;
+  ctx.fillText("Be Right Back", w / 2, h / 2 - h * 0.09);
+
+  // Countdown
+  const mins = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `${Math.round(w * 0.055)}px ui-monospace, monospace`;
+  ctx.fillText(`${mins}:${String(secs).padStart(2, "0")}`, w / 2, h / 2 + h * 0.04);
+
+  // Subtitle
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.font = `${Math.round(w * 0.022)}px system-ui, sans-serif`;
+  ctx.fillText("Stream will resume automatically", w / 2, h / 2 + h * 0.15);
+}
+
 interface Props {
   existingStreamId?: string;
   onStreamChange?: (streamId: string | null) => void;
 }
 
 type VideoConstraintsExt = MediaTrackConstraints & { cursor?: "always" | "never" | "motion" };
+
+interface AudioSource {
+  id: string;
+  label: string;
+  rawStream: MediaStream;
+  sourceNode: MediaStreamAudioSourceNode;
+  gainNode: GainNode;
+  muted: boolean;
+}
 
 async function resizeImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -124,6 +169,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   // Cleanup fn that removes the "ended" listener from the current raw video track
   const videoEndedCleanupRef     = useRef<(() => void) | null>(null);
   const previewAudioRef          = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef              = useRef<AudioContext | null>(null);
+  const mixerDestRef             = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const mixedTrackRef            = useRef<MediaStreamTrack | null>(null);
+  const audioSourcesRef          = useRef<AudioSource[]>([]);
+  const pauseTimerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pauseCanvasRef           = useRef<HTMLCanvasElement | null>(null);
+  const pauseTrackRef            = useRef<LocalVideoTrack | null>(null);
+  const pauseRawTrackRef         = useRef<MediaStreamTrack | null>(null);
+  const pauseEndTimeRef          = useRef<number>(0);
+  const resumeFromPauseRef       = useRef<(() => Promise<void>) | null>(null);
 
   const [status,            setStatus]           = useState<Status>("idle");
   const [error,             setError]            = useState<string | null>(null);
@@ -145,6 +200,12 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [isReconnecting,    setIsReconnecting]   = useState(false);
   const [poorConnection,    setPoorConnection]   = useState(false);
   const [noScreenAudio,     setNoScreenAudio]    = useState(false);
+  const [audioSources,      setAudioSources]     = useState<AudioSource[]>([]);
+  const [addingTab,         setAddingTab]        = useState(false);
+  const [isPaused,          setIsPaused]         = useState(false);
+  const [pauseSecondsLeft,  setPauseSecondsLeft] = useState(0);
+  const [showPauseMenu,     setShowPauseMenu]    = useState(false);
+  const pauseMenuRef                             = useRef<HTMLDivElement>(null);
 
   // Attach/detach track to inline preview
   useEffect(() => {
@@ -173,27 +234,223 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setViewerCount(room.remoteParticipants.size);
   }, []);
 
+  // Close pause-duration menu on outside click
+  useEffect(() => {
+    if (!showPauseMenu) return;
+    function onDown(e: MouseEvent) {
+      if (!pauseMenuRef.current?.contains(e.target as Node)) setShowPauseMenu(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showPauseMenu]);
+
+  // ── Pause / resume helpers ──────────────────────────────────────────────────
+
+  const resumeFromPause = useCallback(async () => {
+    if (pauseTimerRef.current) {
+      clearInterval(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+
+    // Unpublish BRB canvas track
+    if (pauseTrackRef.current && roomRef.current) {
+      if (videoRef.current) pauseTrackRef.current.detach(videoRef.current);
+      await roomRef.current.localParticipant.unpublishTrack(pauseTrackRef.current);
+    }
+    pauseRawTrackRef.current?.stop();
+    pauseRawTrackRef.current = null;
+    pauseTrackRef.current    = null;
+    pauseCanvasRef.current   = null;
+
+    // Republish original screen track
+    if (screenTrackRef.current && roomRef.current) {
+      const captureFps = gameMode ? 30 : 24;
+      const maxBitrate = gameMode ? 4_000_000 : 2_500_000;
+      await roomRef.current.localParticipant.publishTrack(screenTrackRef.current, {
+        source: Track.Source.ScreenShare,
+        videoCodec: gameMode ? "h264" : "vp9",
+        ...(gameMode
+          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+        ),
+        screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
+      });
+      if (videoRef.current) screenTrackRef.current.attach(videoRef.current);
+      if (showPreview && previewRef.current) screenTrackRef.current.attach(previewRef.current);
+    }
+
+    // Restore audio
+    audioSourcesRef.current.forEach(src => {
+      src.gainNode.gain.value = src.muted ? 0 : 1;
+    });
+    if (micLiveTrackRef.current && !micMuted) {
+      await micLiveTrackRef.current.unmute().catch(() => {});
+    }
+
+    setIsPaused(false);
+    setPauseSecondsLeft(0);
+  }, [gameMode, showPreview, micMuted]);
+
+  useEffect(() => { resumeFromPauseRef.current = resumeFromPause; }, [resumeFromPause]);
+
+  const pauseStream = useCallback(async (durationMinutes: 1 | 3 | 5) => {
+    if (!roomRef.current || !screenTrackRef.current) return;
+    setShowPauseMenu(false);
+
+    const totalSeconds = durationMinutes * 60;
+    pauseEndTimeRef.current = Date.now() + totalSeconds * 1000;
+
+    // Build BRB canvas
+    const canvas = document.createElement("canvas");
+    canvas.width  = 1280;
+    canvas.height = 720;
+    drawPauseFrame(canvas, totalSeconds);
+    pauseCanvasRef.current = canvas;
+
+    // Capture 2fps video from canvas (plenty for a static countdown)
+    const canvasStream    = (canvas as unknown as { captureStream(fps: number): MediaStream }).captureStream(2);
+    const canvasRawTrack  = canvasStream.getVideoTracks()[0];
+    pauseRawTrackRef.current = canvasRawTrack;
+
+    // Swap out the screen track: detach + unpublish (don't stop it)
+    if (videoRef.current) screenTrackRef.current.detach(videoRef.current);
+    await roomRef.current.localParticipant.unpublishTrack(screenTrackRef.current);
+
+    // Publish BRB track
+    const brbLiveTrack = new LocalVideoTrack(canvasRawTrack, undefined, false);
+    pauseTrackRef.current = brbLiveTrack;
+    await roomRef.current.localParticipant.publishTrack(brbLiveTrack, {
+      source: Track.Source.ScreenShare,
+      videoCodec: "vp9",
+      screenShareEncoding: { maxBitrate: 400_000, maxFramerate: 2, priority: "low" },
+    });
+    if (videoRef.current) brbLiveTrack.attach(videoRef.current);
+
+    // Silence all stream audio
+    audioSourcesRef.current.forEach(src => { src.gainNode.gain.value = 0; });
+    if (micLiveTrackRef.current) await micLiveTrackRef.current.mute().catch(() => {});
+
+    setIsPaused(true);
+    setPauseSecondsLeft(totalSeconds);
+
+    // Countdown tick
+    pauseTimerRef.current = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((pauseEndTimeRef.current - Date.now()) / 1000));
+      setPauseSecondsLeft(remaining);
+      if (pauseCanvasRef.current) drawPauseFrame(pauseCanvasRef.current, remaining);
+      if (remaining <= 0) resumeFromPauseRef.current?.();
+    }, 1000);
+  }, []);
+
+  // ── Web Audio mixer helpers ──────────────────────────────────────────────────
+
+  const addToMixer = useCallback((id: string, label: string, rawStream: MediaStream) => {
+    const ctx  = audioCtxRef.current;
+    const dest = mixerDestRef.current;
+    if (!ctx || !dest) return;
+    const sourceNode = ctx.createMediaStreamSource(rawStream);
+    const gainNode   = ctx.createGain();
+    gainNode.gain.value = 1;
+    sourceNode.connect(gainNode);
+    gainNode.connect(dest);
+    const src: AudioSource = { id, label, rawStream, sourceNode, gainNode, muted: false };
+    audioSourcesRef.current = [...audioSourcesRef.current, src];
+    setAudioSources(audioSourcesRef.current);
+  }, []);
+
+  const removeFromMixer = useCallback((id: string) => {
+    const src = audioSourcesRef.current.find(s => s.id === id);
+    if (!src) return;
+    try { src.gainNode.disconnect();   } catch {}
+    try { src.sourceNode.disconnect(); } catch {}
+    src.rawStream.getTracks().forEach(t => t.stop());
+    audioSourcesRef.current = audioSourcesRef.current.filter(s => s.id !== id);
+    setAudioSources([...audioSourcesRef.current]);
+  }, []);
+
+  const toggleSourceMute = useCallback((id: string) => {
+    const src = audioSourcesRef.current.find(s => s.id === id);
+    if (!src) return;
+    const newMuted = !src.muted;
+    src.gainNode.gain.value = newMuted ? 0 : 1;
+    audioSourcesRef.current = audioSourcesRef.current.map(s =>
+      s.id === id ? { ...s, muted: newMuted } : s
+    );
+    setAudioSources([...audioSourcesRef.current]);
+  }, []);
+
+  const addTabAudio = useCallback(async () => {
+    setAddingTab(true);
+    try {
+      // Minimal video required so Chrome shows the tab picker; we discard it immediately
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        video: { width: 1, height: 1 },
+      } as DisplayMediaStreamOptions);
+      stream.getVideoTracks().forEach(t => t.stop());
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack) { stream.getTracks().forEach(t => t.stop()); return; }
+
+      const id    = crypto.randomUUID();
+      const label = audioTrack.label.replace(/^(audio for |system audio[: -]+)/i, "").trim() || "Tab Audio";
+
+      if (!audioCtxRef.current) {
+        // No mixer yet (stream started without screen audio) — create + publish now
+        const ctx  = new AudioContext();
+        audioCtxRef.current = ctx;
+        const dest = ctx.createMediaStreamDestination();
+        mixerDestRef.current  = dest;
+        mixedTrackRef.current = dest.stream.getAudioTracks()[0];
+        addToMixer(id, label, new MediaStream([audioTrack]));
+        if (roomRef.current && mixedTrackRef.current) {
+          const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
+          screenAudioLiveTrackRef.current = liveTrack;
+          await roomRef.current.localParticipant.publishTrack(liveTrack, {
+            source: Track.Source.ScreenShareAudio,
+            audioPreset: { maxBitrate: 256_000 },
+            dtx: false,
+            forceStereo: true,
+            red: true,
+          });
+          setNoScreenAudio(false);
+        }
+      } else {
+        addToMixer(id, label, new MediaStream([audioTrack]));
+      }
+
+      audioTrack.addEventListener("ended", () => removeFromMixer(id));
+    } catch {
+      // user cancelled the picker
+    } finally {
+      setAddingTab(false);
+    }
+  }, [addToMixer, removeFromMixer]);
+
   // Helper: publish screen audio — userProvidedTrack=true prevents LiveKit from
   // re-acquiring the track via getUserMedia (which would re-enable noise suppression)
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
     await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
 
-    // Detect stereo (system audio from OS loopback is usually stereo)
-    const isStereo = (rawTrack.getSettings().channelCount ?? 1) > 1;
+    // Route through Web Audio mixer so additional tab sources can be added/muted later
+    const ctx  = new AudioContext();
+    audioCtxRef.current = ctx;
+    const dest = ctx.createMediaStreamDestination();
+    mixerDestRef.current  = dest;
+    mixedTrackRef.current = dest.stream.getAudioTracks()[0];
 
-    screenAudioRawTrackRef.current = rawTrack;
-    const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
+    addToMixer("screen", "Screen Audio", new MediaStream([rawTrack]));
+
+    const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
-      // High-quality Opus for music/game audio: stereo 192kbps or mono 128kbps
-      audioPreset: { maxBitrate: isStereo ? 256_000 : 192_000 },
-      dtx: false,             // DTX pauses encoding during silence — ruins music, keep off
-      forceStereo: isStereo, // encode as stereo if captured in stereo
-      red: true,        // Redundant Encoding (FEC): recovers lost packets, no audible glitches on packet loss
+      audioPreset: { maxBitrate: 256_000 },
+      dtx: false,
+      forceStereo: true,
+      red: true,
     });
-  }, []);
+  }, [addToMixer]);
 
   // Helper: publish mic track and store refs
   const publishMic = useCallback(async () => {
@@ -394,6 +651,18 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const stopStream = useCallback(async () => {
     setShowPreview(false);
 
+    // Cancel any active pause
+    if (pauseTimerRef.current) {
+      clearInterval(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    pauseRawTrackRef.current?.stop();
+    pauseRawTrackRef.current = null;
+    pauseTrackRef.current    = null;
+    pauseCanvasRef.current   = null;
+    setIsPaused(false);
+    setPauseSecondsLeft(0);
+
     // Remove "ended" listener before stopping the raw track
     videoEndedCleanupRef.current?.();
     videoEndedCleanupRef.current = null;
@@ -404,7 +673,19 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     micRawTrackRef.current?.stop();
     micRawTrackRef.current = null;
     micLiveTrackRef.current = null;
-    screenAudioRawTrackRef.current?.stop();
+
+    // Tear down all audio mixer sources
+    audioSourcesRef.current.forEach(src => {
+      try { src.gainNode.disconnect();   } catch {}
+      try { src.sourceNode.disconnect(); } catch {}
+      src.rawStream.getTracks().forEach(t => t.stop());
+    });
+    audioSourcesRef.current = [];
+    setAudioSources([]);
+    mixedTrackRef.current = null;
+    mixerDestRef.current  = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
     screenAudioRawTrackRef.current = null;
     screenAudioLiveTrackRef.current = null;
 
@@ -514,21 +795,18 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       // Handle new screen audio
       const newScreenAudioTracks = displayStream.getAudioTracks();
       if (newScreenAudioTracks.length > 0) {
-        if (screenAudioLiveTrackRef.current) {
-          await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
-          screenAudioRawTrackRef.current?.stop();
-          screenAudioLiveTrackRef.current = null;
-          screenAudioRawTrackRef.current = null;
+        if (audioCtxRef.current) {
+          // Mixer is already running — hot-swap the screen source, no LiveKit republish needed
+          removeFromMixer("screen");
+          addToMixer("screen", "Screen Audio", new MediaStream([newScreenAudioTracks[0]]));
+        } else {
+          // No mixer yet — initialize and publish
+          await publishScreenAudio(newScreenAudioTracks[0]);
         }
-        await publishScreenAudio(newScreenAudioTracks[0]);
         setNoScreenAudio(false);
       } else {
-        if (screenAudioLiveTrackRef.current) {
-          await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
-          screenAudioRawTrackRef.current?.stop();
-          screenAudioLiveTrackRef.current = null;
-          screenAudioRawTrackRef.current = null;
-        }
+        // New capture has no audio — drop screen source, keep any added tab sources
+        removeFromMixer("screen");
         setNoScreenAudio(true);
       }
 
@@ -544,7 +822,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     } finally {
       setSwitchingScreen(false);
     }
-  }, [captureCursor, gameMode, showPreview, publishScreenAudio, stopStream]);
+  }, [captureCursor, gameMode, showPreview, publishScreenAudio, addToMixer, removeFromMixer, stopStream]);
 
   async function copyLink() {
     const id = streamIdRef.current;
@@ -609,8 +887,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     if (!showPreview || status !== "live" || !el) return;
 
     const tracks: MediaStreamTrack[] = [];
-    if (screenAudioRawTrackRef.current?.readyState === "live") tracks.push(screenAudioRawTrackRef.current);
-    if (micRawTrackRef.current?.readyState === "live")        tracks.push(micRawTrackRef.current);
+    if (mixedTrackRef.current?.readyState === "live") tracks.push(mixedTrackRef.current);
+    if (micRawTrackRef.current?.readyState === "live") tracks.push(micRawTrackRef.current);
 
     if (tracks.length === 0) return;
     el.srcObject = new MediaStream(tracks);
@@ -765,9 +1043,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         )}
 
         {status === "live" && (
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 rounded-[5px] py-[0.2rem] px-2.5 z-10">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
+          <div
+            className="absolute top-3 left-3 flex items-center gap-1.5 rounded-[5px] py-[0.2rem] px-2.5 z-10"
+            style={{ background: isPaused ? "#92400e" : "#dc2626" }}
+          >
+            {isPaused
+              ? <Pause size={9} color="white" />
+              : <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+            <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.06em] uppercase">
+              {isPaused ? "Paused" : "Live"}
+            </span>
           </div>
         )}
 
@@ -846,13 +1131,110 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           {/* Switch capture window */}
           <button
             onClick={switchScreen}
-            disabled={switchingScreen}
+            disabled={switchingScreen || isPaused}
             title="Switch capture window"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)] hover:border-white/15 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw size={13} className={switchingScreen ? "animate-spin" : ""} />
             {switchingScreen ? "Switching…" : "Switch window"}
           </button>
+
+          {/* Pause / Resume */}
+          {isPaused ? (
+            <button
+              onClick={() => resumeFromPauseRef.current?.()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border text-[0.8125rem] font-display font-semibold transition-colors"
+              style={{ borderColor: "rgba(234,179,8,0.4)", background: "rgba(234,179,8,0.08)", color: "#eab308" }}
+            >
+              <Play size={13} />
+              Resume ({Math.floor(pauseSecondsLeft / 60)}:{String(pauseSecondsLeft % 60).padStart(2, "0")})
+            </button>
+          ) : (
+            <div ref={pauseMenuRef} className="relative">
+              <button
+                onClick={() => setShowPauseMenu(v => !v)}
+                title="Pause stream"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] transition-colors hover:text-orange-400 hover:border-orange-500/30"
+              >
+                <Timer size={13} />
+                Pause
+                <ChevronDown size={10} className={`transition-transform duration-150 ${showPauseMenu ? "rotate-180" : ""}`} />
+              </button>
+
+              {showPauseMenu && (
+                <div
+                  className="absolute bottom-[calc(100%+6px)] left-0 bg-[#111]/95 backdrop-blur-sm border border-white/10 rounded-[10px] shadow-xl overflow-hidden z-30"
+                  style={{ animation: "slideDownIn 0.12s ease both" }}
+                >
+                  {([1, 3, 5] as const).map(mins => (
+                    <button
+                      key={mins}
+                      onClick={() => pauseStream(mins)}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 text-[0.8125rem] text-white/80 hover:bg-white/10 transition-colors text-left whitespace-nowrap"
+                    >
+                      <Pause size={12} className="text-orange-400 shrink-0" />
+                      Pause {mins} {mins === 1 ? "minute" : "minutes"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Audio Sources panel ── */}
+      {status === "live" && (
+        <div className="flex flex-col gap-2 px-3 py-2.5 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-[var(--text-muted)]">
+              Audio Sources
+            </span>
+            <button
+              onClick={addTabAudio}
+              disabled={addingTab}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-[5px] border border-[var(--border-subtle)] text-[0.75rem] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-white/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus size={11} />
+              {addingTab ? "Selecting…" : "Add tab audio"}
+            </button>
+          </div>
+
+          {audioSources.length > 0 ? (
+            <div className="flex flex-col gap-0.5">
+              {audioSources.map(src => (
+                <div key={src.id} className="flex items-center gap-2 py-1">
+                  <button
+                    onClick={() => toggleSourceMute(src.id)}
+                    title={src.muted ? "Unmute in stream" : "Mute in stream"}
+                    className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-[5px] border transition-colors ${
+                      src.muted
+                        ? "border-red-500/30 bg-red-500/10 text-red-400"
+                        : "border-emerald-500/30 bg-emerald-500/8 text-emerald-400"
+                    }`}
+                  >
+                    {src.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                  </button>
+                  <span className={`flex-1 text-[0.8125rem] truncate ${src.muted ? "text-[var(--text-muted)] line-through" : "text-[var(--text-secondary)]"}`}>
+                    {src.label}
+                  </span>
+                  {src.id !== "screen" && (
+                    <button
+                      onClick={() => removeFromMixer(src.id)}
+                      title="Remove source"
+                      className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[0.75rem] text-[var(--text-muted)]">
+              No audio sources. Add a browser tab to include its audio in the stream.
+            </p>
+          )}
         </div>
       )}
 
@@ -863,7 +1245,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
             <span className="text-[0.75rem] font-display font-semibold text-[var(--text-secondary)] shrink-0">Viewer Preview</span>
 
             <div className="flex items-end gap-3 flex-1">
-              <AudioLevelBar track={screenAudioRawTrackRef.current} label="Screen" />
+              <AudioLevelBar track={mixedTrackRef.current} label="Stream" />
               <AudioLevelBar track={micRawTrackRef.current} label="Mic" />
             </div>
 

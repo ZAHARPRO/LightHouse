@@ -5,7 +5,7 @@ import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, Track, ConnectionQua
 import {
   Monitor, MonitorOff, Wifi, WifiOff, Loader2,
   ChevronDown, Link2, Check, Eye, EyeOff,
-  Mic, MicOff, MousePointer, Mouse, ImagePlus, X, Clock,
+  Mic, MicOff, MousePointer, Mouse, ImagePlus, X,
   Volume2, VolumeX, RefreshCw, Gamepad2, Info,
 } from "lucide-react";
 
@@ -106,9 +106,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const streamIdRef             = useRef<string | null>(existingStreamId ?? null);
   const dropdownRef             = useRef<HTMLDivElement>(null);
   const heartbeatIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const awayTimeoutRef          = useRef<ReturnType<typeof setTimeout>  | null>(null);
-  const awayTickRef             = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hiddenAtRef             = useRef<number | null>(null);
   const stopStreamRef           = useRef<(() => void) | null>(null);
   const micRawTrackRef           = useRef<MediaStreamTrack | null>(null);
   const micLiveTrackRef          = useRef<LocalAudioTrack | null>(null);
@@ -122,7 +119,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [status,            setStatus]           = useState<Status>("idle");
   const [error,             setError]            = useState<string | null>(null);
   const [viewerCount,       setViewerCount]      = useState(0);
-  const [awaySecondsLeft,   setAwaySecondsLeft]  = useState<number | null>(null);
   const [previewAudioMuted, setPreviewAudioMuted] = useState(false);
   const [previewAudioVol,   setPreviewAudioVol]  = useState(0.7);
   const [streamTitle,       setStreamTitle]      = useState("");
@@ -240,9 +236,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       if (!wsUrl) throw new Error("LiveKit URL not configured");
 
       const room = new Room({
-        adaptiveStream: true,          // viewer auto-adjusts incoming quality to their bandwidth
-        dynacast: true,                // only publish layers that subscribers actually consume
+        adaptiveStream: true,             // viewer auto-adjusts incoming quality to their bandwidth
+        dynacast: true,                   // only publish layers that subscribers actually consume
         stopLocalTrackOnUnpublish: false, // don't stop our tracks when unpublishing during screen switch
+        disconnectOnPageLeave: false,     // keep connection when user tabs to game / another app
       });
       roomRef.current = room;
 
@@ -548,55 +545,29 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   useEffect(() => {
     if (status !== "live") return;
 
-    const TIMEOUT_S = 5 * 60;
+    // Heartbeat runs continuously — including when the user is gaming in another window.
     sendHeartbeat();
     heartbeatIntervalRef.current = setInterval(sendHeartbeat, 25_000);
 
-    function onVisibilityChange() {
-      if (document.hidden) {
-        clearInterval(heartbeatIntervalRef.current!);
-        heartbeatIntervalRef.current = null;
-        hiddenAtRef.current = Date.now();
-
-        let left = TIMEOUT_S;
-        setAwaySecondsLeft(left);
-
-        awayTickRef.current = setInterval(() => {
-          left -= 1;
-          setAwaySecondsLeft(left);
-          if (left <= 0) { clearInterval(awayTickRef.current!); awayTickRef.current = null; }
-        }, 1_000);
-
-        awayTimeoutRef.current = setTimeout(() => {
-          clearInterval(awayTickRef.current!);
-          awayTickRef.current = null;
-          setAwaySecondsLeft(null);
-          stopStream();
-        }, TIMEOUT_S * 1_000);
-      } else {
-        clearTimeout(awayTimeoutRef.current!);
-        clearInterval(awayTickRef.current!);
-        awayTimeoutRef.current = null;
-        awayTickRef.current = null;
-        hiddenAtRef.current = null;
-        setAwaySecondsLeft(null);
-        sendHeartbeat();
-        heartbeatIntervalRef.current = setInterval(sendHeartbeat, 25_000);
-      }
+    // End the stream only when the tab or browser is actually closed (not on alt-tab).
+    // fetch with keepalive:true survives page unload; pagehide fires on tab close and
+    // browser close, unlike beforeunload which is unreliable on mobile.
+    function onPageHide() {
+      const id = streamIdRef.current;
+      if (!id) return;
+      fetch(`/api/streams/${id}`, { method: "PATCH", keepalive: true }).catch(() => {});
     }
 
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide",     onPageHide);
+    window.addEventListener("beforeunload", onPageHide);
+
     return () => {
       clearInterval(heartbeatIntervalRef.current!);
-      clearTimeout(awayTimeoutRef.current!);
-      clearInterval(awayTickRef.current!);
       heartbeatIntervalRef.current = null;
-      awayTimeoutRef.current = null;
-      awayTickRef.current = null;
-      setAwaySecondsLeft(null);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide",     onPageHide);
+      window.removeEventListener("beforeunload", onPageHide);
     };
-  }, [status, sendHeartbeat, stopStream]);
+  }, [status, sendHeartbeat]);
 
   useEffect(() => { return () => { roomRef.current?.disconnect(); }; }, []);
 
@@ -934,20 +905,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         <div className="flex items-center gap-3 px-4 py-3 rounded-[10px] border border-orange-500/30 bg-orange-500/8 text-orange-300">
           <WifiOff size={15} className="shrink-0" />
           <span className="text-[0.8125rem] font-display font-semibold">Poor connection — viewers may see lag</span>
-        </div>
-      )}
-
-      {/* Away warning */}
-      {awaySecondsLeft !== null && status === "live" && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-[10px] border border-amber-500/30 bg-amber-500/8 text-amber-300">
-          <Clock size={15} className="shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[0.8125rem] font-display font-semibold">
-              Tab is inactive — stream ends in{" "}
-              {String(Math.floor(awaySecondsLeft / 60)).padStart(2, "0")}:{String(awaySecondsLeft % 60).padStart(2, "0")}
-            </span>
-            <span className="text-[0.75rem] text-amber-400/70">Return to this tab to keep streaming</span>
-          </div>
         </div>
       )}
 

@@ -128,9 +128,9 @@ async function resizeImage(file: File): Promise<string> {
 }
 
 const SCREEN_VIDEO_OPTS = (captureCursor: boolean, fps: number) => ({
-  frameRate: { ideal: fps, max: fps },
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
+  frameRate: { ideal: fps },
+  width:     { ideal: 1920, max: 2560 },
+  height:    { ideal: 1080, max: 1440 },
   cursor: captureCursor ? "always" : "never",
 } as VideoConstraintsExt);
 
@@ -264,14 +264,14 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
     // Republish original screen track
     if (screenTrackRef.current && roomRef.current) {
-      const captureFps = gameMode ? 30 : 24;
-      const maxBitrate = gameMode ? 4_000_000 : 2_500_000;
+      const captureFps = gameMode ? 60 : 30;
+      const maxBitrate = gameMode ? 8_000_000 : 5_000_000;
       await roomRef.current.localParticipant.publishTrack(screenTrackRef.current, {
         source: Track.Source.ScreenShare,
         videoCodec: gameMode ? "h264" : "vp9",
         ...(gameMode
-          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
-          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+          ? { videoCodecOptions: { h264StartBitrate: 4000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 3000 } }
         ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
@@ -549,8 +549,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       // Game mode vs screen/app mode:
       // Game  → H.264 (hardware encoder: NVENC/QuickSync/AMF) + "motion" hint + 30fps/4Mbps
       // Screen → VP9 (better compression for static content) + "detail" hint + 24fps/2.5Mbps
-      const captureFps   = gameMode ? 30 : 24;
-      const maxBitrate   = gameMode ? 4_000_000 : 2_500_000;
+      const captureFps   = gameMode ? 60 : 30;
+      const maxBitrate   = gameMode ? 8_000_000 : 5_000_000;
       const videoCodec   = gameMode ? "h264" : "vp9";
       const contentHint  = gameMode ? "motion" : "detail";
 
@@ -584,8 +584,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         source: Track.Source.ScreenShare,
         videoCodec,
         ...(gameMode
-          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
-          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+          ? { videoCodecOptions: { h264StartBitrate: 4000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 3000 } }
         ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
@@ -743,8 +743,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     setError(null);
 
     try {
-      const captureFps  = gameMode ? 30 : 24;
-      const maxBitrate  = gameMode ? 4_000_000 : 2_500_000;
+      const captureFps  = gameMode ? 60 : 30;
+      const maxBitrate  = gameMode ? 8_000_000 : 5_000_000;
       const videoCodec  = gameMode ? "h264" : "vp9";
       const contentHint = gameMode ? "motion" : "detail";
 
@@ -784,8 +784,8 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         source: Track.Source.ScreenShare,
         videoCodec,
         ...(gameMode
-          ? { videoCodecOptions: { h264StartBitrate: 2000 } }
-          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 1200 } }
+          ? { videoCodecOptions: { h264StartBitrate: 4000 } }
+          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 3000 } }
         ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });

@@ -92,10 +92,19 @@ const SCREEN_VIDEO_OPTS = (captureCursor: boolean, fps: number) => ({
 // Processing constraints applied AFTER capture — never passed to getDisplayMedia.
 // Passing constraints (esp. sampleRate) directly to getDisplayMedia causes Chrome to
 // silently drop the audio track for whole-screen capture (OS loopback can't satisfy them).
-const SCREEN_AUDIO_APPLY_CONSTRAINTS = {
+const SCREEN_AUDIO_APPLY_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
+};
+
+// Mic constraints: 48kHz mono, processing on (good for voice)
+const MIC_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  sampleRate:   48_000,
+  channelCount: 1,
 };
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
@@ -169,11 +178,20 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
     await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
+
+    // Detect stereo (system audio from OS loopback is usually stereo)
+    const isStereo = (rawTrack.getSettings().channelCount ?? 1) > 1;
+
     screenAudioRawTrackRef.current = rawTrack;
     const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
+      // High-quality Opus for music/game audio: stereo 192kbps or mono 128kbps
+      audioPreset: { maxBitrate: isStereo ? 192_000 : 128_000 },
+      dtx: false,             // DTX pauses encoding during silence — ruins music, keep off
+      forceStereo: isStereo, // encode as stereo if captured in stereo
+      red: true,        // Redundant Encoding (FEC): recovers lost packets, no audible glitches on packet loss
     });
   }, []);
 
@@ -181,7 +199,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const publishMic = useCallback(async () => {
     if (!roomRef.current) return false;
     try {
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS, video: false });
       const rawTrack = micStream.getAudioTracks()[0];
       if (!rawTrack) return false;
       micRawTrackRef.current = rawTrack;
@@ -189,6 +207,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       micLiveTrackRef.current = liveTrack;
       await roomRef.current.localParticipant.publishTrack(liveTrack, {
         source: Track.Source.Microphone,
+        audioPreset: { maxBitrate: 48_000 }, // 48kbps mono Opus — plenty for voice
+        dtx: true,         // DTX ok for voice: pauses encoding during silence, saves bandwidth
+        forceStereo: false,
+        red: true,    // FEC: recovers lost packets
       });
       return true;
     } catch {
@@ -263,7 +285,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       let preMicStream: MediaStream | null = null;
       if (captureAudio) {
         preMicStream = await navigator.mediaDevices
-          .getUserMedia({ audio: true, video: false })
+          .getUserMedia({ audio: MIC_CONSTRAINTS, video: false })
           .catch(() => null);
       }
 
@@ -332,6 +354,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           micLiveTrackRef.current = micLive;
           await roomRef.current.localParticipant.publishTrack(micLive, {
             source: Track.Source.Microphone,
+            audioPreset: { maxBitrate: 48_000 },
+            dtx: true,
+            forceStereo: false,
+            red: true,
           });
           setMicMuted(false);
         }

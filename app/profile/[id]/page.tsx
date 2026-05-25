@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Play, Eye, Clock, Lock, Users, Star, Crown,
   Award, TrendingUp, Zap, ArrowLeft, AlignLeft,
+  Radio, Calendar,
 } from "lucide-react";
 import { getRank } from "@/lib/elo";
 import SubscribeButton from "@/components/SubscribeButton";
@@ -40,6 +41,26 @@ function formatDuration(secs: number) {
   const s = secs % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatStreamDuration(startedAt: Date, endedAt: Date | null): string {
+  if (!endedAt) return "—";
+  const secs = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${secs}s`;
+}
+
+function formatRelativeDate(date: Date): string {
+  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
 }
 
 function formatViews(n: number) {
@@ -98,6 +119,13 @@ export default async function PublicProfilePage({
   const pctToNext  = (((user.points ?? 0) % 100) / 100) * 100;
   const totalViews = user.videos.reduce((sum: number, v: { views: number | null }) => sum + (v.views ?? 0), 0);
   const isViewerStaff = ["ADMIN", "OPERATOR", "STAFF"].includes(session?.user?.role ?? "");
+
+  const pastStreams = await prisma.stream.findMany({
+    where: { adminId: id, isActive: false, endedAt: { not: null } },
+    orderBy: { startedAt: "desc" },
+    take: 6,
+    select: { id: true, title: true, thumbnail: true, startedAt: true, endedAt: true, viewerCount: true },
+  }).catch(() => []);
 
   let isBlockedByMe = false;
   let myTier = "FREE";
@@ -603,6 +631,98 @@ export default async function PublicProfilePage({
           </div>
         )}
       </div>
+
+      {/* ── Past streams ── */}
+      {pastStreams.length > 0 && (
+        <div style={{ marginTop: "2rem" }}>
+          <h2 style={{
+            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem",
+            color: "var(--text-primary)", marginBottom: "1rem",
+            display: "flex", alignItems: "center", gap: "0.5rem",
+          }}>
+            <Radio size={16} color="#f97316" />
+            Past Streams
+          </h2>
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: "1rem",
+          }}>
+            {pastStreams.map((stream) => (
+              <Link key={stream.id} href={`/stream/${stream.id}`} style={{ textDecoration: "none" }}>
+                <div style={{
+                  borderRadius: 12, overflow: "hidden",
+                  background: "var(--bg-card)", border: "1px solid var(--border-subtle)",
+                  transition: "border-color 0.2s",
+                }}>
+                  {/* Thumbnail */}
+                  <div style={{
+                    aspectRatio: "16/9", position: "relative",
+                    background: stream.thumbnail
+                      ? "transparent"
+                      : "linear-gradient(135deg,#1a0a00 0%,rgba(249,115,22,0.18) 100%)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden",
+                  }}>
+                    {stream.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={stream.thumbnail}
+                        alt={stream.title}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <Radio size={28} color="rgba(249,115,22,0.5)" />
+                    )}
+
+                    {/* Duration badge */}
+                    <div style={{
+                      position: "absolute", bottom: 7, right: 7,
+                      background: "rgba(0,0,0,0.72)", borderRadius: 4,
+                      padding: "0.125rem 0.375rem",
+                      display: "flex", alignItems: "center", gap: "0.25rem",
+                    }}>
+                      <Clock size={10} color="#aaa" />
+                      <span style={{ fontSize: "0.6875rem", color: "#ddd" }}>
+                        {formatStreamDuration(stream.startedAt, stream.endedAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ padding: "0.75rem" }}>
+                    <p style={{
+                      fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem",
+                      color: "var(--text-primary)", lineHeight: 1.3, marginBottom: "0.5rem",
+                      display: "-webkit-box", WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical", overflow: "hidden",
+                    }}>
+                      {stream.title}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <span style={{
+                        display: "flex", alignItems: "center", gap: "0.25rem",
+                        fontSize: "0.75rem", color: "var(--text-muted)",
+                      }}>
+                        <Eye size={11} />
+                        {formatViews(stream.viewerCount)}
+                      </span>
+                      <span style={{
+                        display: "flex", alignItems: "center", gap: "0.25rem",
+                        fontSize: "0.75rem", color: "var(--text-muted)",
+                      }}>
+                        <Calendar size={11} />
+                        {formatRelativeDate(stream.endedAt!)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

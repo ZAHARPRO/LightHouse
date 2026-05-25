@@ -45,6 +45,16 @@ export default async function StreamIdPage({ params }: { params: Promise<{ id: s
 
   if (!stream) notFound();
 
+  // If this stream ended but the same author is streaming live now → redirect there
+  if (!stream.isActive) {
+    const liveNow = await prisma.stream.findFirst({
+      where: { adminId: stream.adminId, isActive: true, id: { not: id } },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    }).catch(() => null);
+    if (liveNow) redirect(`/stream/${liveNow.id}`);
+  }
+
   const followingSub = await prisma.subscription.findUnique({
     where: { subscriberId_creatorId: { subscriberId: userId, creatorId: stream.adminId } },
   }).catch(() => null);

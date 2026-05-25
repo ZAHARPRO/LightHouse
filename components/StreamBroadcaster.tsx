@@ -439,13 +439,16 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     screenAudioRawTrackRef.current = rawTrack;
 
     const ctx  = new AudioContext({ sampleRate: 48_000 });
-    // Ensure the context is running — it can be "suspended" if the browser
-    // didn't consider this execution path a direct response to a user gesture.
     if (ctx.state !== "running") await ctx.resume();
     audioCtxRef.current = ctx;
     const dest = ctx.createMediaStreamDestination();
     mixerDestRef.current  = dest;
     mixedTrackRef.current = dest.stream.getAudioTracks()[0];
+
+    // Connect source to mixer BEFORE publishing — the LiveKit encoder starts
+    // pulling audio immediately on publishTrack; if no source is connected yet
+    // it encodes silence and some codecs/SFUs never recover from that initial gap.
+    addToMixer("screen", "Screen Audio", new MediaStream([rawTrack]));
 
     const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
@@ -456,8 +459,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       forceStereo: true,
       red: true,
     });
-
-    addToMixer("screen", "Screen Audio", new MediaStream([rawTrack]));
   }, [addToMixer]);
 
   // Helper: publish mic track and store refs
@@ -893,6 +894,24 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   }, [status, sendHeartbeat]);
 
   useEffect(() => { return () => { roomRef.current?.disconnect(); }; }, []);
+
+  // Chrome suspends AudioContext when the tab is hidden (broadcaster alt-tabs to their game).
+  // 1. Resume immediately when they return to the tab.
+  // 2. Poll every 3 s while live so suspended contexts are caught before the user notices.
+  //    (3 s is fast enough to be imperceptible, slow enough to be cheap.)
+  useEffect(() => {
+    function resumeCtx() {
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    }
+    document.addEventListener("visibilitychange", resumeCtx);
+    const id = setInterval(resumeCtx, 3_000);
+    return () => {
+      document.removeEventListener("visibilitychange", resumeCtx);
+      clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     const el = previewAudioRef.current;

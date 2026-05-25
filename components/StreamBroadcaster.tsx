@@ -104,7 +104,7 @@ const MIC_CONSTRAINTS: MediaTrackConstraints = {
   noiseSuppression: true,
   autoGainControl: true,
   sampleRate:   48_000,
-  channelCount: 1,
+  channelCount: 2,
 };
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
@@ -188,7 +188,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
       // High-quality Opus for music/game audio: stereo 192kbps or mono 128kbps
-      audioPreset: { maxBitrate: isStereo ? 192_000 : 128_000 },
+      audioPreset: { maxBitrate: isStereo ? 256_000 : 192_000 },
       dtx: false,             // DTX pauses encoding during silence — ruins music, keep off
       forceStereo: isStereo, // encode as stereo if captured in stereo
       red: true,        // Redundant Encoding (FEC): recovers lost packets, no audible glitches on packet loss
@@ -207,9 +207,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       micLiveTrackRef.current = liveTrack;
       await roomRef.current.localParticipant.publishTrack(liveTrack, {
         source: Track.Source.Microphone,
-        audioPreset: { maxBitrate: 48_000 }, // 48kbps mono Opus — plenty for voice
-        dtx: true,         // DTX ok for voice: pauses encoding during silence, saves bandwidth
-        forceStereo: false,
+        audioPreset: { maxBitrate: 128_000 },
+        dtx: true,
+        forceStereo: true,
         red: true,    // FEC: recovers lost packets
       });
       return true;
@@ -354,9 +354,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           micLiveTrackRef.current = micLive;
           await roomRef.current.localParticipant.publishTrack(micLive, {
             source: Track.Source.Microphone,
-            audioPreset: { maxBitrate: 48_000 },
+            audioPreset: { maxBitrate: 128_000 },
             dtx: true,
-            forceStereo: false,
+            forceStereo: true,
             red: true,
           });
           setMicMuted(false);

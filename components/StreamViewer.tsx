@@ -43,6 +43,9 @@ export default function StreamViewer({ streamId }: Props) {
   const activePubRef = useRef<RemoteTrackPublication | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const mutedRef  = useRef(false);
+  const volumeRef = useRef(1);
+
   const [status,       setStatus]     = useState<Status>("connecting");
   const [error,        setError]      = useState<string | null>(null);
   const [muted,        setMuted]      = useState(false);
@@ -63,6 +66,10 @@ export default function StreamViewer({ streamId }: Props) {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  // Keep refs in sync so attachTrack (useCallback) can read current values without stale closures
+  useEffect(() => { mutedRef.current  = muted;  }, [muted]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
 
   // Sync mute/volume → dedicated audio element only.
   // Video element stays muted (it carries video track only).
@@ -149,10 +156,25 @@ export default function StreamViewer({ streamId }: Props) {
         ms.addTrack(track.mediaStreamTrack);
         el.srcObject = ms;
       }
-      el.play().catch(() => {
-        // Browser blocked autoplay — show the user a button to unlock audio
-        setAudioBlocked(true);
-      });
+      // Only start playback if not already playing — prevents AbortError when mic + screen
+      // audio tracks arrive simultaneously (concurrent play() calls abort each other).
+      if (el.paused) {
+        // Start muted so the browser always allows autoplay (muted autoplay is universally
+        // permitted), then immediately restore the user's actual mute/volume preference.
+        el.muted = true;
+        el.play()
+          .then(() => {
+            const a = audioRef.current;
+            if (!a) return;
+            a.muted  = mutedRef.current;
+            a.volume = volumeRef.current;
+            setAudioBlocked(false);
+          })
+          .catch(() => {
+            // Even muted autoplay was blocked (very rare) — show the overlay
+            setAudioBlocked(true);
+          });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
@@ -290,9 +312,16 @@ export default function StreamViewer({ streamId }: Props) {
   function unlockAudio() {
     const el = audioRef.current;
     if (!el) return;
-    el.muted = false;
-    el.volume = volume;
-    el.play().then(() => setAudioBlocked(false)).catch(() => {});
+    el.muted = true;
+    el.play()
+      .then(() => {
+        const a = audioRef.current;
+        if (!a) return;
+        a.muted  = mutedRef.current;
+        a.volume = volumeRef.current;
+        setAudioBlocked(false);
+      })
+      .catch(() => {});
   }
 
   function toggleMute() {

@@ -279,6 +279,7 @@ export default function CheckersRoomPage() {
   const [moving, setMoving]     = useState(false);
   const [readying, setReadying] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [resigning, setResigning] = useState(false);
   const [connStatus, setConnStatus] = useState<ConnStatus>("ok");
   const [history, setHistory]   = useState<HistoryEntry[]>([]);
@@ -448,6 +449,14 @@ export default function CheckersRoomPage() {
     setStarting(true);
     await fetch(`/api/checkers-rooms/${roomId}/start`, { method: "POST" }).catch(() => {});
     await fetchRoom(); setStarting(false);
+  }
+
+  async function handleJoin() {
+    setJoining(true);
+    const res = await fetch(`/api/checkers-rooms/${roomId}/join`, { method: "POST" });
+    if (res.status === 401) { router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`); return; }
+    setJoining(false);
+    fetchRoom();
   }
 
   async function handleCancelRoom() {

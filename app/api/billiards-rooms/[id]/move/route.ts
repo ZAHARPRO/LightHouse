@@ -8,6 +8,7 @@ import {
 import { awardBadge, awardBilliardsEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
 import { broadcast } from "@/lib/billiards-sse";
+import { notifyMatchResult } from "@/lib/notify-match";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -108,6 +109,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           await awardBilliardsEloBadges(prisma, winnerId, winnerNew);
         }
       }
+      notifyMatchResult(room.hostId, room.guestId, winnerId, "billiards", id, result.winReason ?? "pocketed_eight").catch(() => {});
     } catch (err) {
       console.error("[billiards/move] post-win update failed:", err);
     }

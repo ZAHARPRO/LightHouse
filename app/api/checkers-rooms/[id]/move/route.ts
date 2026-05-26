@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { boardFromJson, boardToJson, getLegalMoves, applyMove, canContinueJump, isGameOver } from "@/lib/checkers";
 import { awardBadge, awardCheckersEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
+import { notifyMatchResult } from "@/lib/notify-match";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -70,6 +71,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await awardBadge(prisma, twId, "CHECKERS_WIN");
       await awardBadge(prisma, twId, "CHECKERS_ONLINE_WIN");
       if (room.rated && room.guestId) await applyElo(prisma, id, room, twId);
+      notifyMatchResult(room.hostId, room.guestId, twId, "checkers", id, "timeout").catch(() => {});
       return NextResponse.json({ ok: true });
     }
     update[myIsWhite ? "whiteTimeMs" : "blackTimeMs"] = remaining;
@@ -97,6 +99,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await awardBadge(prisma, winnerId, "CHECKERS_WIN");
     await awardBadge(prisma, winnerId, "CHECKERS_ONLINE_WIN");
     if (room.rated && room.guestId) await applyElo(prisma, id, room, winnerId);
+    notifyMatchResult(room.hostId, room.guestId, winnerId, "checkers", id, update.winReason as string).catch(() => {});
   }
 
   return NextResponse.json({ ok: true });

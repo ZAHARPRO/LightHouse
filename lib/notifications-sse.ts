@@ -1,7 +1,10 @@
+export type MatchGame = "chess" | "checkers" | "billiards" | "battleship";
+
 export type NotifEvent =
   | { type: "badge"; id: string; rewardType: string; pointsValue: number; description: string; earnedAt: string }
   | { type: "dm"; id: string; convId: string; senderName: string | null; senderImage: string | null; senderTier: string; content: string }
-  | { type: "stream_live"; streamId: string; title: string; thumbnail: string | null };
+  | { type: "stream_live"; streamId: string; title: string; thumbnail: string | null }
+  | { type: "match_result"; game: MatchGame; roomId: string; outcome: "win" | "loss" | "draw"; opponentName: string | null; reason: string };
 
 type Subscriber = (event: NotifEvent) => void;
 

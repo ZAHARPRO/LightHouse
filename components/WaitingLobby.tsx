@@ -15,22 +15,26 @@ export type WaitingPlayer = {
 
 export type WaitingLobbyProps = {
   gameName: string;
-  subtitle: string;           // "⚡ 5 min · Rated" — собирается снаружи
+  gameEmoji?: string;
+  subtitle: string;
   rated?: boolean;
   isHost: boolean;
   host: WaitingPlayer;
   guest: (WaitingPlayer & { ready: boolean }) | null;
   guestReady: boolean;
-  myRole: "host" | "guest";
+  myRole: "host" | "guest" | "spectator";
   onLeave: () => void;
-  onReady?: () => void;       // только для гостя
-  onStart?: () => void;       // только для хоста
+  onReady?: () => void;
+  onStart?: () => void;
   startDisabled?: boolean;
-  startLabel?: string;        // текст кнопки Start когда disabled
+  startLabel?: string;
+  onJoin?: () => void;
+  joining?: boolean;
 };
 
 export default function WaitingLobby({
   gameName,
+  gameEmoji,
   subtitle,
   rated,
   isHost,
@@ -43,14 +47,76 @@ export default function WaitingLobby({
   onStart,
   startDisabled,
   startLabel,
+  onJoin,
+  joining,
 }: WaitingLobbyProps) {
   const [copied, setCopied] = useState(false);
+  const [watchingAsSpectator, setWatchingAsSpectator] = useState(false);
   const roomUrl = typeof window !== "undefined" ? window.location.href : "";
 
   async function handleCopy() {
     try { await navigator.clipboard.writeText(roomUrl); } catch { /* ignore */ }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  // Spectator invite card — shown when visitor opens the invite link
+  if (myRole === "spectator" && !guest && !watchingAsSpectator) {
+    return (
+      <main className="max-w-sm mx-auto px-4 flex flex-col items-center justify-center" style={{ minHeight: "calc(100vh - 64px)" }}>
+        <div className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-8 flex flex-col items-center gap-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
+          <div className="text-5xl">{gameEmoji ?? "🎮"}</div>
+          <div className="text-center">
+            <p className="text-xs font-display font-bold uppercase tracking-[0.1em] text-[var(--accent-orange)] mb-1">
+              You&apos;re invited
+            </p>
+            <h1 className="text-xl font-display font-extrabold text-[var(--text-primary)] mb-1">
+              {host.name ?? "Someone"} is waiting
+            </h1>
+            <p className="text-sm text-[var(--text-muted)]">
+              {gameName} · {subtitle}{rated ? " · Rated" : ""}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full bg-[var(--bg-secondary)] rounded-xl px-4 py-3">
+            {host.image ? (
+              <Image src={host.image} alt="" width={40} height={40} className="rounded-full shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">
+                {host.name?.[0] ?? "?"}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold text-[var(--text-primary)] text-sm truncate">
+                {host.name ?? "Host"}
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                {host.elo ? `ELO ${host.elo}` : "Host"}
+                {host.rankEmoji && host.rankLabel ? ` · ${host.rankEmoji} ${host.rankLabel}` : ""}
+              </p>
+            </div>
+            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+          </div>
+
+          {onJoin && (
+            <button
+              onClick={onJoin}
+              disabled={joining}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-base hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              {joining ? <Loader2 size={18} className="animate-spin" /> : "Join as Player 2"}
+            </button>
+          )}
+
+          <button
+            onClick={() => setWatchingAsSpectator(true)}
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            Watch as spectator instead
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -80,10 +146,8 @@ export default function WaitingLobby({
 
       {/* Player slots */}
       <div className="flex flex-col gap-3 mb-8">
-        {/* Host */}
         <PlayerSlot player={host} label="Host" ready={true} />
 
-        {/* Guest */}
         {guest ? (
           <PlayerSlot player={guest} label="Guest" ready={guestReady} />
         ) : (
@@ -115,9 +179,7 @@ export default function WaitingLobby({
             disabled={startDisabled}
             className="flex-1 py-2.5 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-30 transition-opacity"
           >
-            {startDisabled
-              ? (startLabel ?? "Waiting for opponent…")
-              : "Start!"}
+            {startDisabled ? (startLabel ?? "Waiting for opponent…") : "Start!"}
           </button>
         )}
       </div>

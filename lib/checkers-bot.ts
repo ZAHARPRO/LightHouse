@@ -2,42 +2,68 @@ import { Board, Color, Move, getLegalMoves, applyMove, canContinueJump, isGameOv
 
 export type Difficulty = "easy" | "normal" | "hard";
 
-// Material values
-const PIECE_VAL  = 100;
-const KING_VAL   = 300;
-// Center-ish bonus: rows 3-4 / cols 2-5
-function positionalBonus(r: number, c: number): number {
-  const rowBonus = (r === 3 || r === 4) ? 10 : (r === 2 || r === 5) ? 5 : 0;
-  const colBonus = (c >= 2 && c <= 5) ? 5 : 0;
-  return rowBonus + colBonus;
-}
+const PIECE_VAL = 100;
+const KING_VAL  = 300;
 
 function evaluate(board: Board, color: Color): number {
   let score = 0;
+  let wCount = 0, bCount = 0;
+
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const cell = board[r][c];
       if (!cell) continue;
+
       const isWhite = cell === "w" || cell === "W";
       const isKing  = cell === "W" || cell === "B";
-      const val = (isKing ? KING_VAL : PIECE_VAL) + positionalBonus(r, c);
+      if (isWhite) wCount++; else bCount++;
+
+      let val = isKing ? KING_VAL : PIECE_VAL;
+
+      if (!isKing) {
+        // Advancement: white pieces advance toward row 0; black toward row 7
+        const advance = isWhite ? (7 - r) : r;
+        val += advance * 4;
+
+        // Back-row defense: keep at least some pieces on home row to block promotion
+        const homeRow = isWhite ? 7 : 0;
+        if (r === homeRow) val += 12;
+      } else {
+        // Kings: prefer central positions
+        const centerDist = Math.abs(3.5 - r) + Math.abs(3.5 - c);
+        val += Math.max(0, 14 - centerDist * 2);
+      }
+
+      // Edge penalty: pieces on edge columns have fewer attack options
+      if (c === 0 || c === 7) val -= 8;
+
       score += isWhite ? val : -val;
     }
   }
+
+  // Trade incentive: the side with more pieces benefits from simplification
+  const diff = wCount - bCount;
+  if (diff !== 0) {
+    const simplifyBonus = (16 - wCount - bCount) * 2;
+    score += diff > 0 ? simplifyBonus : -simplifyBonus;
+  }
+
   return color === "w" ? score : -score;
 }
 
 // rootMove tracks the first move of a chain so getBotMove applies it to the original board
-function expandMoves(board: Board, moves: Move[], color: Color, rootMove?: Move): { board: Board; move: Move }[] {
-  const result: { board: Board; move: Move }[] = [];
+function expandMoves(board: Board, moves: Move[], color: Color, rootMove?: Move): { board: Board; move: Move; chainLen: number }[] {
+  const result: { board: Board; move: Move; chainLen: number }[] = [];
   for (const move of moves) {
     const root = rootMove ?? move;
     const { board: nb, promoted } = applyMove(board, move);
     if (move.captured && !promoted && canContinueJump(nb, move.to[0], move.to[1])) {
       const continuations = getLegalMoves(nb, color, move.to);
-      for (const e of expandMoves(nb, continuations, color, root)) result.push(e);
+      for (const e of expandMoves(nb, continuations, color, root)) {
+        result.push({ ...e, chainLen: e.chainLen + 1 });
+      }
     } else {
-      result.push({ board: nb, move: root });
+      result.push({ board: nb, move: root, chainLen: move.captured ? 1 : 0 });
     }
   }
   return result;
@@ -49,8 +75,8 @@ function minimax(
   alpha: number,
   beta: number,
   maximizing: boolean,
-  color: Color,      // perspective color (the bot)
-  turn: Color,       // whose turn it is right now
+  color: Color,
+  turn: Color,
 ): number {
   const { over, winner } = isGameOver(board, turn);
   if (over) {
@@ -60,8 +86,11 @@ function minimax(
   if (depth === 0) return evaluate(board, color);
 
   const moves = getLegalMoves(board, turn);
-  const expanded = expandMoves(board, moves, turn);
+  let expanded = expandMoves(board, moves, turn);
   if (expanded.length === 0) return maximizing ? -100000 : 100000;
+
+  // Move ordering: longer capture chains first, then advances over retreats
+  expanded = expanded.slice().sort((a, b) => b.chainLen - a.chainLen);
 
   const nextTurn: Color = turn === "w" ? "b" : "w";
   if (maximizing) {
@@ -95,20 +124,30 @@ export function getBotMove(
   if (moves.length === 0) return null;
 
   if (difficulty === "easy") {
-    return moves[Math.floor(Math.random() * moves.length)];
+    // Easy: random, but always take a capture if one is available
+    const captures = moves.filter(m => m.captured);
+    const pool = captures.length > 0 ? captures : moves;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  const depth = difficulty === "normal" ? 3 : 5;
+  // Normal: depth 4. Hard: depth 6.
+  const depth = difficulty === "normal" ? 4 : 6;
   const expanded = expandMoves(board, moves, botColor);
   if (expanded.length === 0) return null;
 
+  // Sort root candidates: longer capture chains first
+  const sorted = expanded.slice().sort((a, b) => b.chainLen - a.chainLen);
+
   const nextTurn: Color = botColor === "w" ? "b" : "w";
   let bestScore = -Infinity;
-  let bestMove: Move = expanded[0].move;
+  let bestMove: Move = sorted[0].move;
 
-  for (const { board: nb, move } of expanded) {
+  for (const { board: nb, move } of sorted) {
     const score = minimax(nb, depth - 1, -Infinity, Infinity, false, botColor, nextTurn);
-    if (score > bestScore) { bestScore = score; bestMove = move; }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
   }
   return bestMove;
 }

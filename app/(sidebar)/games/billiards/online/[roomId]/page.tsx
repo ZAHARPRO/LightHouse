@@ -353,7 +353,9 @@ export default function BilliardsOnlineRoom() {
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const [animBalls, setAnimBalls] = useState<Ball[] | null>(null);
   const [viewingOpponentResult, setViewingOpponentResult] = useState(false);
+  const [showFinished, setShowFinished] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [joining, setJoining] = useState(false);
   // Live countdown state — synced from server, ticks between polls
   const [liveHostMs, setLiveHostMs] = useState<number | null>(null);
   const [liveGuestMs, setLiveGuestMs] = useState<number | null>(null);
@@ -375,6 +377,7 @@ export default function BilliardsOnlineRoom() {
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
   const opponentResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roomRef = useRef<RoomData | null>(null);
 
   const processQueue = useCallback(() => {
     if (animatingRef.current || shotQueueRef.current.length === 0) return;
@@ -401,6 +404,9 @@ export default function BilliardsOnlineRoom() {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         if (shotQueueRef.current.length > 0) {
           processQueue();
+        } else if (roomRef.current?.status === "FINISHED") {
+          // Winning shot finished animating — reveal result screen after brief pause
+          setTimeout(() => setShowFinished(true), 500);
         } else if (wasOpponent) {
           // Show the opponent's shot result for 2 seconds before enabling the player's turn
           setViewingOpponentResult(true);
@@ -426,11 +432,16 @@ export default function BilliardsOnlineRoom() {
       const res = await fetch(`/api/billiards-rooms/${roomId}`);
       if (!res.ok) { setConnStatus("lost"); return; }
       const data: RoomData = await res.json();
+      roomRef.current = data;
       setRoom(prev => {
         if (prev && prev.status !== data.status && data.status === "PLAYING") playSound("match_start");
         return data;
       });
       setConnStatus("ok");
+      // Show FINISHED screen immediately only when no animation is playing
+      if (data.status === "FINISHED" && !animatingRef.current && shotQueueRef.current.length === 0) {
+        setShowFinished(true);
+      }
     } catch {
       setConnStatus("lost");
     }
@@ -506,7 +517,7 @@ export default function BilliardsOnlineRoom() {
 
   // Animate shots that arrived from the server (opponent moves)
   useEffect(() => {
-    if (!room || room.status !== "PLAYING" || replayIdx !== null) return;
+    if (!room || room.status === "WAITING" || replayIdx !== null) return;
     // On first load skip existing shots — sync confirmedState to server state, skip animation
     if (!initializedAnimRef.current) {
       initializedAnimRef.current = true;
@@ -767,6 +778,17 @@ export default function BilliardsOnlineRoom() {
     await fetch(`/api/billiards-rooms/${roomId}/resign`, { method: "POST" }); fetchRoom();
   }
 
+  async function handleJoin() {
+    setJoining(true);
+    const res = await fetch(`/api/billiards-rooms/${roomId}/join`, { method: "POST" });
+    if (res.status === 401) {
+      router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+    setJoining(false);
+    fetchRoom();
+  }
+
   if (!room) {
     return (
       <main className="flex items-center justify-center" style={{ height: "calc(100vh - 64px)" }}>
@@ -819,6 +841,49 @@ export default function BilliardsOnlineRoom() {
 
   // ── WAITING ────────────────────────────────────────────────────────────────
   if (room.status === "WAITING") {
+    // Visitor opened the invite link — prompt them to join
+    if (isSpectator && !room.guestId) {
+      return (
+        <main className="max-w-sm mx-auto px-4 flex flex-col items-center justify-center" style={{ minHeight: "calc(100vh - 64px)" }}>
+          <div className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-8 flex flex-col items-center gap-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
+            <div className="text-5xl">🎱</div>
+            <div className="text-center">
+              <p className="text-xs font-display font-bold uppercase tracking-[0.1em] text-[var(--accent-orange)] mb-1">You&apos;re invited</p>
+              <h1 className="text-xl font-display font-extrabold text-[var(--text-primary)] mb-1">
+                {room.hostName ?? "Someone"} is waiting
+              </h1>
+              <p className="text-sm text-[var(--text-muted)]">
+                Billiards · {TC_LABELS[room.timeControl] ?? room.timeControl} · {room.rated ? "Rated" : "Casual"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 w-full bg-[var(--bg-secondary)] rounded-xl px-4 py-3">
+              {room.hostImage
+                ? <Image src={room.hostImage} alt="" width={40} height={40} className="rounded-full shrink-0" />
+                : <div className="w-10 h-10 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-semibold text-[var(--text-primary)] text-sm truncate">{room.hostName ?? "Host"}</p>
+                <p className="text-xs text-[var(--text-muted)]">{room.hostElo ? `ELO ${room.hostElo}` : "Host"}</p>
+              </div>
+              <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+            </div>
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-base hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              {joining ? <Loader2 size={18} className="animate-spin" /> : "Join as Player 2"}
+            </button>
+            <button
+              onClick={() => fetchRoom()}
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              Watch as spectator instead
+            </button>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="max-w-lg mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-6">
@@ -889,7 +954,7 @@ export default function BilliardsOnlineRoom() {
   }
 
   // ── FINISHED ────────────────────────────────────────────────────────────────
-  if (room.status === "FINISHED") {
+  if (showFinished) {
     const iWon = (isHost && room.winner === "host") || (isGuest && room.winner === "guest");
     return (
       <main className="max-w-lg mx-auto px-4 py-12">

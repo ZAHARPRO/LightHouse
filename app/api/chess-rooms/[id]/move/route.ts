@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, isCheckmate, isStalemate } from "@/lib/chess";
 import { awardBadge, awardChessEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
+import { notifyMatchResult } from "@/lib/notify-match";
 
 const CAPTURE_BONUS: Record<string, number> = { P: 1000, N: 2000, B: 2000, R: 3000, Q: 4000 };
 
@@ -113,6 +114,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
 
+      if (timeoutWinnerId) notifyMatchResult(room.hostId, room.guestId, timeoutWinnerId, "chess", id, "timeout").catch(() => {});
       return NextResponse.json({ ok: true });
     }
 
@@ -172,6 +174,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await awardChessEloBadges(prisma, winnerId, winnerNew);
       }
     }
+  }
+
+  if (update.status === "FINISHED") {
+    const winnerColor = update.winner as string;
+    const hColor = room.hostColor ?? "w";
+    const winnerUserId = winnerColor === "draw" ? null
+      : winnerColor === "white" ? (hColor === "w" ? room.hostId : room.guestId)
+      : (hColor === "b" ? room.hostId : room.guestId);
+    notifyMatchResult(room.hostId, room.guestId, winnerUserId, "chess", id, update.winReason as string).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, san });

@@ -379,6 +379,7 @@ export default function ChessOnlineRoom() {
   const cellPx = useCellPx();
   const [room, setRoom] = useState<RoomData|null>(null);
   const [error, setError] = useState<string|null>(null);
+  const [joining, setJoining] = useState(false);
   const [selected, setSelected] = useState<[number,number]|null>(null);
   const [legalDots, setLegalDots] = useState<[number,number][]>([]);
   const [replayIdx, setReplayIdx] = useState<number|null>(null);
@@ -514,6 +515,14 @@ export default function ChessOnlineRoom() {
     pollRef.current = setInterval(fetchRoom, 400);
   }, [roomId, fetchRoom]);
 
+  async function handleJoin() {
+    setJoining(true);
+    const res = await fetch(`/api/chess-rooms/${roomId}/join`, { method: "POST" });
+    if (res.status === 401) { router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`); return; }
+    setJoining(false);
+    fetchRoom();
+  }
+
   function getMyColor(r: RoomData): string {
     return r.myRole === "host" ? r.hostColor : (r.hostColor === "w" ? "b" : "w");
   }
@@ -596,10 +605,13 @@ if (room.status === "WAITING") {
   return (
     <WaitingLobby
       gameName="Chess Room"
+      gameEmoji="♟️"
       subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
       rated={room.rated}
       isHost={room.myRole === "host"}
-      myRole={room.myRole as "host" | "guest"}
+      myRole={room.myRole}
+      onJoin={handleJoin}
+      joining={joining}
       host={{
         name: room.hostName,
         image: room.hostImage,

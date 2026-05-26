@@ -4,26 +4,58 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { X, MessageCircle, Radio, Film, FileText } from "lucide-react";
+import { X, MessageCircle, Radio, Film, FileText, Swords } from "lucide-react";
 import { BADGE_DEFS } from "@/lib/badges";
 import UserAvatar from "./UserAvatar";
-import type { NotifEvent } from "@/lib/notifications-sse";
+import type { NotifEvent, MatchGame } from "@/lib/notifications-sse";
 
 /* ─── Types ─── */
 
-type BadgeToast = NotifEvent & { type: "badge" };
-type DMToast    = NotifEvent & { type: "dm" };
-type StreamToast = NotifEvent & { type: "stream_live" };
+type BadgeToast   = NotifEvent & { type: "badge" };
+type DMToast      = NotifEvent & { type: "dm" };
+type StreamToast  = NotifEvent & { type: "stream_live" };
+type MatchToast   = NotifEvent & { type: "match_result" };
 
 type ContentToast =
   | { kind: "post";  id: string; title: string; authorName: string | null; authorImage: string | null; authorTier: string; createdAt: string }
   | { kind: "video"; id: string; title: string; authorName: string | null; authorImage: string | null; authorTier: string; createdAt: string };
 
 type AnyToast =
-  | { _key: string; _tag: "badge";  data: BadgeToast }
-  | { _key: string; _tag: "dm";     data: DMToast }
-  | { _key: string; _tag: "stream"; data: StreamToast }
-  | { _key: string; _tag: "content"; data: ContentToast };
+  | { _key: string; _tag: "badge";   data: BadgeToast }
+  | { _key: string; _tag: "dm";      data: DMToast }
+  | { _key: string; _tag: "stream";  data: StreamToast }
+  | { _key: string; _tag: "content"; data: ContentToast }
+  | { _key: string; _tag: "match";   data: MatchToast };
+
+const GAME_META: Record<MatchGame, { icon: string; label: string; color: string }> = {
+  chess:       { icon: "♟️", label: "Chess",       color: "#f59e0b" },
+  checkers:    { icon: "🔴", label: "Checkers",    color: "#8b5cf6" },
+  billiards:   { icon: "🎱", label: "Billiards",   color: "#10b981" },
+  battleship:  { icon: "🚢", label: "Battleship",  color: "#0ea5e9" },
+};
+
+const OUTCOME_META: Record<"win" | "loss" | "draw", { label: string; color: string }> = {
+  win:  { label: "Victory!",  color: "#22c55e" },
+  loss: { label: "Defeat",    color: "#ef4444" },
+  draw: { label: "Draw",      color: "#6b7280" },
+};
+
+const REASON_LABELS: Record<string, string> = {
+  checkmate:         "by checkmate",
+  stalemate:         "draw by stalemate",
+  timeout:           "on time",
+  resigned:          "by resignation",
+  no_moves:          "no legal moves",
+  all_sunk:          "all ships sunk",
+  pocketed_eight:    "8-ball pocketed",
+  scratch_on_eight:  "scratch on 8-ball",
+  wrong_eight_pocket:"wrong pocket for 8",
+  eight_on_break:    "8-ball on break",
+};
+
+function gameRoomUrl(game: MatchGame, roomId: string): string {
+  return `/games/${game}/online/${roomId}`;
+}
 
 /* ─── Constants ─── */
 
@@ -185,6 +217,51 @@ function StreamToastItem({ data, onDone }: { data: StreamToast; onDone: () => vo
   );
 }
 
+function MatchResultToastItem({ data, onDone }: { data: MatchToast; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const dismiss = () => { setLeaving(true); setTimeout(onDone, 320); };
+  useAutoDismiss(dismiss);
+
+  const gm      = GAME_META[data.game];
+  const outcome = OUTCOME_META[data.outcome];
+  const reason  = REASON_LABELS[data.reason] ?? data.reason;
+
+  return (
+    <ToastShell color={outcome.color} leaving={leaving} onClose={dismiss}>
+      <Link
+        href={gameRoomUrl(data.game, data.roomId)}
+        onClick={dismiss}
+        className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3 no-underline"
+      >
+        <div
+          className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-[1.4rem] relative"
+          style={{ background: `${gm.color}18`, border: `1.5px solid ${gm.color}40` }}
+        >
+          {gm.icon}
+          <div
+            className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 border-[var(--bg-card)]"
+            style={{ background: outcome.color }}
+          >
+            <Swords size={8} className="text-white" />
+          </div>
+        </div>
+        <div className="min-w-0">
+          <p
+            className="text-[0.6875rem] font-display font-bold uppercase tracking-[0.06em] mb-[0.1rem]"
+            style={{ color: outcome.color }}
+          >
+            {outcome.label}
+          </p>
+          <p className="font-display font-extrabold text-[0.875rem] text-[var(--text-primary)] truncate">
+            {gm.label}{data.opponentName ? ` · vs ${data.opponentName}` : ""}
+          </p>
+          <p className="text-[0.75rem] text-[var(--text-muted)] truncate">{reason} · tap to view</p>
+        </div>
+      </Link>
+    </ToastShell>
+  );
+}
+
 function ContentToastItem({ data, onDone }: { data: ContentToast; onDone: () => void }) {
   const [leaving, setLeaving] = useState(false);
   const dismiss = () => { setLeaving(true); setTimeout(onDone, 320); };
@@ -340,6 +417,8 @@ export default function NotificationHub() {
             addToast({ _key: `dm-${event.id}`, _tag: "dm", data: event });
           } else if (event.type === "stream_live") {
             addToast({ _key: `stream-${event.streamId}`, _tag: "stream", data: event });
+          } else if (event.type === "match_result") {
+            addToast({ _key: `match-${event.game}-${event.roomId}`, _tag: "match", data: event });
           }
         } catch { }
       };
@@ -406,6 +485,9 @@ export default function NotificationHub() {
           )}
           {toast._tag === "content" && (
             <ContentToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
+          )}
+          {toast._tag === "match" && (
+            <MatchResultToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
           )}
         </div>
       ))}

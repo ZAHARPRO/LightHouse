@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { awardBadge, awardCheckersEloBadges } from "@/lib/awardBadge";
+import { notifyMatchResult } from "@/lib/notify-match";
 import { calculateEloDelta } from "@/lib/elo";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -60,6 +61,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       await awardCheckersEloBadges(prisma, winnerId, winnerNew);
     }
   }
+  notifyMatchResult(room.hostId, room.guestId, winnerId, "checkers", id, "resigned").catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

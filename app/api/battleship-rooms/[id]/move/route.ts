@@ -5,6 +5,7 @@ import { Board, Ship, applyShot, GameState, serializeState } from "@/lib/battles
 import { calculateEloDelta } from "@/lib/elo";
 import { awardBadge, awardBattleshipEloBadges } from "@/lib/awardBadge";
 import { auth } from "@/auth";
+import { notifyMatchResult } from "@/lib/notify-match";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -167,6 +168,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       guest: { select: { id: true, name: true, image: true, battleshipElo: true } },
     },
   });
+
+  if (gameOver && winner) {
+    const winnerUserId = winner === "host" ? room.hostId : room.guestId!;
+    notifyMatchResult(room.hostId, room.guestId, winnerUserId, "battleship", id, "all_sunk").catch(() => {});
+  }
 
   return NextResponse.json({
     room: updatedRoom,

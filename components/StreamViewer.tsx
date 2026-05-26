@@ -159,21 +159,16 @@ export default function StreamViewer({ streamId }: Props) {
       // Only start playback if not already playing — prevents AbortError when mic + screen
       // audio tracks arrive simultaneously (concurrent play() calls abort each other).
       if (el.paused) {
-        // Start muted so the browser always allows autoplay (muted autoplay is universally
-        // permitted), then immediately restore the user's actual mute/volume preference.
-        el.muted = true;
+        // Attempt normal (unmuted) autoplay first.
+        // Muted-first was tried previously but left the audio permanently muted in Chrome:
+        // the browser shows the tab audio icon even for a muted element, so the user saw
+        // "audio playing" in the tab but heard nothing — misleading and unfixable silently.
+        // If play() fails here (strict autoplay policy), the overlay button appears and the
+        // user clicks once; unlockAudio() then handles the muted-first unlock from a real
+        // user gesture, which is guaranteed to work.
         el.play()
-          .then(() => {
-            const a = audioRef.current;
-            if (!a) return;
-            a.muted  = mutedRef.current;
-            a.volume = volumeRef.current;
-            setAudioBlocked(false);
-          })
-          .catch(() => {
-            // Even muted autoplay was blocked (very rare) — show the overlay
-            setAudioBlocked(true);
-          });
+          .then(() => setAudioBlocked(false))
+          .catch(() => setAudioBlocked(true));
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -77,7 +77,7 @@ export default function StreamReactionButtons({
         className={[
           btnBase,
           reaction === "LIKE"
-            ? "bg-orange-500/10 border border-orange-500/40 text-[var(--accent-orange)]"
+            ? "bg-pink-500/10 border border-pink-500/40 text-[var(--accent-orange)]"
             : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]",
         ].join(" ")}
       >

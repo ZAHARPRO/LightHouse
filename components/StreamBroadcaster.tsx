@@ -995,7 +995,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                     </button>
                   </div>
                 ) : (
-                  <label className="flex items-center gap-2 w-fit cursor-pointer px-3 py-1.5 rounded-[8px] border border-dashed border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-orange-500/40 transition-colors text-[0.8125rem] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+                  <label className="flex items-center gap-2 w-fit cursor-pointer px-3 py-1.5 rounded-[8px] border border-dashed border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-pink-500/40 transition-colors text-[0.8125rem] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                     <ImagePlus size={14} />
                     Upload thumbnail
                     <input type="file" accept="image/*" className="hidden" onChange={handleThumbnailFile} />
@@ -1192,7 +1192,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
               <button
                 onClick={() => setShowPauseMenu(v => !v)}
                 title="Pause stream"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] transition-colors hover:text-orange-400 hover:border-orange-500/30"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[0.8125rem] font-display font-semibold text-[var(--text-muted)] transition-colors hover:text-pink-400 hover:border-pink-500/30"
               >
                 <Timer size={13} />
                 Pause
@@ -1210,68 +1210,13 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                       onClick={() => pauseStream(mins)}
                       className="flex items-center gap-2 w-full px-4 py-2.5 text-[0.8125rem] text-white/80 hover:bg-white/10 transition-colors text-left whitespace-nowrap"
                     >
-                      <Pause size={12} className="text-orange-400 shrink-0" />
+                      <Pause size={12} className="text-pink-400 shrink-0" />
                       Pause {mins} {mins === 1 ? "minute" : "minutes"}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Audio Sources panel ── */}
-      {status === "live" && (
-        <div className="flex flex-col gap-2 px-3 py-2.5 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-          <div className="flex items-center justify-between">
-            <span className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-[var(--text-muted)]">
-              Audio Sources
-            </span>
-            <button
-              onClick={addTabAudio}
-              disabled={addingTab}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-[5px] border border-[var(--border-subtle)] text-[0.75rem] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-white/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus size={11} />
-              {addingTab ? "Selecting…" : "Add tab audio"}
-            </button>
-          </div>
-
-          {audioSources.length > 0 ? (
-            <div className="flex flex-col gap-0.5">
-              {audioSources.map(src => (
-                <div key={src.id} className="flex items-center gap-2 py-1">
-                  <button
-                    onClick={() => toggleSourceMute(src.id)}
-                    title={src.muted ? "Unmute in stream" : "Mute in stream"}
-                    className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-[5px] border transition-colors ${
-                      src.muted
-                        ? "border-red-500/30 bg-red-500/10 text-red-400"
-                        : "border-emerald-500/30 bg-emerald-500/8 text-emerald-400"
-                    }`}
-                  >
-                    {src.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
-                  </button>
-                  <span className={`flex-1 text-[0.8125rem] truncate ${src.muted ? "text-[var(--text-muted)] line-through" : "text-[var(--text-secondary)]"}`}>
-                    {src.label}
-                  </span>
-                  {src.id !== "screen" && (
-                    <button
-                      onClick={() => removeFromMixer(src.id)}
-                      title="Remove source"
-                      className="shrink-0 text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[0.75rem] text-[var(--text-muted)]">
-              No audio sources. Add a browser tab to include its audio in the stream.
-            </p>
           )}
         </div>
       )}
@@ -1348,7 +1293,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
 
       {/* Poor connection warning */}
       {poorConnection && !isReconnecting && status === "live" && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-[10px] border border-orange-500/30 bg-orange-500/8 text-orange-300">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-[10px] border border-pink-500/30 bg-pink-500/8 text-pink-300">
           <WifiOff size={15} className="shrink-0" />
           <span className="text-[0.8125rem] font-display font-semibold">Poor connection — viewers may see lag</span>
         </div>

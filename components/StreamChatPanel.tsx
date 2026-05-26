@@ -129,7 +129,7 @@ export default function StreamChatPanel({
       <div className="flex items-center gap-2 px-3 py-2.5 border-t border-[var(--border-subtle)] shrink-0">
         <input
           ref={inputRef}
-          className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[8px] px-3 py-[0.4rem] text-[0.8125rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-orange-500/40 transition-colors"
+          className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[8px] px-3 py-[0.4rem] text-[0.8125rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-pink-500/40 transition-colors"
           placeholder="Say something…"
           value={text}
           maxLength={200}

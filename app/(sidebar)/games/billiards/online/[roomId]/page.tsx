@@ -437,7 +437,29 @@ export default function BilliardsOnlineRoom() {
   }, [roomId]);
 
   useEffect(() => { preloadSounds(); fetchRoom(); }, [fetchRoom]);
-  useEffect(() => { const t = setInterval(fetchRoom, 400); return () => clearInterval(t); }, [fetchRoom]);
+
+  // SSE for real-time updates, replacing 400ms polling
+  useEffect(() => {
+    const es = new EventSource(`/api/billiards-rooms/${roomId}/sse`);
+    es.onopen = () => setConnStatus("ok");
+    es.onerror = () => setConnStatus("slow");
+    es.onmessage = (e) => {
+      const msg = JSON.parse(e.data) as { type: string; role?: "host" | "guest"; power?: number };
+      if (msg.type === "update") {
+        fetchRoom();
+      } else if (msg.type === "tension" && msg.role !== undefined && msg.power !== undefined) {
+        setRoom(prev => prev ? {
+          ...prev,
+          hostDraftPower:  msg.role === "host"  ? msg.power! : prev.hostDraftPower,
+          guestDraftPower: msg.role === "guest" ? msg.power! : prev.guestDraftPower,
+        } : prev);
+      }
+    };
+    return () => es.close();
+  }, [roomId, fetchRoom]);
+
+  // Slow fallback poll in case SSE misses an event
+  useEffect(() => { const t = setInterval(fetchRoom, 30_000); return () => clearInterval(t); }, [fetchRoom]);
   useEffect(() => () => {
     cancelAnimationFrame(rafRef.current);
     if (opponentResultTimerRef.current) clearTimeout(opponentResultTimerRef.current);

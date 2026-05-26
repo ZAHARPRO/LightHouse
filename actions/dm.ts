@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyUser } from "@/lib/notifications-sse";
 
 async function requireUser() {
   const session = await auth();
@@ -239,7 +240,7 @@ export async function sendDirectMessage(
         replyToId: replyToId ?? null,
       },
       include: {
-        sender: { select: { id: true, name: true, tier: true } },
+        sender: { select: { id: true, name: true, image: true, tier: true } },
         replyTo: {
           select: {
             id: true,
@@ -254,6 +255,16 @@ export async function sendDirectMessage(
       data: { updatedAt: new Date() },
     }),
   ]);
+
+  notifyUser(otherId, {
+    type: "dm",
+    id: msg.id,
+    convId,
+    senderName: msg.sender.name,
+    senderImage: msg.sender.image,
+    senderTier: msg.sender.tier,
+    content: msg.content,
+  });
 
   return { message: msg };
 }

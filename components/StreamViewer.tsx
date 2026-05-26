@@ -34,11 +34,10 @@ interface Props {
 export default function StreamViewer({ streamId }: Props) {
   const roomRef      = useRef<Room | null>(null);
   const videoRef     = useRef<HTMLVideoElement>(null);
-  // Separate audio element — multiple audio tracks (mic + screen) coexist here.
-  // LiveKit's track.attach(videoEl) removes existing audio of the same kind, so
-  // attaching mic after screen audio silently kills screen audio. By using a
-  // dedicated <audio> element and manually managing its MediaStream we keep all tracks.
-  const audioRef     = useRef<HTMLAudioElement>(null);
+  // One <audio> element per remote audio track — avoids both the "second track.attach()
+  // replaces the first" issue AND the LiveKit adaptive-stream problem where the SDK
+  // stops forwarding audio to tracks that never had attach() called on them.
+  const audioElsRef  = useRef<Map<string, HTMLAudioElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const activePubRef = useRef<RemoteTrackPublication | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,14 +70,22 @@ export default function StreamViewer({ streamId }: Props) {
   useEffect(() => { mutedRef.current  = muted;  }, [muted]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
 
-  // Sync mute/volume → dedicated audio element only.
+  // Sync mute/volume → all active audio elements.
   // Video element stays muted (it carries video track only).
   useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    el.muted  = muted;
-    el.volume = volume;
+    audioElsRef.current.forEach(el => {
+      el.muted  = muted;
+      el.volume = volume;
+    });
   }, [muted, volume]);
+
+  // Tear down all audio elements on unmount
+  useEffect(() => {
+    return () => {
+      audioElsRef.current.forEach(el => { el.srcObject = null; el.remove(); });
+      audioElsRef.current.clear();
+    };
+  }, []);
 
   // Fullscreen detection — standard + webkit (iOS)
   useEffect(() => {
@@ -140,36 +147,29 @@ export default function StreamViewer({ streamId }: Props) {
     if (track.kind === Track.Kind.Video) {
       const el = videoRef.current;
       if (!el) return;
-      // Let LiveKit manage the video element normally
       track.attach(el);
       if (pub) activePubRef.current = pub;
       applyQuality(quality);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      const el = audioRef.current;
-      if (!el) return;
-      // Manually add audio track to the shared MediaStream WITHOUT removing others.
-      // This allows screen audio + mic to coexist — browser mixes them automatically.
-      const ms = (el.srcObject instanceof MediaStream) ? el.srcObject : new MediaStream();
-      const alreadyPresent = ms.getAudioTracks().some(t => t.id === track.mediaStreamTrack.id);
-      if (!alreadyPresent) {
-        ms.addTrack(track.mediaStreamTrack);
-        el.srcObject = ms;
-      }
-      // Only start playback if not already playing — prevents AbortError when mic + screen
-      // audio tracks arrive simultaneously (concurrent play() calls abort each other).
-      if (el.paused) {
-        // Attempt normal (unmuted) autoplay first.
-        // Muted-first was tried previously but left the audio permanently muted in Chrome:
-        // the browser shows the tab audio icon even for a muted element, so the user saw
-        // "audio playing" in the tab but heard nothing — misleading and unfixable silently.
-        // If play() fails here (strict autoplay policy), the overlay button appears and the
-        // user clicks once; unlockAudio() then handles the muted-first unlock from a real
-        // user gesture, which is guaranteed to work.
-        el.play()
-          .then(() => setAudioBlocked(false))
-          .catch(() => setAudioBlocked(true));
-      }
+      // Give each remote audio track its own <audio> element and call track.attach() on it.
+      // This is critical for two reasons:
+      // 1. track.attach() tells LiveKit the track is in use — with adaptiveStream enabled the
+      //    SDK silently stops delivering audio to tracks that were never attached.
+      // 2. It avoids the in-place MediaStream mutation bug where setting el.srcObject to the
+      //    same reference doesn't trigger a browser reload, so new tracks are never rendered.
+      if (!track.sid || audioElsRef.current.has(track.sid)) return; // already attached or no sid yet
+      const el = document.createElement("audio");
+      el.autoplay = true;
+      el.setAttribute("playsinline", "");
+      el.muted  = mutedRef.current;
+      el.volume = volumeRef.current;
+      document.body.appendChild(el);
+      audioElsRef.current.set(track.sid, el);
+      track.attach(el);
+      el.play()
+        .then(() => setAudioBlocked(false))
+        .catch(() => setAudioBlocked(true));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
@@ -182,10 +182,12 @@ export default function StreamViewer({ streamId }: Props) {
       activePubRef.current = null;
       setStatus("offline");
     } else if (track.kind === Track.Kind.Audio) {
-      // Remove only this specific track — leave other audio tracks playing
-      const el = audioRef.current;
-      if (el?.srcObject instanceof MediaStream) {
-        el.srcObject.removeTrack(track.mediaStreamTrack);
+      const el = track.sid ? audioElsRef.current.get(track.sid) : undefined;
+      if (el && track.sid) {
+        track.detach(el);
+        el.srcObject = null;
+        el.remove();
+        audioElsRef.current.delete(track.sid);
       }
     }
   }, []);
@@ -279,7 +281,8 @@ export default function StreamViewer({ streamId }: Props) {
         if (data.type === "stream_ended") {
           setStatus("ended");
           if (videoRef.current) videoRef.current.srcObject = null;
-          if (audioRef.current) { audioRef.current.srcObject = null; }
+          audioElsRef.current.forEach(el => { el.srcObject = null; el.remove(); });
+          audioElsRef.current.clear();
         }
       } catch { /* ignore */ }
     };
@@ -305,18 +308,22 @@ export default function StreamViewer({ streamId }: Props) {
   }
 
   function unlockAudio() {
-    const el = audioRef.current;
-    if (!el) return;
-    el.muted = true;
-    el.play()
-      .then(() => {
-        const a = audioRef.current;
-        if (!a) return;
-        a.muted  = mutedRef.current;
-        a.volume = volumeRef.current;
-        setAudioBlocked(false);
-      })
-      .catch(() => {});
+    // Play all audio elements muted-first (guaranteed from a user gesture click),
+    // then immediately restore the user's actual mute/volume preference.
+    let anyPlaying = false;
+    audioElsRef.current.forEach(el => {
+      if (!el.paused) { anyPlaying = true; return; }
+      el.muted = true;
+      el.play()
+        .then(() => {
+          el.muted  = mutedRef.current;
+          el.volume = volumeRef.current;
+          anyPlaying = true;
+          setAudioBlocked(false);
+        })
+        .catch(() => {});
+    });
+    if (anyPlaying) setAudioBlocked(false);
   }
 
   function toggleMute() {
@@ -363,8 +370,6 @@ export default function StreamViewer({ streamId }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
 
       <div
         ref={containerRef}
@@ -435,7 +440,7 @@ export default function StreamViewer({ streamId }: Props) {
                 className="flex items-center justify-between w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
               >
                 <span className="font-display font-semibold">{QUALITY_LABEL[q]}</span>
-                {quality === q && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 ml-4" />}
+                {quality === q && <span className="w-1.5 h-1.5 rounded-full bg-pink-400 ml-4" />}
               </button>
             ))}
           </div>

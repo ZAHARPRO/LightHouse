@@ -134,20 +134,11 @@ const SCREEN_VIDEO_OPTS = (captureCursor: boolean, fps: number) => ({
   cursor: captureCursor ? "always" : "never",
 } as VideoConstraintsExt);
 
-// Processing constraints applied AFTER capture — never passed to getDisplayMedia.
-// Passing constraints (esp. sampleRate) directly to getDisplayMedia causes Chrome to
-// silently drop the audio track for whole-screen capture (OS loopback can't satisfy them).
-const SCREEN_AUDIO_APPLY_CONSTRAINTS: MediaTrackConstraints = {
+
+const MIC_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
-  autoGainControl: false,
-};
-
-// Mic constraints: 48kHz mono, processing on (good for voice)
-const MIC_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
+  autoGainControl:  false,
   sampleRate:   48_000,
   channelCount: 2,
 };
@@ -397,15 +388,27 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const label = audioTrack.label.replace(/^(audio for |system audio[: -]+)/i, "").trim() || "Tab Audio";
 
       if (!audioCtxRef.current) {
-        // No screen audio was captured — create mixer and publish its output
+        // First tab added — create the mixer now (we have a user gesture from the picker dialog).
+        // Also fold in the existing direct screen audio track (if any) so it keeps playing.
         const ctx  = new AudioContext({ sampleRate: 48_000 });
         if (ctx.state !== "running") await ctx.resume();
         audioCtxRef.current = ctx;
         const dest = ctx.createMediaStreamDestination();
         mixerDestRef.current  = dest;
         mixedTrackRef.current = dest.stream.getAudioTracks()[0];
+
+        // Include existing screen audio in the mixer
+        if (screenAudioRawTrackRef.current?.readyState === "live") {
+          addToMixer("screen", "Screen Audio", new MediaStream([screenAudioRawTrackRef.current]));
+        }
         addToMixer(id, label, new MediaStream([audioTrack]));
+
         if (roomRef.current && mixedTrackRef.current) {
+          // Transition: unpublish the direct screen audio track, publish mixer output instead
+          if (screenAudioLiveTrackRef.current) {
+            await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
+            screenAudioLiveTrackRef.current = null;
+          }
           const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
           screenAudioLiveTrackRef.current = liveTrack;
           await roomRef.current.localParticipant.publishTrack(liveTrack, {
@@ -430,36 +433,23 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     }
   }, [addToMixer, removeFromMixer]);
 
-  // Route screen audio through the Web Audio mixer at 48 kHz.
-  // The mixer destination always outputs stereo PCM, making forceStereo safe,
-  // and the 48 kHz AudioContext prevents resampling artifacts.
+  // Publish screen audio directly — no Web Audio mixer for the initial capture.
+  // The mixer (AudioContext) is only created later if the user adds a second
+  // source via "Add Tab Audio". Bypassing AudioContext avoids the suspended-context
+  // silence bug: an AudioContext created deep in an async chain (after getDisplayMedia)
+  // can stay suspended even after resume(), outputting zero PCM to LiveKit.
   const publishScreenAudio = useCallback(async (rawTrack: MediaStreamTrack) => {
     if (!roomRef.current) return;
-    await rawTrack.applyConstraints(SCREEN_AUDIO_APPLY_CONSTRAINTS).catch(() => {});
     screenAudioRawTrackRef.current = rawTrack;
-
-    const ctx  = new AudioContext({ sampleRate: 48_000 });
-    if (ctx.state !== "running") await ctx.resume();
-    audioCtxRef.current = ctx;
-    const dest = ctx.createMediaStreamDestination();
-    mixerDestRef.current  = dest;
-    mixedTrackRef.current = dest.stream.getAudioTracks()[0];
-
-    // Connect source to mixer BEFORE publishing — the LiveKit encoder starts
-    // pulling audio immediately on publishTrack; if no source is connected yet
-    // it encodes silence and some codecs/SFUs never recover from that initial gap.
-    addToMixer("screen", "Screen Audio", new MediaStream([rawTrack]));
-
-    const liveTrack = new LocalAudioTrack(mixedTrackRef.current, undefined, true);
+    const liveTrack = new LocalAudioTrack(rawTrack, undefined, true);
     screenAudioLiveTrackRef.current = liveTrack;
     await roomRef.current.localParticipant.publishTrack(liveTrack, {
       source: Track.Source.ScreenShareAudio,
       audioPreset: { maxBitrate: 510_000 },
       dtx: false,
-      forceStereo: true,
       red: true,
     });
-  }, [addToMixer]);
+  }, []);
 
   // Helper: publish mic track and store refs
   const publishMic = useCallback(async () => {
@@ -808,8 +798,14 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           // Mixer running — hot-swap screen source, no LiveKit republish needed
           removeFromMixer("screen");
           addToMixer("screen", "Screen Audio", new MediaStream([newScreenAudioTracks[0]]));
+          screenAudioRawTrackRef.current = newScreenAudioTracks[0];
         } else {
-          // No mixer yet — publish fresh (creates mixer)
+          // Direct publish — unpublish old, publish new raw track
+          if (screenAudioLiveTrackRef.current && roomRef.current) {
+            await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
+            screenAudioLiveTrackRef.current = null;
+          }
+          screenAudioRawTrackRef.current?.stop();
           await publishScreenAudio(newScreenAudioTracks[0]);
         }
         setNoScreenAudio(false);
@@ -817,6 +813,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         // New capture has no audio
         if (audioCtxRef.current) {
           removeFromMixer("screen");
+          screenAudioRawTrackRef.current = null;
         } else {
           if (screenAudioLiveTrackRef.current && roomRef.current) {
             await roomRef.current.localParticipant.unpublishTrack(screenAudioLiveTrackRef.current);
@@ -824,8 +821,6 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           }
           screenAudioRawTrackRef.current?.stop();
           screenAudioRawTrackRef.current = null;
-          audioSourcesRef.current = audioSourcesRef.current.filter(s => s.id !== "screen");
-          setAudioSources([...audioSourcesRef.current]);
         }
         setNoScreenAudio(true);
       }
@@ -925,7 +920,9 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     if (!showPreview || status !== "live" || !el) return;
 
     const tracks: MediaStreamTrack[] = [];
-    if (mixedTrackRef.current?.readyState === "live") tracks.push(mixedTrackRef.current);
+    // Use mixer output if active, otherwise fall back to the raw screen audio track
+    const screenAudioTrack = mixedTrackRef.current ?? screenAudioRawTrackRef.current;
+    if (screenAudioTrack?.readyState === "live") tracks.push(screenAudioTrack);
     if (micRawTrackRef.current?.readyState === "live") tracks.push(micRawTrackRef.current);
 
     if (tracks.length === 0) return;
@@ -1228,7 +1225,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
             <span className="text-[0.75rem] font-display font-semibold text-[var(--text-secondary)] shrink-0">Viewer Preview</span>
 
             <div className="flex items-end gap-3 flex-1">
-              <AudioLevelBar track={mixedTrackRef.current} label="Stream" />
+              <AudioLevelBar track={mixedTrackRef.current ?? screenAudioRawTrackRef.current} label="Stream" />
               <AudioLevelBar track={micRawTrackRef.current} label="Mic" />
             </div>
 

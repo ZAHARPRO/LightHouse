@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/billiards-sse";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,5 +26,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: isHost ? { hostDraftPower: power } : { guestDraftPower: power },
   });
 
+  broadcast(id, { type: "tension", role: isHost ? "host" : "guest", power });
   return NextResponse.json({ ok: true });
 }

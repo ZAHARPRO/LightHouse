@@ -9,8 +9,7 @@ import { auth } from "@/auth";
 import { type Locale, locales } from "@/i18n/config";
 
 import Navbar from "@/components/Navbar";
-import BadgeNotifier from "@/components/BadgeNotifier";
-import DMNotifier from "@/components/DMNotifier";
+import NotificationHub from "@/components/NotificationHub";
 import SupportChatBubble from "@/components/SupportChatBubble";
 import PwaInit from "@/components/PwaInit";
 import { MusicProvider } from "@/contexts/MusicContext";
@@ -77,8 +76,7 @@ export default async function RootLayout({
               <div className="min-h-screen flex flex-col">
                 <PwaInit />
                 <Navbar />
-                <BadgeNotifier />
-                <DMNotifier />
+                <NotificationHub />
                 <SupportChatBubble />
 
                 <main className="flex-1">{children}</main>

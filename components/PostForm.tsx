@@ -86,7 +86,7 @@ export default function PostForm() {
             "flex items-center justify-between px-5 py-4 rounded-[10px] cursor-pointer",
             "transition-[background,border-color] duration-200",
             isPremium
-              ? "bg-orange-500/[0.07] border border-orange-500/30"
+              ? "bg-pink-500/[0.07] border border-pink-500/30"
               : "bg-[var(--bg-elevated)] border border-[var(--border-subtle)]",
           ].join(" ")}
         >

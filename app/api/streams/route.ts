@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyAll } from "@/lib/notifications-sse";
 
 // GET /api/streams — active streams (for feed row)
 export async function GET() {
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
     data: { adminId: session.user.id, title, description, thumbnail },
     select: { id: true, title: true, description: true, thumbnail: true, startedAt: true },
   });
+
+  notifyAll({ type: "stream_live", streamId: stream.id, title: stream.title, thumbnail: stream.thumbnail });
 
   return NextResponse.json(stream, { status: 201 });
 }

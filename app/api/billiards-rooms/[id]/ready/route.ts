@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/billiards-sse";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,5 +14,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (room.guestId !== session.user.id) return NextResponse.json({ error: "Not the guest" }, { status: 403 });
 
   await prisma.billiardsRoom.update({ where: { id }, data: { guestReady: !room.guestReady } });
+  broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });
 }

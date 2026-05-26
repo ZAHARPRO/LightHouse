@@ -32,7 +32,7 @@ export default function StreamPageClient({ userId }: Props) {
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-[10px] bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-[10px] bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0">
           <Monitor size={17} className="text-[var(--accent-orange)]" />
         </div>
         <div>

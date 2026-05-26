@@ -96,7 +96,7 @@ export default function StreamIdPageClient({
                   className="w-14 h-8 sm:w-16 sm:h-9 rounded-[6px] object-cover border border-[var(--border-subtle)] shrink-0 mt-0.5"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-[8px] bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-[8px] bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0 mt-0.5">
                   <Monitor size={15} className="text-[var(--accent-orange)]" />
                 </div>
               )}

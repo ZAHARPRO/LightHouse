@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { BADGE_DEFS, BadgeDef } from "./badges";
+import { notifyUser } from "./notifications-sse";
 
 export async function awardBadge(
   prisma: PrismaClient,
@@ -15,7 +16,7 @@ export async function awardBadge(
   });
   if (existing) return { awarded: false };
 
-  await prisma.$transaction([
+  const [reward] = await prisma.$transaction([
     prisma.reward.create({
       data: { userId, type: type as never, pointsValue: def.points, description: def.description },
     }),
@@ -24,6 +25,15 @@ export async function awardBadge(
       data: { points: { increment: def.points } },
     }),
   ]);
+
+  notifyUser(userId, {
+    type: "badge",
+    id: reward.id,
+    rewardType: type,
+    pointsValue: def.points,
+    description: def.description,
+    earnedAt: reward.earnedAt.toISOString(),
+  });
 
   return { awarded: true, badge: def };
 }

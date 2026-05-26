@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+import { broadcast } from "@/lib/billiards-sse";
+
 type ChatMsg = { userId: string; name: string; text: string; at: number };
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -27,5 +29,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (msgs.length > 100) msgs.splice(0, msgs.length - 100);
 
   await prisma.billiardsRoom.update({ where: { id }, data: { chatJson: JSON.stringify(msgs) } });
+  broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });
 }

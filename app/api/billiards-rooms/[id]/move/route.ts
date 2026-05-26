@@ -7,6 +7,7 @@ import {
 } from "@/lib/billiards";
 import { awardBadge, awardBilliardsEloBadges } from "@/lib/awardBadge";
 import { calculateEloDelta } from "@/lib/elo";
+import { broadcast } from "@/lib/billiards-sse";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -112,5 +113,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
+  broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });
 }

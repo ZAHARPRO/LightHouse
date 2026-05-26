@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateEloDelta } from "@/lib/elo";
 import { awardBadge, awardBilliardsEloBadges } from "@/lib/awardBadge";
+import { broadcast } from "@/lib/billiards-sse";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,5 +54,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });
 }

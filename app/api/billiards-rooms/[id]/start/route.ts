@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { initialState, serializeState } from "@/lib/billiards";
+import { broadcast } from "@/lib/billiards-sse";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,5 +39,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     },
   });
 
+  broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });
 }

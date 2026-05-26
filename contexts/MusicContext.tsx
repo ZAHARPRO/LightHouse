@@ -373,12 +373,23 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     smartLoadingRef.current = true;
     setSmartLoading(true);
     try {
-      const res = await fetch(
-        `/api/youtube/search?q=${encodeURIComponent(`${baseTrack.title} ${baseTrack.channel}`)}`
-      );
-      if (!res.ok) return;
-      const d = await res.json() as { items: YTTrack[] };
-      const pool = (d.items ?? []).filter(i => i.videoId !== baseTrack.videoId);
+      // Try YouTube related videos first
+      let pool: YTTrack[] = [];
+      const relRes = await fetch(`/api/youtube/related?videoId=${encodeURIComponent(baseTrack.videoId)}`);
+      if (relRes.ok) {
+        const d = await relRes.json() as { items: YTTrack[] };
+        pool = (d.items ?? []).filter(i => i.videoId !== baseTrack.videoId);
+      }
+      // Fall back to text search if related returned nothing
+      if (!pool.length) {
+        const srRes = await fetch(
+          `/api/youtube/search?q=${encodeURIComponent(`${baseTrack.title} ${baseTrack.channel}`)}`
+        );
+        if (srRes.ok) {
+          const d = await srRes.json() as { items: YTTrack[] };
+          pool = (d.items ?? []).filter(i => i.videoId !== baseTrack.videoId);
+        }
+      }
       if (!pool.length) return;
       const picked = pool[Math.floor(Math.random() * Math.min(5, pool.length))];
       dispatch({ type: "PLAY_NOW", track: picked });

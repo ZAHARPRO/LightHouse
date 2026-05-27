@@ -138,9 +138,9 @@ const SCREEN_VIDEO_OPTS = (captureCursor: boolean, fps: number) => ({
 const MIC_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
-  autoGainControl:  false,
-  sampleRate:   48_000,
-  channelCount: 1,
+  // autoGainControl on: ensures mic is audible even at low input volume.
+  // Keep the rest unprocessed for clean stream audio.
+  autoGainControl:  true,
 };
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
@@ -600,10 +600,19 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
         setNoScreenAudio(true);
       }
 
-      // Publish pre-captured mic (secured before screen dialog to avoid audio conflicts)
-      if (preMicStream) {
-        const micRaw = preMicStream.getAudioTracks()[0];
-        if (micRaw && roomRef.current) {
+      // Publish mic — use the pre-captured stream if still live, otherwise re-request.
+      // On Windows, getDisplayMedia({ audio: true }) can steal the audio subsystem and
+      // end a previously captured getUserMedia mic track.
+      if (captureAudio && roomRef.current) {
+        let micRaw = preMicStream?.getAudioTracks()[0] ?? null;
+        // Check if the pre-captured track is still alive
+        if (!micRaw || micRaw.readyState !== "live") {
+          const fallback = await navigator.mediaDevices
+            .getUserMedia({ audio: MIC_CONSTRAINTS, video: false })
+            .catch(() => null);
+          micRaw = fallback?.getAudioTracks()[0] ?? null;
+        }
+        if (micRaw && micRaw.readyState === "live" && roomRef.current) {
           micRawTrackRef.current = micRaw;
           const micLive = new LocalAudioTrack(micRaw, undefined, true);
           micLiveTrackRef.current = micLive;

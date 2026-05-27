@@ -166,9 +166,11 @@ export default function StreamViewer({ streamId }: Props) {
       el.volume = volumeRef.current;
       document.body.appendChild(el);
       audioElsRef.current.set(sid, el);
-      // Bypass track.attach() to avoid adaptiveStream visibility side-effects;
-      // directly wire the MediaStreamTrack so the browser plays it unconditionally.
-      el.srcObject = new MediaStream([track.mediaStreamTrack]);
+      // track.attach() routes audio to the element AND activates LiveKit's internal
+      // audio pipeline for the track. adaptiveStream: false (set on the Room) means
+      // the SDK will NOT use a ResizeObserver to pause invisible elements, so this
+      // call is safe even for <audio> tags with zero rendered dimensions.
+      track.attach(el);
       el.play()
         .then(() => setAudioBlocked(false))
         .catch(() => setAudioBlocked(true));
@@ -188,6 +190,7 @@ export default function StreamViewer({ streamId }: Props) {
       if (!sid) return;
       const el = audioElsRef.current.get(sid);
       if (el) {
+        track.detach(el);
         el.srcObject = null;
         el.remove();
         audioElsRef.current.delete(sid);

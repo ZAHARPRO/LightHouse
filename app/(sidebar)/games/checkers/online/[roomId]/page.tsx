@@ -541,7 +541,10 @@ if (room.status === "WAITING") {
       subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
       rated={room.rated}
       isHost={room.myRole === "host"}
-      myRole={room.myRole as "host" | "guest"}
+      myRole={room.myRole as "host" | "guest" | "spectator"}
+      gameEmoji="🔴"
+      onJoin={handleJoin}
+      joining={joining}
       host={{
         name: room.hostName,
         image: room.hostImage,

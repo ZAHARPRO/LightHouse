@@ -152,21 +152,23 @@ export default function StreamViewer({ streamId }: Props) {
       applyQuality(quality);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      // Give each remote audio track its own <audio> element and call track.attach() on it.
-      // This is critical for two reasons:
-      // 1. track.attach() tells LiveKit the track is in use — with adaptiveStream enabled the
-      //    SDK silently stops delivering audio to tracks that were never attached.
-      // 2. It avoids the in-place MediaStream mutation bug where setting el.srcObject to the
-      //    same reference doesn't trigger a browser reload, so new tracks are never rendered.
-      if (!track.sid || audioElsRef.current.has(track.sid)) return; // already attached or no sid yet
+      // Give each remote audio track its own <audio> element.
+      // Use pub.trackSid (always set by SFU) as the key, with track.sid as fallback.
+      // We set srcObject directly rather than calling track.attach() to avoid LiveKit SDK v2's
+      // adaptiveStream ResizeObserver logic, which can mistakenly pause invisible <audio>
+      // elements (they report 0×0 size) and stop server-side delivery.
+      const sid = pub?.trackSid ?? track.sid;
+      if (!sid || audioElsRef.current.has(sid)) return; // already attached or no sid yet
       const el = document.createElement("audio");
       el.autoplay = true;
       el.setAttribute("playsinline", "");
       el.muted  = mutedRef.current;
       el.volume = volumeRef.current;
       document.body.appendChild(el);
-      audioElsRef.current.set(track.sid, el);
-      track.attach(el);
+      audioElsRef.current.set(sid, el);
+      // Bypass track.attach() to avoid adaptiveStream visibility side-effects;
+      // directly wire the MediaStreamTrack so the browser plays it unconditionally.
+      el.srcObject = new MediaStream([track.mediaStreamTrack]);
       el.play()
         .then(() => setAudioBlocked(false))
         .catch(() => setAudioBlocked(true));
@@ -174,7 +176,7 @@ export default function StreamViewer({ streamId }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, applyQuality]);
 
-  const detachTrack = useCallback((track: RemoteTrack) => {
+  const detachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
     if (track.kind === Track.Kind.Video) {
       const el = videoRef.current;
       if (!el) return;
@@ -182,12 +184,13 @@ export default function StreamViewer({ streamId }: Props) {
       activePubRef.current = null;
       setStatus("offline");
     } else if (track.kind === Track.Kind.Audio) {
-      const el = track.sid ? audioElsRef.current.get(track.sid) : undefined;
-      if (el && track.sid) {
-        track.detach(el);
+      const sid = pub?.trackSid ?? track.sid;
+      if (!sid) return;
+      const el = audioElsRef.current.get(sid);
+      if (el) {
         el.srcObject = null;
         el.remove();
-        audioElsRef.current.delete(track.sid);
+        audioElsRef.current.delete(sid);
       }
     }
   }, []);
@@ -211,7 +214,11 @@ export default function StreamViewer({ streamId }: Props) {
         if (!wsUrl) throw new Error("LiveKit URL not configured");
 
         const room = new Room({
-          adaptiveStream: true,
+          // adaptiveStream disabled: in LiveKit SDK v2 it attaches a ResizeObserver to
+          // every element passed to track.attach(). Invisible <audio> elements (0×0) are
+          // flagged as "not visible" which can pause server-side audio delivery.
+          // Video quality is controlled manually via setVideoQuality() instead.
+          adaptiveStream: false,
           dynacast: true,
         });
         if (cancelled) return;
@@ -220,7 +227,7 @@ export default function StreamViewer({ streamId }: Props) {
         room.on(RoomEvent.TrackSubscribed,
           (track: RemoteTrack, pub: RemoteTrackPublication) => attachTrack(track, pub));
         room.on(RoomEvent.TrackUnsubscribed,
-          (track: RemoteTrack) => detachTrack(track));
+          (track: RemoteTrack, pub: RemoteTrackPublication) => detachTrack(track, pub));
         room.on(RoomEvent.Reconnecting, () => setReconnecting(true));
         room.on(RoomEvent.Reconnected, () => {
           setReconnecting(false);
@@ -229,7 +236,7 @@ export default function StreamViewer({ streamId }: Props) {
             p.trackPublications.forEach((pub) => {
               if (!pub.track) return;
               if (pub.kind === Track.Kind.Video) { attachTrack(pub.track as RemoteTrack, pub); hasVideo = true; }
-              else if (pub.kind === Track.Kind.Audio) { attachTrack(pub.track as RemoteTrack); }
+              else if (pub.kind === Track.Kind.Audio) { attachTrack(pub.track as RemoteTrack, pub); }
             });
           });
           if (!hasVideo) setStatus("offline");
@@ -249,7 +256,7 @@ export default function StreamViewer({ streamId }: Props) {
               attachTrack(pub.track as RemoteTrack, pub);
               foundVideo = true;
             } else if (pub.kind === Track.Kind.Audio) {
-              attachTrack(pub.track as RemoteTrack);
+              attachTrack(pub.track as RemoteTrack, pub);
             }
           });
         });

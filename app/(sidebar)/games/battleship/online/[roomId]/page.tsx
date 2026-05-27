@@ -280,7 +280,7 @@ export default function BattleshipOnlineRoom() {
 
   // Waiting lobby
   const [leaving, setLeaving] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [joining, setJoining] = useState(false);
 
   // ─── Fetch room ────────────────────────────────────────────────────────────
   const fetchRoom = useCallback(async () => {
@@ -406,6 +406,17 @@ export default function BattleshipOnlineRoom() {
     await fetchRoom();
   }
 
+  async function handleJoin() {
+    setJoining(true);
+    const res = await fetch(`/api/battleship-rooms/${roomId}/join`, { method: "POST" });
+    if (res.status === 401) {
+      router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+    setJoining(false);
+    fetchRoom();
+  }
+
   // ─── Derived state ───────────────────────────────────────────────────────────
   const userId = session?.user?.id;
   const myRole = userId === room?.hostId ? "host"
@@ -464,7 +475,6 @@ export default function BattleshipOnlineRoom() {
         subtitle={TC_LABELS[room.timeControl] ?? room.timeControl}
         rated={room.rated}
         isHost={room.myRole === "host"}
-        myRole={room.myRole as "host" | "guest"}
         host={{
           name: room.host?.name,
           image: room.host?.image,
@@ -483,11 +493,15 @@ export default function BattleshipOnlineRoom() {
           rankColor: guestRank?.color,
         } : null}
         guestReady={room.guestReady}
+        myRole={room.myRole as "host" | "guest" | "spectator"}
+        gameEmoji="🚢"
         onLeave={room.myRole === "host"
           ? async () => { await fetch(`/api/battleship-rooms/${roomId}`, { method: "DELETE" }); router.push("/games/battleship/online"); }
           : () => router.push("/games/battleship/online")}
         onReady={() => { handleReady() }}
         onStart={() => { handleStart() }}
+        onJoin={handleJoin}
+        joining={joining}
         startDisabled={!room.guestId || !room.guestReady}
         startLabel={!room.guestId ? "Waiting for opponent…" : "Opponent not ready"}
       />

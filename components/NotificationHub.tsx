@@ -198,18 +198,31 @@ function StreamToastItem({ data, onDone }: { data: StreamToast; onDone: () => vo
         onClick={dismiss}
         className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3 no-underline"
       >
-        <div
-          className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center"
-          style={{ background: "#ef444418", border: "1.5px solid #ef444440" }}
-        >
-          <Radio size={22} className="text-[#ef4444]" />
-        </div>
-        <div className="min-w-0">
+        {/* Author avatar or fallback Radio icon */}
+        {data.authorImage ? (
+          <div className="relative shrink-0">
+            <img src={data.authorImage} alt="" className="w-11 h-11 rounded-xl object-cover" />
+            <span className="absolute -bottom-1 -right-1 bg-[#ef4444] rounded-full p-0.5">
+              <Radio size={10} className="text-white" />
+            </span>
+          </div>
+        ) : (
+          <div
+            className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center"
+            style={{ background: "#ef444418", border: "1.5px solid #ef444440" }}
+          >
+            <Radio size={22} className="text-[#ef4444]" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
           <p className="text-[0.6875rem] font-display font-bold uppercase tracking-[0.06em] text-[#f87171] mb-[0.1rem]">
-            Live now!
+            🔴 Live now{data.authorName ? ` · ${data.authorName}` : ""}
           </p>
           <p className="font-display font-extrabold text-[0.9rem] text-[var(--text-primary)] truncate">
             {data.title}
+          </p>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">
+            {data.viewerCount} watching · {data.likeCount} likes
           </p>
         </div>
       </Link>

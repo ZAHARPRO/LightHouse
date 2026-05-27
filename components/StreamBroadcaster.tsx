@@ -140,7 +140,7 @@ const MIC_CONSTRAINTS: MediaTrackConstraints = {
   noiseSuppression: false,
   autoGainControl:  false,
   sampleRate:   48_000,
-  channelCount: 2,
+  channelCount: 1,
 };
 
 export default function StreamBroadcaster({ existingStreamId, onStreamChange }: Props) {
@@ -464,8 +464,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       await roomRef.current.localParticipant.publishTrack(liveTrack, {
         source: Track.Source.Microphone,
         audioPreset: { maxBitrate: 510_000 },
-        dtx: true,
-        forceStereo: true,
+        dtx: false,
         red: true,    // FEC: recovers lost packets
       });
       return true;
@@ -611,8 +610,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
           await roomRef.current.localParticipant.publishTrack(micLive, {
             source: Track.Source.Microphone,
             audioPreset: { maxBitrate: 510_000 },
-            dtx: true,
-            forceStereo: true,
+            dtx: false,
             red: true,
           });
           setMicMuted(false);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { notifyAll } from "@/lib/notifications-sse";
+import { notifyAllExcept } from "@/lib/notifications-sse";
 
 // GET /api/streams — active streams (for feed row)
 export async function GET() {
@@ -42,12 +42,26 @@ export async function POST(req: Request) {
     data: { isActive: false, endedAt: new Date() },
   });
 
+  const admin = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, image: true },
+  });
+
   const stream = await prisma.stream.create({
     data: { adminId: session.user.id, title, description, thumbnail },
     select: { id: true, title: true, description: true, thumbnail: true, startedAt: true },
   });
 
-  notifyAll({ type: "stream_live", streamId: stream.id, title: stream.title, thumbnail: stream.thumbnail });
+  notifyAllExcept(session.user.id, {
+    type: "stream_live",
+    streamId: stream.id,
+    title: stream.title,
+    thumbnail: stream.thumbnail,
+    authorName: admin?.name ?? null,
+    authorImage: admin?.image ?? null,
+    viewerCount: 0,
+    likeCount: 0,
+  });
 
   return NextResponse.json(stream, { status: 201 });
 }

@@ -250,6 +250,22 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState]);
 
+  // Buffering watchdog — if the player is stuck in BUFFERING (state 3) for >8 s,
+  // nudge it with a seek to the same position to un-stick the buffer.
+  const playerStateRef = useRef(playerState);
+  playerStateRef.current = playerState;
+  useEffect(() => {
+    if (playerState !== 3) return;
+    const t = setTimeout(() => {
+      if (playerStateRef.current !== 3) return; // already recovered
+      try {
+        const pos = playerRef.current?.getCurrentTime() ?? 0;
+        playerRef.current?.seekTo(pos, true);
+      } catch {}
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [playerState]);
+
   // ── Silent AudioContext — keeps the audio session alive on iOS lock screen ─
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

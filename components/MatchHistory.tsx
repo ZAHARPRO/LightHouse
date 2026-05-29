@@ -9,6 +9,12 @@ import {
 import Image from "next/image";
 import { fromFEN, getLegalMoves, applyMove, toSAN, type GameState } from "@/lib/chess";
 import { computeNeighbors } from "@/lib/minesweeper";
+import {
+  initialState as billiardsInitial, simulateShot, decodeShots,
+  TABLE_W, TABLE_H, BALL_R, POCKET_R, POCKETS,
+  PF_LEFT, PF_RIGHT, PF_TOP, PF_BOTTOM,
+  type BilliardsState, type ShotRecord,
+} from "@/lib/billiards";
 
 
 // ─────────────────────────────────────────────────────────── types
@@ -1148,7 +1154,261 @@ type BilliardsGame = {
   shotsJson: string | null; totalShots: number;
 };
 
-function BilliardsGameCard({ game }: { game: BilliardsGame }) {
+// ─────────────────────────────────────────────────────────── billiards SVG table
+
+const BALL_COLORS: Record<number, string> = {
+  1:"#f7d000",2:"#1a5cdb",3:"#e03030",4:"#6a1a8a",5:"#e07020",6:"#157a3a",7:"#8b1a1a",
+  8:"#1a1a1a",9:"#f7d000",10:"#1a5cdb",11:"#e03030",12:"#6a1a8a",13:"#e07020",14:"#157a3a",15:"#8b1a1a",
+};
+
+function BilliardsTableSVG({ state, scale = 1 }: { state: BilliardsState; scale?: number }) {
+  const W = TABLE_W * scale, H = TABLE_H * scale;
+  const r = BALL_R * scale;
+  const pr = POCKET_R * scale * 0.6;
+  return (
+    <svg width={W} height={H} style={{ display:"block", borderRadius: 6, overflow:"hidden" }}>
+      {/* Felt */}
+      <rect width={W} height={H} fill="#1a7a3c" />
+      {/* Cushions */}
+      <rect x={0} y={0} width={PF_LEFT*scale} height={H} fill="#0d4820"/>
+      <rect x={(TABLE_W-PF_LEFT)*scale} y={0} width={PF_LEFT*scale} height={H} fill="#0d4820"/>
+      <rect x={0} y={0} width={W} height={PF_TOP*scale} fill="#0d4820"/>
+      <rect x={0} y={(TABLE_H-PF_TOP)*scale} width={W} height={PF_TOP*scale} fill="#0d4820"/>
+      {/* Playing field border */}
+      <rect x={PF_LEFT*scale} y={PF_TOP*scale}
+        width={(PF_RIGHT-PF_LEFT)*scale} height={(PF_BOTTOM-PF_TOP)*scale}
+        fill="none" stroke="#f97316" strokeWidth={1.5*scale}/>
+      {/* Head string */}
+      <line x1={TABLE_W*0.25*scale} y1={PF_TOP*scale} x2={TABLE_W*0.25*scale} y2={PF_BOTTOM*scale}
+        stroke="rgba(255,255,255,0.12)" strokeWidth={scale} strokeDasharray={`${3*scale} ${5*scale}`}/>
+      {/* Pockets */}
+      {POCKETS.map(([px,py],i) => (
+        <circle key={i} cx={px*scale} cy={py*scale} r={pr} fill="#050505"/>
+      ))}
+      {/* Balls */}
+      {state.balls.filter(b => !b.pocketed).map(b => {
+        const isStripe = b.id >= 9 && b.id <= 15;
+        const isCue    = b.id === 0;
+        const color    = isCue ? "#ffffff" : BALL_COLORS[b.id] ?? "#888";
+        const cx = b.x * scale, cy = b.y * scale;
+        const clipId = `bl${b.id}`;
+        return (
+          <g key={b.id}>
+            {isStripe && (
+              <defs>
+                <clipPath id={clipId}>
+                  <circle cx={cx} cy={cy} r={r}/>
+                </clipPath>
+              </defs>
+            )}
+            {/* Base circle */}
+            <circle cx={cx} cy={cy} r={r} fill={isStripe ? "#ffffff" : color}
+              stroke="rgba(0,0,0,0.4)" strokeWidth={0.8*scale}/>
+            {/* Stripe band */}
+            {isStripe && (
+              <rect x={cx-r} y={cy-r*0.5} width={r*2} height={r} fill={color} clipPath={`url(#${clipId})`}/>
+            )}
+            {/* Dot for number visibility */}
+            {!isCue && (
+              <circle cx={cx} cy={cy} r={r*0.38}
+                fill={b.id===8 ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.7)"}/>
+            )}
+            {/* Ball number */}
+            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+              fontSize={r * 0.72} fontWeight="bold" fontFamily="monospace"
+              fill={b.id===8||b.id>8 ? (isStripe ? "#1a1a1a" : "#ffffff") : "#1a1a1a"}
+              style={{ userSelect:"none", pointerEvents:"none" }}>
+              {b.id === 0 ? "" : b.id}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────── billiards replay modal
+
+function BilliardsReplayModal({ game, onClose }: { game: BilliardsGame; onClose: () => void }) {
+  const shots = useMemo<ShotRecord[]>(() => decodeShots(game.shotsJson ?? "[]"), [game.shotsJson]);
+
+  // states[i] = position AFTER shots[i-1] (states[0] = initial rack)
+  const states = useMemo<BilliardsState[]>(() => {
+    const arr: BilliardsState[] = [billiardsInitial()];
+    let s = arr[0];
+    for (const rec of shots) {
+      s = simulateShot(s, rec.shot).newState;
+      arr.push(s);
+    }
+    return arr;
+  }, [shots]);
+
+  const [idx, setIdx]       = useState(states.length - 1);
+  const [autoplay, setAuto] = useState(false);
+
+  const go = useCallback((n: number) => {
+    setAuto(false);
+    setIdx(Math.max(0, Math.min(states.length - 1, n)));
+  }, [states.length]);
+
+  useEffect(() => {
+    if (!autoplay) return;
+    const t = setInterval(() => {
+      setIdx(i => { if (i >= states.length - 1) { setAuto(false); return i; } return i + 1; });
+    }, 600);
+    return () => clearInterval(t);
+  }, [autoplay, states.length]);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  go(idx - 1);
+      if (e.key === "ArrowRight") go(idx + 1);
+      if (e.key === " ")          { e.preventDefault(); setAuto(a => !a); }
+      if (e.key === "Escape")     onClose();
+    };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [idx, go, onClose]);
+
+  // Responsive scale
+  const [scale, setScale] = useState(0.5);
+  useEffect(() => {
+    const upd = () => {
+      const maxW = Math.min(window.innerWidth - 32, 720);
+      setScale(Math.max(0.3, Math.min(0.9, maxW / TABLE_W)));
+    };
+    upd();
+    window.addEventListener("resize", upd);
+    return () => window.removeEventListener("resize", upd);
+  }, []);
+
+  const won  = game.outcome === "win";
+  const drew = game.outcome === "draw";
+  const resultColor = drew ? "text-[var(--text-muted)]" : won ? "text-yellow-400" : "text-red-400";
+  const resultLabel = drew ? "Draw" : won ? "Victory" : "Defeat";
+  const resultIcon  = drew ? null : won ? <Trophy size={13}/> : <Skull size={13}/>;
+
+  const currentShot = idx > 0 ? shots[idx - 1] : null;
+  const WIN_REASON: Record<string, string> = {
+    pocketed_eight:"Pocketed 8-ball", eight_ball_early:"8-ball too early",
+    scratch_on_eight:"Scratch on 8", timeout:"Timeout", resigned:"Resigned",
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[960] flex flex-col sm:items-center sm:justify-center sm:p-4"
+      style={{ background:"rgba(0,0,0,0.9)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-[var(--bg-card)] sm:rounded-2xl sm:border border-[var(--border-subtle)]
+        w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-subtle)] shrink-0">
+          <span className={`flex items-center gap-1 font-display font-bold text-sm shrink-0 ${resultColor}`}>
+            {resultIcon}{resultLabel}
+          </span>
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 text-[0.65rem] text-[var(--text-muted)]">
+            <span className="truncate max-w-[80px]">{game.oppName ?? "Opponent"}</span>
+            <span>·</span>
+            <span>{TC_LABEL[game.timeControl] ?? game.timeControl}</span>
+            <span>·</span>
+            <span>{game.totalShots} shots</span>
+            {game.winReason && <><span>·</span><span>{WIN_REASON[game.winReason] ?? game.winReason.replace(/_/g," ")}</span></>}
+            {game.myEloDelta != null && (
+              <span className={`font-bold ${game.myEloDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {game.myEloDelta >= 0 ? "+" : ""}{game.myEloDelta} ELO
+              </span>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="p-2 rounded-xl hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0 touch-manipulation">
+            <X size={18}/>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto flex flex-col items-center gap-3 p-4">
+          {/* Table */}
+          <BilliardsTableSVG state={states[idx]} scale={scale} />
+
+          {/* Shot info */}
+          <p className="text-[0.65rem] text-[var(--text-muted)] text-center min-h-[1.2rem]">
+            {idx === 0 ? "Starting position" : currentShot ? (
+              `Shot ${idx}/${shots.length} · ${currentShot.by === "host" ? game.oppName ?? "Host" : "You"}` +
+              (currentShot.pocketed.filter(id => id !== 0).length > 0 ? ` · +${currentShot.pocketed.filter(id => id !== 0).length} pocketed` : "") +
+              (currentShot.foul ? " · FOUL" : "") +
+              (currentShot.earlyEight ? " · ⚠ Early 8" : "") +
+              (currentShot.winner ? ` · 🏆 ${currentShot.winner === "host" ? game.oppName ?? "Host" : "You"} wins` : "")
+            ) : ""}
+          </p>
+
+          {/* Slider */}
+          <input type="range" min={0} max={states.length - 1} value={idx}
+            onChange={e => go(+e.target.value)}
+            className="w-full max-w-md accent-orange-500 cursor-pointer"/>
+
+          {/* Controls */}
+          <div className="flex items-center gap-1">
+            <button onClick={() => go(0)} disabled={idx === 0}
+              className="p-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+              <ChevronsLeft size={15}/>
+            </button>
+            <button onClick={() => go(idx - 1)} disabled={idx === 0}
+              className="p-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+              <ChevronLeft size={15}/>
+            </button>
+            <button onClick={() => { if (idx >= states.length - 1) go(0); setAuto(a => !a); }}
+              className={["p-2.5 rounded-xl border transition-colors touch-manipulation",
+                autoplay
+                  ? "bg-orange-500/20 border-orange-500/40 text-orange-400"
+                  : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              ].join(" ")}>
+              {autoplay ? <Pause size={15}/> : <Play size={15}/>}
+            </button>
+            <button onClick={() => go(idx + 1)} disabled={idx >= states.length - 1}
+              className="p-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+              <ChevronRight size={15}/>
+            </button>
+            <button onClick={() => go(states.length - 1)} disabled={idx >= states.length - 1}
+              className="p-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors touch-manipulation">
+              <ChevronsRight size={15}/>
+            </button>
+          </div>
+          <p className="text-[0.58rem] text-[var(--text-muted)] opacity-50 hidden sm:block">← → Space · Esc to close</p>
+
+          {/* Shot list */}
+          {shots.length > 0 && (
+            <div className="w-full max-w-md border-t border-[var(--border-subtle)] pt-3 mt-1">
+              <p className="text-[0.6rem] font-display font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2">Shots</p>
+              <div className="flex flex-col gap-px max-h-40 overflow-y-auto">
+                {shots.map((s, i) => (
+                  <button key={i} onClick={() => go(i + 1)}
+                    className={["flex items-center gap-2 px-2 py-1 rounded text-left text-xs transition-colors touch-manipulation",
+                      idx === i + 1
+                        ? "bg-orange-500/20 text-orange-300"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                    ].join(" ")}>
+                    <span className="font-mono text-[var(--text-muted)] w-5 shrink-0">{i + 1}.</span>
+                    <span className="font-semibold text-[0.65rem]">{s.by === "host" ? game.oppName ?? "Host" : "You"}</span>
+                    {s.pocketed.filter(id => id !== 0).length > 0 &&
+                      <span className="text-green-400 text-[0.6rem]">+{s.pocketed.filter(id => id !== 0).length}</span>}
+                    {s.foul && <span className="text-red-400 text-[0.58rem]">FOUL</span>}
+                    {s.earlyEight && <span className="text-amber-400 text-[0.58rem]">⚠</span>}
+                    {s.winner && <span className="text-yellow-400 text-[0.58rem]">🏆</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─────────────────────────────────────────────────────────── billiards card / panel
+
+function BilliardsGameCard({ game, onView }: { game: BilliardsGame; onView: () => void }) {
   const won  = game.outcome === "win";
   const drew = game.outcome === "draw";
   return (
@@ -1171,13 +1431,17 @@ function BilliardsGameCard({ game }: { game: BilliardsGame }) {
           {game.winReason ? ` · ${game.winReason.replace(/_/g, " ")}` : ""}
         </p>
       </div>
-      <div className="flex flex-col items-end shrink-0 gap-0.5">
+      <div className="flex flex-col items-end shrink-0 gap-1">
         {game.myEloDelta !== null && (
           <span className={["text-xs font-bold", game.myEloDelta >= 0 ? "text-green-400" : "text-red-400"].join(" ")}>
             {game.myEloDelta >= 0 ? "+" : ""}{game.myEloDelta}
           </span>
         )}
         <span className="text-[0.65rem] text-[var(--text-muted)]">{fmtAgo(game.endedAt)}</span>
+        <button onClick={onView}
+          className="px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/25 text-orange-400 text-[0.62rem] font-bold hover:bg-orange-500/20 transition-colors touch-manipulation whitespace-nowrap">
+          Replay
+        </button>
       </div>
     </div>
   );
@@ -1188,6 +1452,7 @@ function BilliardsHistoryPanel({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [page, setPage]       = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [view, setView]       = useState<BilliardsGame | null>(null);
 
   function load(p: number) {
     setLoading(true);
@@ -1210,7 +1475,7 @@ function BilliardsHistoryPanel({ userId }: { userId: string }) {
   return (
     <>
       <div className="flex flex-col gap-2">
-        {games.map(g => <BilliardsGameCard key={g.id} game={g} />)}
+        {games.map(g => <BilliardsGameCard key={g.id} game={g} onView={() => setView(g)} />)}
       </div>
       {hasMore && (
         <button onClick={() => setPage(p => p + 1)} disabled={loading}
@@ -1218,6 +1483,7 @@ function BilliardsHistoryPanel({ userId }: { userId: string }) {
           {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
         </button>
       )}
+      {view && <BilliardsReplayModal game={view} onClose={() => setView(null)} />}
     </>
   );
 }

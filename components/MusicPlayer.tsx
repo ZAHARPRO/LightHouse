@@ -412,6 +412,9 @@ export default function MusicPlayer({ onClose, isOpen = true }: { onClose: () =>
       return; // track was applied from incoming SSE — don't echo back
     }
     if (inLobbyApplyRef.current) return;
+    // Keep syncedTrackRef current so stale SSE events (old track URI from another source)
+    // don't fall into the "same track" drift-correction branch while the player is loading the new one.
+    syncedTrackRef.current = track.videoId;
     // Mark the current queue as already-synced so the queue effect doesn't fire a second
     // hostSync in the same render cycle (e.g. after auto-advance) with stale isPlaying=false
     incomingSyncQueueRef.current = JSON.stringify(activeQueue);

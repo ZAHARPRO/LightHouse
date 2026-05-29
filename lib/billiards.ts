@@ -405,22 +405,19 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
       ? myGroupBalls.every(id => nowPocketed.includes(id) || prePocketed.has(id))
       : allColoredCleared;
 
-    if (scratched || hasFoul || !allMyGroupCleared) {
-      // Early 8-ball — apply 3-strike rule
+    if (!allMyGroupCleared && !scratched && !hasFoul) {
+      // Pocketed 8-ball before clearing group (no foul/scratch) — 3-strike rule
       const myStrikesBefore = newState[me === "host" ? "hostEarlyEight" : "guestEarlyEight"] as number;
       const strikeCount = myStrikesBefore + 1;
 
       if (strikeCount >= 3) {
-        // Third strike — opponent wins
         winner = opp;
-        winReason = scratched ? "scratch_on_eight" : "eight_ball_early";
+        winReason = "eight_ball_early";
         events.push({ type: "loss", reason: winReason });
       } else {
-        // First or second strike — warning, respawn 8-ball, opponent gets cue-in-hand
         if (me === "host") newState.hostEarlyEight = strikeCount;
         else newState.guestEarlyEight = strikeCount;
 
-        // Respawn 8-ball at the foot-spot (rack center)
         const eightBall = balls.find(b => b.id === 8);
         if (eightBall) {
           eightBall.pocketed = false;
@@ -429,14 +426,19 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
           eightBall.vx = 0;
           eightBall.vy = 0;
         }
-        // If cue ball was also scratched, restore it (opponent cue-in-hand)
         const cueBallAfter = balls.find(b => b.id === 0);
-        if (cueBallAfter) cueBallAfter.pocketed = true; // keep pocketed → cue_in_hand placement
+        if (cueBallAfter) cueBallAfter.pocketed = true;
         newState.turn = opp;
         newState.phase = "cue_in_hand";
         events.push({ type: "early_eight", strikes: strikeCount });
       }
+    } else if (scratched || hasFoul || !allMyGroupCleared) {
+      // Foul/scratch while pocketing 8-ball, OR early 8 with foul — immediate loss (standard rules)
+      winner = opp;
+      winReason = scratched ? "scratch_on_eight" : "eight_ball_early";
+      events.push({ type: "loss", reason: winReason });
     } else {
+      // Group cleared, clean shot — win
       winner = me;
       winReason = "pocketed_eight";
       events.push({ type: "win", reason: winReason });

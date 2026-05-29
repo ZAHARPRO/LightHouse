@@ -375,6 +375,7 @@ export default function BilliardsOnlineRoom() {
   const shotQueueRef = useRef<Array<{ frames: Ball[][]; sound: SoundKey; angle: number; power: number; byOpponent: boolean }>>([]);
   const animatingRef = useRef(false);
   const animIdRef = useRef(0);
+  const replayIdxRef = useRef<number | null>(null);
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
   const opponentResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -516,9 +517,12 @@ export default function BilliardsOnlineRoom() {
     [room?.shotsJson],
   );
 
+  // Keep replayIdxRef in sync so the shots effect always reads the live value (avoids stale closure)
+  useEffect(() => { replayIdxRef.current = replayIdx; }, [replayIdx]);
+
   // Animate shots that arrived from the server (opponent moves)
   useEffect(() => {
-    if (!room || room.status === "WAITING" || replayIdx !== null) return;
+    if (!room || room.status === "WAITING" || replayIdxRef.current !== null) return;
     // On first load skip existing shots — sync confirmedState to server state, skip animation
     if (!initializedAnimRef.current) {
       initializedAnimRef.current = true;
@@ -581,7 +585,7 @@ export default function BilliardsOnlineRoom() {
       }
       if (i >= frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
-        processQueue(); return;
+        return; // do NOT call processQueue — replay mode must not drain the live animation queue
       }
       const t = Math.min(1, (now - lastFrameTime) / 17);
       const next = frames[i + 1];
@@ -989,7 +993,16 @@ export default function BilliardsOnlineRoom() {
           <div className="mt-6 flex flex-col items-center gap-3">
             <canvas ref={canvasRef} style={{ width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale }} />
             <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
-              cancelAnimationFrame(rafRef.current); setAnimBalls(null); setReplayIdx(i);
+              cancelAnimationFrame(rafRef.current);
+              ++animIdRef.current; // invalidate any running tick (live or replay)
+              shotQueueRef.current = []; // discard queued live animations
+              animatingRef.current = false;
+              if (i === null) {
+                // Exiting replay — resync so future opponent shots animate from correct baseline
+                lastAnimatedCountRef.current = shots.length;
+                if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
+              }
+              setAnimBalls(null); setReplayIdx(i);
             }} />
           </div>
         )}
@@ -1131,12 +1144,28 @@ export default function BilliardsOnlineRoom() {
             <div className="flex items-center justify-between mb-2 shrink-0">
               <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Shot History</span>
               {replayIdx !== null && (
-                <button onClick={() => { cancelAnimationFrame(rafRef.current); setAnimBalls(null); setReplayIdx(null); }}
-                  className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">Live »</button>
+                <button onClick={() => {
+                  cancelAnimationFrame(rafRef.current);
+                  ++animIdRef.current;
+                  shotQueueRef.current = [];
+                  animatingRef.current = false;
+                  lastAnimatedCountRef.current = shots.length;
+                  if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
+                  setAnimBalls(null); setReplayIdx(null);
+                }} className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">Live »</button>
               )}
             </div>
             <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
-              cancelAnimationFrame(rafRef.current); setAnimBalls(null); setReplayIdx(i);
+              cancelAnimationFrame(rafRef.current);
+              ++animIdRef.current; // invalidate any running tick (live or replay)
+              shotQueueRef.current = []; // discard queued live animations
+              animatingRef.current = false;
+              if (i === null) {
+                // Exiting replay — resync so future opponent shots animate from correct baseline
+                lastAnimatedCountRef.current = shots.length;
+                if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
+              }
+              setAnimBalls(null); setReplayIdx(i);
             }} />
           </div>
 

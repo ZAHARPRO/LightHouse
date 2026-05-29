@@ -50,6 +50,8 @@ export interface BilliardsState {
   guestGroup: Group | null;
   phase: "playing" | "cue_in_hand";
   moveCount: number;
+  hostEarlyEight?: number;
+  guestEarlyEight?: number;
 }
 
 export interface BilliardsShot {
@@ -60,9 +62,10 @@ export interface BilliardsShot {
 }
 
 export interface ShotEvent {
-  type: "pocket" | "scratch" | "foul" | "win" | "loss";
+  type: "pocket" | "scratch" | "foul" | "win" | "loss" | "early_eight";
   ballId?: number;
   reason?: string;
+  strikes?: number;
 }
 
 export interface ShotResult {
@@ -143,6 +146,8 @@ export function serializeState(state: BilliardsState): string {
     guestGroup: state.guestGroup,
     phase: state.phase,
     moveCount: state.moveCount,
+    hostEarlyEight: state.hostEarlyEight ?? 0,
+    guestEarlyEight: state.guestEarlyEight ?? 0,
   });
 }
 
@@ -343,6 +348,8 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
     guestGroup: state.guestGroup,
     phase: "playing",
     moveCount: state.moveCount + 1,
+    hostEarlyEight: state.hostEarlyEight ?? 0,
+    guestEarlyEight: state.guestEarlyEight ?? 0,
   };
 
   const events: ShotEvent[] = [];
@@ -390,19 +397,45 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
   // Eight ball pocketed
   if (eightPocketed) {
     const myGroupBalls = myGroup === "solids" ? [1,2,3,4,5,6,7] : myGroup === "stripes" ? [9,10,11,12,13,14,15] : [];
-    // If groups were never formally assigned but ALL 14 colored balls are gone, treat as a legal win
-    const allColoredCleared = [1,2,3,4,5,6,7,9,10,11,12,13,14,15].every(
-      id => prePocketed.has(id) || nowPocketed.includes(id)
-    );
+    // If groups were never formally assigned, allow win if either group (solids or stripes) is fully cleared
+    const allColoredCleared =
+      [1,2,3,4,5,6,7].every(id => prePocketed.has(id) || nowPocketed.includes(id)) ||
+      [9,10,11,12,13,14,15].every(id => prePocketed.has(id) || nowPocketed.includes(id));
     const allMyGroupCleared = myGroup !== null
       ? myGroupBalls.every(id => nowPocketed.includes(id) || prePocketed.has(id))
       : allColoredCleared;
 
     if (scratched || hasFoul || !allMyGroupCleared) {
-      // Loss: pocketed 8 before clearing group, or scratched while pocketing 8
-      winner = opp;
-      winReason = scratched ? "scratch_on_eight" : "eight_ball_early";
-      events.push({ type: "loss", reason: winReason });
+      // Early 8-ball — apply 3-strike rule
+      const myStrikesBefore = newState[me === "host" ? "hostEarlyEight" : "guestEarlyEight"] as number;
+      const strikeCount = myStrikesBefore + 1;
+
+      if (strikeCount >= 3) {
+        // Third strike — opponent wins
+        winner = opp;
+        winReason = scratched ? "scratch_on_eight" : "eight_ball_early";
+        events.push({ type: "loss", reason: winReason });
+      } else {
+        // First or second strike — warning, respawn 8-ball, opponent gets cue-in-hand
+        if (me === "host") newState.hostEarlyEight = strikeCount;
+        else newState.guestEarlyEight = strikeCount;
+
+        // Respawn 8-ball at the foot-spot (rack center)
+        const eightBall = balls.find(b => b.id === 8);
+        if (eightBall) {
+          eightBall.pocketed = false;
+          eightBall.x = RACK_X;
+          eightBall.y = RACK_Y;
+          eightBall.vx = 0;
+          eightBall.vy = 0;
+        }
+        // If cue ball was also scratched, restore it (opponent cue-in-hand)
+        const cueBallAfter = balls.find(b => b.id === 0);
+        if (cueBallAfter) cueBallAfter.pocketed = true; // keep pocketed → cue_in_hand placement
+        newState.turn = opp;
+        newState.phase = "cue_in_hand";
+        events.push({ type: "early_eight", strikes: strikeCount });
+      }
     } else {
       winner = me;
       winReason = "pocketed_eight";
@@ -458,6 +491,7 @@ export interface ShotRecord {
   continuesTurn: boolean;
   foul?: boolean;
   winner?: "host" | "guest";
+  earlyEight?: boolean;
 }
 
 export function encodeShots(shots: ShotRecord[]): string {

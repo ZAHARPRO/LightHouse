@@ -35,6 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const result = simulateShot(state, shot);
 
   const hasFoul = result.events.some(e => e.type === "foul");
+  const hasEarlyEight = result.events.some(e => e.type === "early_eight");
   const shots: ShotRecord[] = decodeShots(room.shotsJson ?? "[]");
   shots.push({
     by: myRole,
@@ -43,6 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     continuesTurn: result.continuesTurn,
     foul: hasFoul,
     winner: result.winner ?? undefined,
+    earlyEight: hasEarlyEight || undefined,
   });
 
   const update: Record<string, unknown> = {

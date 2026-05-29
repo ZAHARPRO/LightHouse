@@ -376,6 +376,7 @@ export default function BilliardsOnlineRoom() {
   const animatingRef = useRef(false);
   const animIdRef = useRef(0);
   const replayIdxRef = useRef<number | null>(null);
+  const pendingWinnerRef = useRef<"host" | "guest" | null>(null);
   const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
   const opponentResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -404,9 +405,11 @@ export default function BilliardsOnlineRoom() {
       }
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
+        const localWin = pendingWinnerRef.current;
+        pendingWinnerRef.current = null;
         if (shotQueueRef.current.length > 0) {
           processQueue();
-        } else if (roomRef.current?.status === "FINISHED") {
+        } else if (localWin || roomRef.current?.status === "FINISHED") {
           // Winning shot finished animating — reveal result screen after brief pause
           setTimeout(() => setShowFinished(true), 500);
         } else if (wasOpponent) {
@@ -765,7 +768,9 @@ export default function BilliardsOnlineRoom() {
     setPower(0); setPullback(0); setCueHandPos(null);
     const frames = animateShot(displayState, shot, 1);
     lastAnimatedCountRef.current++;
-    confirmedStateRef.current = simulateShot(displayState, shot).newState;
+    const localResult = simulateShot(displayState, shot);
+    confirmedStateRef.current = localResult.newState;
+    pendingWinnerRef.current = localResult.winner;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power, false);
     setSubmitting(true);
     try {

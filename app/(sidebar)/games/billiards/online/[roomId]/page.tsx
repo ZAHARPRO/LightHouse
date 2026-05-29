@@ -295,8 +295,9 @@ function fmtMs(ms: number | null) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function ReplayShotPanel({ shots, replayIdx, onReplay }: {
+function ReplayShotPanel({ shots, replayIdx, onReplay, hostName, guestName }: {
   shots: ShotRecord[]; replayIdx: number | null; onReplay: (i: number | null) => void;
+  hostName?: string | null; guestName?: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -312,7 +313,7 @@ function ReplayShotPanel({ shots, replayIdx, onReplay }: {
               replayIdx === i ? "bg-pink-500/20 text-[var(--accent-orange)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
             ].join(" ")}>
             <span className="font-mono text-[var(--text-muted)] w-5 shrink-0">{i + 1}.</span>
-            <span className="font-semibold capitalize">{s.by}</span>
+            <span className="font-semibold capitalize">{s.by === "host" ? (hostName ?? "Host") : (guestName ?? "Guest")}</span>
             {s.pocketed.filter(id => id !== 0).length > 0 && <span className="text-green-400">+{s.pocketed.filter(id => id !== 0).length}</span>}
             {s.foul && <span className="text-red-400 text-[0.65rem]">FOUL</span>}
           </button>
@@ -503,12 +504,12 @@ export default function BilliardsOnlineRoom() {
   useEffect(() => {
     if (!room || room.status !== "PLAYING" || room.timeControl === "none") return;
     const t = setInterval(() => {
-      if (animatingRef.current) return; // wait for opponent animation to finish
+      if (animatingRef.current || viewingOpponentResult) return;
       if (room.currentTurn === "host") setLiveHostMs(p => p !== null ? Math.max(0, p - 100) : null);
       else setLiveGuestMs(p => p !== null ? Math.max(0, p - 100) : null);
     }, 100);
     return () => clearInterval(t);
-  }, [room?.status, room?.currentTurn, room?.timeControl]);
+  }, [room?.status, room?.currentTurn, room?.timeControl, viewingOpponentResult]);
 
   const shots = useMemo<ShotRecord[]>(
     () => (room?.shotsJson ? decodeShots(room.shotsJson) : []),
@@ -764,10 +765,10 @@ export default function BilliardsOnlineRoom() {
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power, false);
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/billiards-rooms/${roomId}/move`, {
+      await fetch(`/api/billiards-rooms/${roomId}/move`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(shot),
       });
-      if (res.ok) await fetchRoom();
+      await fetchRoom();
     } finally { setSubmitting(false); }
   }
 
@@ -818,7 +819,7 @@ export default function BilliardsOnlineRoom() {
   const topRemaining = topGroup ? remainingBalls(displayState, topGroup) : [];
   const topIsActiveTurn = room.currentTurn === topRole;
 
-  const btmIsGuest = isSpectator || isHost; // guest on bottom for spectator/host view
+  const btmIsGuest = isSpectator || isGuest; // guest on bottom for spectator/guest view
   const btmName    = btmIsGuest ? room.guestName  : room.hostName;
   const btmImage   = btmIsGuest ? room.guestImage : room.hostImage;
   const btmGroup   = btmIsGuest ? room.guestGroup : room.hostGroup;
@@ -987,7 +988,7 @@ export default function BilliardsOnlineRoom() {
         {replayIdx !== null && (
           <div className="mt-6 flex flex-col items-center gap-3">
             <canvas ref={canvasRef} style={{ width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale }} />
-            <ReplayShotPanel shots={shots} replayIdx={replayIdx} onReplay={(i) => {
+            <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
               cancelAnimationFrame(rafRef.current); setAnimBalls(null); setReplayIdx(i);
             }} />
           </div>
@@ -1134,7 +1135,7 @@ export default function BilliardsOnlineRoom() {
                   className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">Live »</button>
               )}
             </div>
-            <ReplayShotPanel shots={shots} replayIdx={replayIdx} onReplay={(i) => {
+            <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
               cancelAnimationFrame(rafRef.current); setAnimBalls(null); setReplayIdx(i);
             }} />
           </div>

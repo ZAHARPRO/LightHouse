@@ -18,7 +18,7 @@ function elapsed(iso: string) {
   return `${m}m`;
 }
 
-export default function StreamPageClient({ userId }: Props) {
+export default function StreamPageClient({ userId, userName }: Props) {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [startedAt] = useState(() => new Date().toISOString());
 
@@ -79,6 +79,8 @@ export default function StreamPageClient({ userId }: Props) {
             <StreamChatPanel
               streamId={streamId}
               currentUserId={userId}
+              currentUserName={userName}
+              isStreamOwner
               initialMessages={[]}
             />
           ) : (

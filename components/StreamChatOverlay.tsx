@@ -5,8 +5,8 @@ import { GripVertical } from "lucide-react";
 import Image from "next/image";
 import {
   loadSettings, saveSettingsToStorage, loadGoogleFont,
-  frameClip, GOOGLE_FONTS,
-  type OverlaySettings,
+  frameClip, GOOGLE_FONTS, POS_KEY,
+  type OverlaySettings, type PosPreset,
 } from "@/components/StreamOverlaySettings";
 
 type ChatMsg = {
@@ -26,6 +26,33 @@ function hexToRgb(hex: string) {
   return `${r},${g},${b}`;
 }
 
+const PANEL_W = 340;
+const GAP     = 20;
+
+function calcPos(preset: PosPreset): { x: number; y: number } {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  switch (preset) {
+    case "top-left":     return { x: GAP,           y: GAP };
+    case "top-right":    return { x: W - PANEL_W - GAP, y: GAP };
+    case "bottom-left":  return { x: GAP,           y: H - 420 };
+    case "bottom-right": return { x: W - PANEL_W - GAP, y: H - 420 };
+    default:             return { x: W - PANEL_W - GAP, y: GAP };
+  }
+}
+
+function loadSavedPos(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function savePos(pos: { x: number; y: number }) {
+  try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+}
+
 export default function StreamChatOverlay({ streamId }: { streamId: string }) {
   const [msgs,     setMsgs]     = useState<ChatMsg[]>([]);
   const [settings, setSettings] = useState<OverlaySettings | null>(null);
@@ -34,26 +61,53 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const panelRef  = useRef<HTMLDivElement>(null);
   const dragRef   = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
-  const posRef    = useRef({ x: 20, y: 20 });
+  // Default: top-right — calculated client-side after mount
+  const posRef    = useRef({ x: -1, y: 20 }); // x=-1 = not yet initialised
+
+  const prevPresetRef = useRef<PosPreset | null>(null);
+
+  function applyPos(pos: { x: number; y: number }) {
+    posRef.current = pos;
+    if (panelRef.current) {
+      panelRef.current.style.left = pos.x + "px";
+      panelRef.current.style.top  = pos.y + "px";
+    }
+  }
+
+  // Initial position: saved drag pos → else preset
+  useEffect(() => {
+    const saved = loadSavedPos();
+    const s = loadSettings();
+    applyPos(saved ?? calcPos(s.posPreset ?? "top-right"));
+    prevPresetRef.current = s.posPreset ?? "top-right";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load settings from localStorage (set by broadcaster in setup)
   useEffect(() => {
     const s = loadSettings();
     setSettings(s);
-    // Load fonts
     if (GOOGLE_FONTS.includes(s.fontFamily)) loadGoogleFont(s.fontFamily);
     s.customFonts.forEach(f => loadGoogleFont(f.name));
   }, []);
 
-  // Poll localStorage every 2s so overlay picks up live setting changes
+  // Poll localStorage every 2s — pick up live setting changes incl. posPreset
   useEffect(() => {
     const t = setInterval(() => {
       const s = loadSettings();
       setSettings(s);
       if (GOOGLE_FONTS.includes(s.fontFamily)) loadGoogleFont(s.fontFamily);
       s.customFonts.forEach(f => loadGoogleFont(f.name));
+      // If posPreset changed in settings, jump to new preset (clears saved drag pos)
+      const preset = s.posPreset ?? "top-right";
+      if (preset !== prevPresetRef.current) {
+        prevPresetRef.current = preset;
+        localStorage.removeItem(POS_KEY);
+        applyPos(calcPos(preset));
+      }
     }, 2000);
     return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // SSE
@@ -88,12 +142,16 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
     function onMove(ev: MouseEvent) {
       if (!dragRef.current || !panelRef.current) return;
       const { startX, startY, ox, oy } = dragRef.current;
-      panelRef.current.style.left = Math.max(0, ox + ev.clientX - startX) + "px";
-      panelRef.current.style.top  = Math.max(0, oy + ev.clientY - startY) + "px";
+      const x = Math.max(0, ox + ev.clientX - startX);
+      const y = Math.max(0, oy + ev.clientY - startY);
+      panelRef.current.style.left = x + "px";
+      panelRef.current.style.top  = y + "px";
+      posRef.current = { x, y };
     }
     function onUp() {
       setDragging(false);
       dragRef.current = null;
+      savePos(posRef.current); // persist drag position
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     }
@@ -101,7 +159,7 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
     window.addEventListener("mouseup", onUp);
   }
 
-  if (!settings) return null;
+  if (!settings || !settings.enabled) return null;
 
   const visibleMsgs    = msgs.slice(-settings.maxMessages);
   const overlayBg      = `rgba(${hexToRgb(settings.overlayBgColor)},${settings.overlayBgOpacity / 100})`;

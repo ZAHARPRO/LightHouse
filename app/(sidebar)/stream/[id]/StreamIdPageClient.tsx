@@ -55,7 +55,7 @@ function elapsed(iso: string) {
 }
 
 export default function StreamIdPageClient({
-  isStreamOwner, streamId, userId, isLoggedIn,
+  isStreamOwner, streamId, userId, userName, isLoggedIn,
   initialStream, initialMessages,
   initialLikes, initialDislikes, initialUserReaction, initialFollowing,
 }: Props) {
@@ -185,6 +185,8 @@ export default function StreamIdPageClient({
             <StreamChatPanel
               streamId={streamId}
               currentUserId={userId}
+              currentUserName={userName}
+              isStreamOwner={isStreamOwner}
               initialMessages={initialMessages}
             />
           ) : (

@@ -27,6 +27,8 @@ const QUALITY_LABEL: Record<Quality, string> = {
   high:   "1080p",
 };
 
+const VOLUME_KEY = "lh_stream_volume";
+
 interface Props {
   streamId: string;
 }
@@ -75,8 +77,31 @@ export default function StreamViewer({ streamId }: Props) {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Keep refs in sync
-  useEffect(() => { mutedRef.current  = muted;  }, [muted]);
+  // Restore saved volume on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VOLUME_KEY);
+      if (saved) {
+        const { volume: v, muted: m } = JSON.parse(saved);
+        if (typeof v === "number" && v >= 0 && v <= 1) {
+          setVolume(v);
+          volumeRef.current = v;
+          setPrevVolume(v > 0 ? v : 1);
+        }
+        if (typeof m === "boolean") {
+          setMuted(m);
+          mutedRef.current = m;
+        }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep refs in sync + persist to localStorage
+  useEffect(() => {
+    mutedRef.current = muted;
+    try { localStorage.setItem(VOLUME_KEY, JSON.stringify({ volume, muted })); } catch { /* ignore */ }
+  }, [muted, volume]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
   useEffect(() => { qualityRef.current = quality; }, [quality]);
 

@@ -90,6 +90,9 @@ model User {
   streams            Stream[]            @relation("StreamAdmin")
   streamChatMessages StreamChatMessage[]
   streamReactions    StreamReaction[]
+  streamChatMods     StreamChatMod[]     @relation("StreamChatModUser")
+  streamChatBans     StreamChatBan[]     @relation("StreamChatBanUser")
+  streamChatMutes    StreamChatMute[]    @relation("StreamChatMuteUser")
 }
 
 
@@ -108,6 +111,9 @@ model Stream {
   admin        User               @relation("StreamAdmin", fields: [adminId], references: [id], onDelete: Cascade)
   chatMessages StreamChatMessage[]
   reactions    StreamReaction[]
+  chatMods     StreamChatMod[]
+  chatBans     StreamChatBan[]
+  chatMutes    StreamChatMute[]
 }
 
 model StreamChatMessage {
@@ -138,6 +144,38 @@ model StreamReaction {
   @@unique([userId, streamId])
 }
 
+
+model StreamChatMod {
+  id        String   @id @default(cuid())
+  streamId  String
+  userId    String
+  createdAt DateTime @default(now())
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user      User     @relation("StreamChatModUser", fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([streamId, userId])
+}
+
+model StreamChatBan {
+  id        String   @id @default(cuid())
+  streamId  String
+  userId    String
+  bannedBy  String
+  bannedAt  DateTime @default(now())
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user      User     @relation("StreamChatBanUser", fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([streamId, userId])
+}
+
+model StreamChatMute {
+  id        String   @id @default(cuid())
+  streamId  String
+  userId    String
+  mutedBy   String
+  mutedAt   DateTime @default(now())
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user      User     @relation("StreamChatMuteUser", fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([streamId, userId])
+}
 
 model WatchHistory {
   id        String   @id @default(cuid())

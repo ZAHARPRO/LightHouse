@@ -1336,7 +1336,6 @@ function BilliardsReplayModal({ game, onClose }: { game: BilliardsGame; onClose:
               `Shot ${idx}/${shots.length} · ${currentShot.by === "host" ? game.oppName ?? "Host" : "You"}` +
               (currentShot.pocketed.filter(id => id !== 0).length > 0 ? ` · +${currentShot.pocketed.filter(id => id !== 0).length} pocketed` : "") +
               (currentShot.foul ? " · FOUL" : "") +
-              (currentShot.earlyEight ? " · ⚠ Early 8" : "") +
               (currentShot.winner ? ` · 🏆 ${currentShot.winner === "host" ? game.oppName ?? "Host" : "You"} wins` : "")
             ) : ""}
           </p>
@@ -1392,7 +1391,6 @@ function BilliardsReplayModal({ game, onClose }: { game: BilliardsGame; onClose:
                     {s.pocketed.filter(id => id !== 0).length > 0 &&
                       <span className="text-green-400 text-[0.6rem]">+{s.pocketed.filter(id => id !== 0).length}</span>}
                     {s.foul && <span className="text-red-400 text-[0.58rem]">FOUL</span>}
-                    {s.earlyEight && <span className="text-amber-400 text-[0.58rem]">⚠</span>}
                     {s.winner && <span className="text-yellow-400 text-[0.58rem]">🏆</span>}
                   </button>
                 ))}

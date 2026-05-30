@@ -114,6 +114,7 @@ model StreamChatMessage {
   id        String   @id @default(cuid())
   text      String
   userName  String
+  userImage String?
   isSupport Boolean  @default(false)
   createdAt DateTime @default(now())
 

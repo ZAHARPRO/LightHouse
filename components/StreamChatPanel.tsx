@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, MessageSquare, Heart } from "lucide-react";
+import { Send, MessageSquare, Heart, Smile } from "lucide-react";
+import Image from "next/image";
 
 type ChatMsg = {
   id: string;
   text: string;
   userName: string;
+  userImage?: string | null;
   userId: string;
   isSupport?: boolean;
   at: number;
@@ -18,16 +20,25 @@ interface Props {
   initialMessages?: ChatMsg[];
 }
 
+const DEFAULT_EMOJIS = [
+  "😀","😂","😍","🥹","😭","😎","🤔","🥺","😮","🤯",
+  "😡","😴","🤩","🥳","🫡","👀","💀","🙏","🫶","❤️",
+  "🔥","💯","✨","🎉","⭐","👍","👎","🤝","👏","🫂",
+  "🎮","💪","🚀","🏆","💡","🍕","🎵","🌊","⚡","🐐",
+];
+
 export default function StreamChatPanel({
   streamId,
   currentUserId,
   initialMessages = [],
 }: Props) {
-  const [msgs, setMsgs] = useState<ChatMsg[]>(initialMessages);
-  const [text, setText] = useState("");
+  const [msgs, setMsgs]       = useState<ChatMsg[]>(initialMessages);
+  const [text, setText]       = useState("");
   const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,6 +56,16 @@ export default function StreamChatPanel({
     return () => es.close();
   }, [streamId]);
 
+  // Close emoji panel on outside click
+  useEffect(() => {
+    if (!showEmoji) return;
+    function onOutside(e: MouseEvent) {
+      if (!emojiPanelRef.current?.contains(e.target as Node)) setShowEmoji(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [showEmoji]);
+
   async function send() {
     const t = text.trim();
     if (!t || sending) return;
@@ -56,6 +77,11 @@ export default function StreamChatPanel({
       body: JSON.stringify({ text: t }),
     }).catch(() => {});
     setSending(false);
+    inputRef.current?.focus();
+  }
+
+  function insertEmoji(emoji: string) {
+    setText(prev => prev + emoji);
     inputRef.current?.focus();
   }
 
@@ -99,25 +125,43 @@ export default function StreamChatPanel({
           }
 
           return (
-            <div key={m.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-              <div className="flex items-baseline gap-1.5 mb-0.5">
+            <div key={m.id} className={`flex items-start gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+              {/* Avatar */}
+              <div className="shrink-0 mt-0.5">
+                {m.userImage ? (
+                  <Image
+                    src={m.userImage}
+                    alt=""
+                    width={26}
+                    height={26}
+                    className="rounded-full object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="w-[26px] h-[26px] rounded-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center justify-center text-[0.6rem] font-bold text-[var(--text-muted)]">
+                    {m.userName[0]?.toUpperCase() ?? "?"}
+                  </div>
+                )}
+              </div>
+
+              <div className={`flex flex-col max-w-[78%] ${isMe ? "items-end" : "items-start"}`}>
                 {!isMe && (
-                  <span className="text-[0.6875rem] font-display font-semibold text-[var(--accent-orange)] truncate max-w-[120px]">
+                  <span className="text-[0.6875rem] font-display font-semibold text-[var(--accent-orange)] truncate max-w-[120px] mb-0.5 ml-0.5">
                     {m.userName}
                   </span>
                 )}
-                <span className="text-[0.6rem] text-[var(--text-muted)]">{formatTime(m.at)}</span>
-              </div>
-              <div
-                className="px-3 py-1.5 rounded-2xl text-[0.8125rem] max-w-[85%] break-words leading-snug"
-                style={{
-                  background: isMe ? "var(--accent-orange)" : "var(--bg-elevated)",
-                  color: isMe ? "#fff" : "var(--text-primary)",
-                  border: isMe ? "none" : "1px solid var(--border-subtle)",
-                  borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                }}
-              >
-                {m.text}
+                <div
+                  className="px-3 py-1.5 text-[0.8125rem] break-words leading-snug"
+                  style={{
+                    background: isMe ? "var(--accent-orange)" : "var(--bg-elevated)",
+                    color: isMe ? "#fff" : "var(--text-primary)",
+                    border: isMe ? "none" : "1px solid var(--border-subtle)",
+                    borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  }}
+                >
+                  {m.text}
+                </div>
+                <span className="text-[0.6rem] text-[var(--text-muted)] mt-0.5 mx-0.5">{formatTime(m.at)}</span>
               </div>
             </div>
           );
@@ -126,7 +170,34 @@ export default function StreamChatPanel({
       </div>
 
       {/* Input */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-t border-[var(--border-subtle)] shrink-0">
+      <div className="flex items-center gap-1.5 px-3 py-2.5 border-t border-[var(--border-subtle)] shrink-0 relative">
+        {/* Emoji panel */}
+        {showEmoji && (
+          <div
+            ref={emojiPanelRef}
+            className="absolute bottom-full left-0 right-0 mx-3 mb-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[10px] p-2 shadow-xl z-50"
+          >
+            <div className="grid grid-cols-10 gap-0.5">
+              {DEFAULT_EMOJIS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => insertEmoji(emoji)}
+                  className="w-7 h-7 flex items-center justify-center text-[1.1rem] rounded-[6px] hover:bg-[var(--bg-elevated)] transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowEmoji(v => !v)}
+          className={`p-1.5 rounded-[7px] transition-colors shrink-0 ${showEmoji ? "bg-[var(--bg-elevated)] text-[var(--accent-orange)]" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
+        >
+          <Smile size={16} />
+        </button>
+
         <input
           ref={inputRef}
           className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[8px] px-3 py-[0.4rem] text-[0.8125rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-pink-500/40 transition-colors"
@@ -136,6 +207,7 @@ export default function StreamChatPanel({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+            if (e.key === "Escape") setShowEmoji(false);
           }}
         />
         <button

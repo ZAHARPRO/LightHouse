@@ -24,11 +24,12 @@ export async function POST(
   if (!text) return NextResponse.json({ error: "Empty message" }, { status: 400 });
   const isSupport = body.isSupport === true;
 
-  const userName = (session.user as { name?: string }).name ?? "Anonymous";
+  const userName  = (session.user as { name?: string }).name ?? "Anonymous";
+  const userImage = (session.user as { image?: string | null }).image ?? null;
 
   const msg = await prisma.streamChatMessage.create({
-    data: { streamId: id, userId: session.user.id, userName, text, isSupport },
-    select: { id: true, text: true, userName: true, userId: true, isSupport: true, createdAt: true },
+    data: { streamId: id, userId: session.user.id, userName, userImage, text, isSupport },
+    select: { id: true, text: true, userName: true, userImage: true, userId: true, isSupport: true, createdAt: true },
   });
 
   streamSseBroadcast(id, { type: "chat", ...msg, at: msg.createdAt.getTime() });

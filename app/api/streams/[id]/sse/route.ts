@@ -4,7 +4,7 @@ import { streamSseSubscribe, streamSseUnsubscribe, streamSseBroadcast } from "@/
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export async function GET(
   req: Request,
@@ -16,15 +16,31 @@ export async function GET(
   let ctrl: ReadableStreamDefaultController<Uint8Array>;
   let ping: ReturnType<typeof setInterval>;
 
+  async function adjustViewerCount(delta: 1 | -1) {
+    try {
+      const updated = await prisma.stream.update({
+        where: { id },
+        data: { viewerCount: { increment: delta } },
+        select: { viewerCount: true, isActive: true },
+      });
+      if (updated.isActive) {
+        const count = Math.max(0, updated.viewerCount);
+        streamSseBroadcast(id, { type: "viewer_count", count });
+      }
+    } catch { /* stream may already be gone */ }
+  }
+
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       ctrl = controller;
       streamSseSubscribe(id, ctrl);
       controller.enqueue(enc.encode(": connected\n\n"));
 
+      // Count this connection as a viewer
+      await adjustViewerCount(1);
+
       ping = setInterval(async () => {
         try {
-          // Check if broadcaster went away (no heartbeat for 5 min)
           const s = await prisma.stream.findUnique({
             where: { id },
             select: { isActive: true, lastHeartbeat: true },
@@ -34,7 +50,7 @@ export async function GET(
             const age = Date.now() - s.lastHeartbeat.getTime();
             if (age > HEARTBEAT_TIMEOUT_MS) {
               await prisma.stream
-                .update({ where: { id }, data: { isActive: false, endedAt: new Date() } })
+                .update({ where: { id }, data: { isActive: false, endedAt: new Date(), viewerCount: 0 } })
                 .catch(() => {});
               streamSseBroadcast(id, { type: "stream_ended" });
             }
@@ -46,15 +62,17 @@ export async function GET(
         }
       }, 30_000);
     },
-    cancel() {
+    async cancel() {
       clearInterval(ping);
       streamSseUnsubscribe(id, ctrl);
+      await adjustViewerCount(-1);
     },
   });
 
-  req.signal.addEventListener("abort", () => {
+  req.signal.addEventListener("abort", async () => {
     clearInterval(ping);
     streamSseUnsubscribe(id, ctrl);
+    await adjustViewerCount(-1);
   });
 
   return new Response(stream, {

@@ -9,6 +9,7 @@ import {
   Volume2, VolumeX, RefreshCw, Gamepad2, Info, Plus,
   Pause, Play, Timer,
 } from "lucide-react";
+import StreamOverlaySettings from "@/components/StreamOverlaySettings";
 
 type Status = "idle" | "connecting" | "live" | "error";
 
@@ -1056,6 +1057,7 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                   </span>
                 </div>
               )}
+              <StreamOverlaySettings />
             </>
           )}
         </div>

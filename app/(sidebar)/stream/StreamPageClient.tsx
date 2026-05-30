@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Monitor, Radio, Users, Clock } from "lucide-react";
+import { Monitor, Radio, Clock, ExternalLink } from "lucide-react";
 import StreamBroadcaster from "@/components/StreamBroadcaster";
 import StreamChatPanel from "@/components/StreamChatPanel";
 
@@ -51,6 +51,14 @@ export default function StreamPageClient({ userId }: Props) {
             <div className="flex items-center gap-3 mt-1 text-[0.75rem] text-[var(--text-muted)]">
               <span className="flex items-center gap-1"><Radio size={11} /> Broadcasting</span>
               <span className="flex items-center gap-1"><Clock size={11} /> {elapsed(startedAt)}</span>
+              {streamId && (
+                <button
+                  onClick={() => window.open(`/stream/overlay/${streamId}`, "chatOverlay", "width=400,height=640,toolbar=no,location=no,menubar=no,resizable=yes")}
+                  className="flex items-center gap-1 text-[var(--accent-orange)] hover:opacity-80 transition-opacity font-semibold"
+                >
+                  <ExternalLink size={11} /> Chat overlay
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-[0.8rem] text-[var(--text-muted)] mt-0.5">

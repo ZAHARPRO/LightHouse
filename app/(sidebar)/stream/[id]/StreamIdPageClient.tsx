@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Monitor, Radio, Users, Clock } from "lucide-react";
 import StreamBroadcaster from "@/components/StreamBroadcaster";
@@ -60,7 +60,20 @@ export default function StreamIdPageClient({
   initialLikes, initialDislikes, initialUserReaction, initialFollowing,
 }: Props) {
   const router = useRouter();
-  const [isEnded, setIsEnded] = useState(!initialStream.isActive);
+  const [isEnded,      setIsEnded]      = useState(!initialStream.isActive);
+  const [viewerCount,  setViewerCount]  = useState(initialStream.viewerCount);
+
+  useEffect(() => {
+    const es = new EventSource(`/api/streams/${streamId}/sse`);
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "viewer_count") setViewerCount(data.count as number);
+        if (data.type === "stream_ended") setIsEnded(true);
+      } catch { /* ignore */ }
+    };
+    return () => es.close();
+  }, [streamId]);
 
   function handleStreamChange(id: string | null) {
     if (!id) setIsEnded(true);
@@ -121,7 +134,7 @@ export default function StreamIdPageClient({
                   {initialStream.isActive && !isEnded && (
                     <>
                       <span className="flex items-center gap-1">
-                        <Users size={10} /> {initialStream.viewerCount}
+                        <Users size={10} /> {viewerCount}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={10} /> {elapsed(initialStream.startedAt)}

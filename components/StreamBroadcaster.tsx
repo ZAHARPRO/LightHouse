@@ -260,9 +260,10 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       await roomRef.current.localParticipant.publishTrack(screenTrackRef.current, {
         source: Track.Source.ScreenShare,
         videoCodec: gameMode ? "h264" : "vp9",
+        simulcast: true,
         ...(gameMode
           ? { videoCodecOptions: { h264StartBitrate: 12000 } }
-          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 10000 } }
+          : { videoCodecOptions: { vp9StartBitrate: 10000 } }
         ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });
@@ -575,15 +576,13 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       const screenTrack = new LocalVideoTrack(videoMediaTrack, undefined, true);
       screenTrackRef.current = screenTrack;
 
-      // No simulcast — degrades sharp text/edges and wastes upload bandwidth
-      // scalabilityMode L1T3 (screen) = VP9 SVC temporal layers: SFU delivers the right
-      // layer per viewer bandwidth without extra encode cost. H.264 doesn't support SVC.
       await room.localParticipant.publishTrack(screenTrack, {
         source: Track.Source.ScreenShare,
         videoCodec,
+        simulcast: true,
         ...(gameMode
           ? { videoCodecOptions: { h264StartBitrate: 12000 } }
-          : { scalabilityMode: "L1T3", videoCodecOptions: { vp9StartBitrate: 10000 } }
+          : { videoCodecOptions: { vp9StartBitrate: 10000 } }
         ),
         screenShareEncoding: { maxBitrate, maxFramerate: captureFps, priority: "high" },
       });

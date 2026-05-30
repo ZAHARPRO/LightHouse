@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Room, RoomEvent, RemoteTrack, RemoteTrackPublication,
   Track, RemoteParticipant, VideoQuality,
@@ -34,16 +34,16 @@ interface Props {
 export default function StreamViewer({ streamId }: Props) {
   const roomRef      = useRef<Room | null>(null);
   const videoRef     = useRef<HTMLVideoElement>(null);
-  // One <audio> element per remote audio track — avoids both the "second track.attach()
-  // replaces the first" issue AND the LiveKit adaptive-stream problem where the SDK
-  // stops forwarding audio to tracks that never had attach() called on them.
   const audioElsRef  = useRef<Map<string, HTMLAudioElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const activePubRef = useRef<RemoteTrackPublication | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef   = useRef(true);
 
-  const mutedRef  = useRef(false);
-  const volumeRef = useRef(1);
+  const mutedRef    = useRef(false);
+  const volumeRef   = useRef(1);
+  // Ref-copy of quality so attachTrack stays stable and doesn't trigger LiveKit reconnect
+  const qualityRef  = useRef<Quality>("high");
 
   const [status,       setStatus]     = useState<Status>("connecting");
   const [error,        setError]      = useState<string | null>(null);
@@ -52,11 +52,20 @@ export default function StreamViewer({ streamId }: Props) {
   const [prevVolume,   setPrevVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [quality,      setQuality]    = useState<Quality>("high");
-  const [showQuality,  setShowQuality]    = useState(false);
-  const [showControls, setShowControls]   = useState(true);
-  const [reconnecting, setReconnecting]   = useState(false);
+  const [showQuality,  setShowQuality]  = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [reconnecting, setReconnecting] = useState(false);
   const [hasFinePointer, setHasFinePointer] = useState(true);
   const [audioBlocked, setAudioBlocked] = useState(false);
+
+  // Track mounted state to avoid setState on unmounted component
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: fine)");
@@ -66,12 +75,12 @@ export default function StreamViewer({ streamId }: Props) {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Keep refs in sync so attachTrack (useCallback) can read current values without stale closures
+  // Keep refs in sync
   useEffect(() => { mutedRef.current  = muted;  }, [muted]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { qualityRef.current = quality; }, [quality]);
 
-  // Sync mute/volume → all active audio elements.
-  // Video element stays muted (it carries video track only).
+  // Sync mute/volume → all active audio elements
   useEffect(() => {
     audioElsRef.current.forEach(el => {
       el.muted  = muted;
@@ -87,7 +96,7 @@ export default function StreamViewer({ streamId }: Props) {
     };
   }, []);
 
-  // Fullscreen detection — standard + webkit (iOS)
+  // Fullscreen detection
   useEffect(() => {
     function onFsChange() {
       setIsFullscreen(
@@ -143,22 +152,19 @@ export default function StreamViewer({ streamId }: Props) {
     activePubRef.current?.setVideoQuality(QUALITY_LK[q]);
   }, []);
 
+  // attachTrack uses qualityRef (not quality state) so it stays stable and
+  // never triggers the LiveKit connect effect to disconnect/reconnect on quality change.
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
     if (track.kind === Track.Kind.Video) {
       const el = videoRef.current;
       if (!el) return;
       track.attach(el);
       if (pub) activePubRef.current = pub;
-      applyQuality(quality);
+      applyQuality(qualityRef.current);
       setStatus("live");
     } else if (track.kind === Track.Kind.Audio) {
-      // Give each remote audio track its own <audio> element.
-      // Use pub.trackSid (always set by SFU) as the key, with track.sid as fallback.
-      // We set srcObject directly rather than calling track.attach() to avoid LiveKit SDK v2's
-      // adaptiveStream ResizeObserver logic, which can mistakenly pause invisible <audio>
-      // elements (they report 0×0 size) and stop server-side delivery.
       const sid = pub?.trackSid ?? track.sid;
-      if (!sid || audioElsRef.current.has(sid)) return; // already attached or no sid yet
+      if (!sid || audioElsRef.current.has(sid)) return;
       const el = document.createElement("audio");
       el.autoplay = true;
       el.setAttribute("playsinline", "");
@@ -166,17 +172,12 @@ export default function StreamViewer({ streamId }: Props) {
       el.volume = volumeRef.current;
       document.body.appendChild(el);
       audioElsRef.current.set(sid, el);
-      // track.attach() routes audio to the element AND activates LiveKit's internal
-      // audio pipeline for the track. adaptiveStream: false (set on the Room) means
-      // the SDK will NOT use a ResizeObserver to pause invisible elements, so this
-      // call is safe even for <audio> tags with zero rendered dimensions.
       track.attach(el);
       el.play()
-        .then(() => setAudioBlocked(false))
-        .catch(() => setAudioBlocked(true));
+        .then(() => { if (mountedRef.current) setAudioBlocked(false); })
+        .catch(() => { if (mountedRef.current) setAudioBlocked(true); });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quality, applyQuality]);
+  }, [applyQuality]);
 
   const detachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
     if (track.kind === Track.Kind.Video) {
@@ -198,7 +199,7 @@ export default function StreamViewer({ streamId }: Props) {
     }
   }, []);
 
-  // LiveKit connect
+  // LiveKit connect — only re-runs when streamId changes (attachTrack is now stable)
   useEffect(() => {
     if (!streamId) return;
     let cancelled = false;
@@ -216,14 +217,7 @@ export default function StreamViewer({ streamId }: Props) {
         const wsUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
         if (!wsUrl) throw new Error("LiveKit URL not configured");
 
-        const room = new Room({
-          // adaptiveStream disabled: in LiveKit SDK v2 it attaches a ResizeObserver to
-          // every element passed to track.attach(). Invisible <audio> elements (0×0) are
-          // flagged as "not visible" which can pause server-side audio delivery.
-          // Video quality is controlled manually via setVideoQuality() instead.
-          adaptiveStream: false,
-          dynacast: true,
-        });
+        const room = new Room({ adaptiveStream: false, dynacast: true });
         if (cancelled) return;
         roomRef.current = room;
 
@@ -318,8 +312,6 @@ export default function StreamViewer({ streamId }: Props) {
   }
 
   function unlockAudio() {
-    // Play all audio elements muted-first (guaranteed from a user gesture click),
-    // then immediately restore the user's actual mute/volume preference.
     let anyPlaying = false;
     audioElsRef.current.forEach(el => {
       if (!el.paused) { anyPlaying = true; return; }
@@ -329,7 +321,7 @@ export default function StreamViewer({ streamId }: Props) {
           el.muted  = mutedRef.current;
           el.volume = volumeRef.current;
           anyPlaying = true;
-          setAudioBlocked(false);
+          if (mountedRef.current) setAudioBlocked(false);
         })
         .catch(() => {});
     });
@@ -355,11 +347,11 @@ export default function StreamViewer({ streamId }: Props) {
     setShowQuality(false);
   }
 
-  function VolumeIcon() {
+  const volumeIcon = useMemo(() => {
     if (muted || volume === 0) return <VolumeX size={15} />;
     if (volume < 0.5) return <Volume1 size={15} />;
     return <Volume2 size={15} />;
-  }
+  }, [muted, volume]);
 
   const isLive = status === "live";
 
@@ -389,7 +381,6 @@ export default function StreamViewer({ streamId }: Props) {
         className="w-full aspect-video rounded-[10px] sm:rounded-[14px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a] relative flex items-center justify-center select-none"
         style={{ cursor: isFullscreen && !showControls ? "none" : "default" }}
       >
-        {/* Video element — carries video track only, always muted */}
         <video
           ref={videoRef}
           autoPlay
@@ -412,7 +403,6 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* Reconnecting overlay — sits on top of last frozen video frame */}
         {reconnecting && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-10">
             <Loader2 size={32} className="animate-spin text-white/80" strokeWidth={1.5} />
@@ -420,7 +410,7 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {isLive && (
+        {isLive && !isFullscreen && (
           <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 bg-red-600 rounded-[5px] py-[0.2rem] px-2.5 z-10 pointer-events-none">
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="text-[0.6875rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
@@ -456,7 +446,6 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
-        {/* Controls overlay */}
         <div
           className="absolute inset-x-0 bottom-0 z-20 transition-opacity duration-200"
           style={{ opacity: (isLive && showControls) || !isLive ? 1 : 0, pointerEvents: showControls || !isLive ? "auto" : "none" }}
@@ -464,7 +453,7 @@ export default function StreamViewer({ streamId }: Props) {
           {isLive && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />}
           <div className="relative flex items-center gap-1.5 px-2.5 py-2">
             <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} className="text-white/80 hover:text-white transition-colors p-1 shrink-0">
-              <VolumeIcon />
+              {volumeIcon}
             </button>
             {hasFinePointer && (
               <div className="relative flex items-center w-16 shrink-0">

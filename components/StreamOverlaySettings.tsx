@@ -183,7 +183,6 @@ export default function StreamOverlaySettings() {
                 className="flex-1 py-2 text-[0.7rem] font-display font-semibold capitalize transition-colors"
                 style={{
                   color: tab === t ? "var(--accent-orange)" : "var(--text-muted)",
-                  borderBottom: tab === t ? "2px solid var(--accent-orange)" : "2px solid transparent",
                   background: "none", border: "none", cursor: "pointer",
                   borderBottom: tab === t ? "2px solid var(--accent-orange)" : "2px solid transparent",
                 }}

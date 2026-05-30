@@ -10,7 +10,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const room = await prisma.checkersRoom.findUnique({ where: { id } });
   if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (room.status !== "WAITING") return NextResponse.json({ error: "Room not open" }, { status: 400 });
-  if (room.hostId === session.user.id) return NextResponse.json({ error: "Already host" }, { status: 400 });
+  if (room.hostId === session.user.id) return NextResponse.json({ ok: true });
   if (room.guestId) return NextResponse.json({ error: "Room full" }, { status: 400 });
 
   const user = room.rated

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const room = await prisma.battleshipRoom.findUnique({ where: { id } });
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
   if (room.status !== "WAITING") return NextResponse.json({ error: "Room not available" }, { status: 400 });
-  if (room.hostId === userId) return NextResponse.json({ error: "Cannot join own room" }, { status: 400 });
+  if (room.hostId === userId) return NextResponse.json({ ok: true });
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

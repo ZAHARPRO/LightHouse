@@ -5,6 +5,7 @@ import { forfeitBattleship } from "@/lib/forfeit";
 
 const DISCONNECT_MS_UNTIMED = 30_000;
 const DISCONNECT_MS_TIMED   = 5 * 60 * 1000;
+const LOBBY_ABANDON_MS      = 5 * 60 * 1000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +14,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const userId = session.user.id;
   const room = await prisma.battleshipRoom.findUnique({ where: { id } });
-  if (!room || room.status !== "PLAYING") return NextResponse.json({ ok: true });
+  if (!room || (room.status !== "PLAYING" && room.status !== "WAITING")) return NextResponse.json({ ok: true });
 
   const isHost  = room.hostId  === userId;
   const isGuest = room.guestId === userId;
@@ -24,6 +25,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     where: { id },
     data: isHost ? { hostLastSeen: now } : { guestLastSeen: now },
   });
+
+  if (room.status === "WAITING") {
+    const cutoff = new Date(Date.now() - LOBBY_ABANDON_MS);
+    const hostActivity = room.hostLastSeen ?? room.createdAt;
+    if (hostActivity < cutoff) {
+      await prisma.battleshipRoom.update({ where: { id, status: "WAITING" }, data: { status: "FINISHED" } });
+      return NextResponse.json({ lobbyClosed: true });
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   const disconnectMs = room.timeControl === "none" ? DISCONNECT_MS_UNTIMED : DISCONNECT_MS_TIMED;
   const cutoff       = new Date(Date.now() - disconnectMs);

@@ -3,8 +3,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { forfeitCheckers } from "@/lib/forfeit";
 
-const PLAYING_DISCONNECT_MS = 5 * 60 * 1000; // 5 min without ping = disconnected during game
-const WAITING_DISCONNECT_MS = 2 * 60 * 1000; // 2 min without ping = host abandoned lobby
+const PLAYING_DISCONNECT_MS = 5 * 60 * 1000;
+const WAITING_DISCONNECT_MS = 5 * 60 * 1000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,10 +29,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     });
   }
 
-  // WAITING: if host has been gone > 2 min, close the lobby
-  if (room.status === "WAITING" && isGuest) {
+  // WAITING: if host has been gone > 5 min, close the lobby
+  if (room.status === "WAITING") {
     const cutoff = new Date(Date.now() - WAITING_DISCONNECT_MS);
-    if (room.hostLastSeen && room.hostLastSeen < cutoff) {
+    const hostActivity = room.hostLastSeen ?? room.createdAt;
+    if (hostActivity < cutoff) {
       await prisma.checkersRoom.update({
         where: { id, status: "WAITING" },
         data: { status: "FINISHED" },

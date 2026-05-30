@@ -376,8 +376,7 @@ export default function BilliardsOnlineRoom() {
   const animatingRef = useRef(false);
   const animIdRef = useRef(0);
   const replayIdxRef = useRef<number | null>(null);
-  const pendingWinnerRef = useRef<"host" | "guest" | null>(null);
-  const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
+const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: number } | null>(null);
   const animFrameIdxRef = useRef(0);
   const opponentResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomRef = useRef<RoomData | null>(null);
@@ -405,11 +404,9 @@ export default function BilliardsOnlineRoom() {
       }
       if (i >= item.frames.length) {
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
-        const localWin = pendingWinnerRef.current;
-        pendingWinnerRef.current = null;
         if (shotQueueRef.current.length > 0) {
           processQueue();
-        } else if (localWin || roomRef.current?.status === "FINISHED") {
+        } else if (roomRef.current?.status === "FINISHED") {
           // Winning shot finished animating — reveal result screen after brief pause
           setTimeout(() => setShowFinished(true), 500);
         } else if (wasOpponent) {
@@ -770,7 +767,6 @@ export default function BilliardsOnlineRoom() {
     lastAnimatedCountRef.current++;
     const localResult = simulateShot(displayState, shot);
     confirmedStateRef.current = localResult.newState;
-    pendingWinnerRef.current = localResult.winner;
     enqueueAnimation(frames, "bl_cue_strike", shot.angle, shot.power, false);
     setSubmitting(true);
     try {
@@ -827,7 +823,6 @@ export default function BilliardsOnlineRoom() {
   const topRank    = topElo    ? getRank(topElo)  : null;
   const topRemaining = topGroup ? remainingBalls(displayState, topGroup) : [];
   const topIsActiveTurn = room.currentTurn === topRole;
-  const topEarlyEight = topIsHost ? (displayState.hostEarlyEight ?? 0) : (displayState.guestEarlyEight ?? 0);
 
   const btmIsGuest = isSpectator || isGuest; // guest on bottom for spectator/guest view
   const btmName    = btmIsGuest ? room.guestName  : room.hostName;
@@ -839,7 +834,6 @@ export default function BilliardsOnlineRoom() {
   const btmRank    = btmElo    ? getRank(btmElo)  : null;
   const btmRemaining = btmGroup ? remainingBalls(displayState, btmGroup) : [];
   const btmIsActiveTurn = room.currentTurn === btmRole;
-  const btmEarlyEight = btmIsGuest ? (displayState.guestEarlyEight ?? 0) : (displayState.hostEarlyEight ?? 0);
 
   const roomUrl = typeof window !== "undefined" ? window.location.href : "";
   async function handleCopy() {
@@ -1034,7 +1028,6 @@ export default function BilliardsOnlineRoom() {
               <span className="text-sm font-display font-semibold text-[var(--text-secondary)] truncate">{topName ?? "Opponent"}</span>
               {topRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${topRank.color}22`, color: topRank.color }}>{topRank.label}</span>}
               {topGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{topGroup} ({topRemaining.length})</span>}
-              {topEarlyEight > 0 && <span className={["text-[0.6rem] font-bold px-1 rounded-full shrink-0", topEarlyEight >= 2 ? "bg-red-500/20 text-red-400" : "bg-amber-500/20 text-amber-400"].join(" ")}>⚠ {topEarlyEight}/3</span>}
               {topAnimating && <span className="text-xs text-blue-400 animate-pulse font-bold shrink-0">● shooting…</span>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -1089,7 +1082,6 @@ export default function BilliardsOnlineRoom() {
               <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{btmName ?? (isPlayer ? "You" : "Guest")}</span>
               {btmRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${btmRank.color}22`, color: btmRank.color }}>{btmRank.label}</span>}
               {btmGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{btmGroup} ({btmRemaining.length})</span>}
-              {btmEarlyEight > 0 && <span className={["text-[0.6rem] font-bold px-1 rounded-full shrink-0", btmEarlyEight >= 2 ? "bg-red-500/20 text-red-400" : "bg-amber-500/20 text-amber-400"].join(" ")}>⚠ {btmEarlyEight}/3</span>}
               {isMyTurnNow && displayState.phase === "cue_in_hand" && !cueHandPos && power === 0 && (
                 <span className="text-xs text-yellow-400 font-bold shrink-0">Place cue ball</span>
               )}

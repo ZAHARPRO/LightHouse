@@ -11,7 +11,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (room.status !== "WAITING") return NextResponse.json({ error: "Room not available" }, { status: 400 });
   if (room.guestId) return NextResponse.json({ error: "Room is full" }, { status: 400 });
-  if (room.hostId === session.user.id) return NextResponse.json({ error: "You are the host" }, { status: 400 });
+  if (room.hostId === session.user.id) return NextResponse.json({ ok: true });
 
   await prisma.minesweeperRoom.update({
     where: { id },

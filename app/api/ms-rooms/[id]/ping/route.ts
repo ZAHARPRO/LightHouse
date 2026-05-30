@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { forfeitMinesweeper } from "@/lib/forfeit";
 
-const DISCONNECT_MS = 30_000; // 30s without ping = disconnected
+const DISCONNECT_MS    = 30_000;
+const LOBBY_ABANDON_MS = 5 * 60 * 1000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,26 +13,32 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const userId = session.user.id;
   const room = await prisma.minesweeperRoom.findUnique({ where: { id } });
-  if (!room || room.status !== "PLAYING") return NextResponse.json({ ok: true });
+  if (!room || (room.status !== "PLAYING" && room.status !== "WAITING")) return NextResponse.json({ ok: true });
 
   const isHost  = room.hostId  === userId;
   const isGuest = room.guestId === userId;
   if (!isHost && !isGuest) return NextResponse.json({ ok: true });
 
   const now = new Date();
-
-  // Update this player's last seen timestamp
   await prisma.minesweeperRoom.update({
     where: { id },
     data: isHost ? { hostLastSeen: now } : { guestLastSeen: now },
   });
 
-  // Check if the OPPONENT has disconnected
+  if (room.status === "WAITING") {
+    const cutoff = new Date(Date.now() - LOBBY_ABANDON_MS);
+    const hostActivity = room.hostLastSeen ?? room.createdAt;
+    if (hostActivity < cutoff) {
+      await prisma.minesweeperRoom.update({ where: { id, status: "WAITING" }, data: { status: "FINISHED" } });
+      return NextResponse.json({ lobbyClosed: true });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const cutoff = new Date(Date.now() - DISCONNECT_MS);
   const oppLastSeen = isHost ? room.guestLastSeen : room.hostLastSeen;
 
   if (oppLastSeen && oppLastSeen < cutoff && room.guestId) {
-    // Opponent hasn't pinged in 30s → they forfeited
     const winnerId    = userId;
     const loserId     = isHost ? room.guestId : room.hostId;
     const isHostWinner = isHost;

@@ -50,8 +50,6 @@ export interface BilliardsState {
   guestGroup: Group | null;
   phase: "playing" | "cue_in_hand";
   moveCount: number;
-  hostEarlyEight?: number;
-  guestEarlyEight?: number;
 }
 
 export interface BilliardsShot {
@@ -62,10 +60,9 @@ export interface BilliardsShot {
 }
 
 export interface ShotEvent {
-  type: "pocket" | "scratch" | "foul" | "win" | "loss" | "early_eight";
+  type: "pocket" | "scratch" | "foul" | "win" | "loss";
   ballId?: number;
   reason?: string;
-  strikes?: number;
 }
 
 export interface ShotResult {
@@ -146,8 +143,6 @@ export function serializeState(state: BilliardsState): string {
     guestGroup: state.guestGroup,
     phase: state.phase,
     moveCount: state.moveCount,
-    hostEarlyEight: state.hostEarlyEight ?? 0,
-    guestEarlyEight: state.guestEarlyEight ?? 0,
   });
 }
 
@@ -348,8 +343,6 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
     guestGroup: state.guestGroup,
     phase: "playing",
     moveCount: state.moveCount + 1,
-    hostEarlyEight: state.hostEarlyEight ?? 0,
-    guestEarlyEight: state.guestEarlyEight ?? 0,
   };
 
   const events: ShotEvent[] = [];
@@ -405,40 +398,11 @@ export function simulateShot(state: BilliardsState, shot: BilliardsShot): ShotRe
       ? myGroupBalls.every(id => nowPocketed.includes(id) || prePocketed.has(id))
       : allColoredCleared;
 
-    if (!allMyGroupCleared && !scratched && !hasFoul) {
-      // Pocketed 8-ball before clearing group (no foul/scratch) — 3-strike rule
-      const myStrikesBefore = newState[me === "host" ? "hostEarlyEight" : "guestEarlyEight"] as number;
-      const strikeCount = myStrikesBefore + 1;
-
-      if (strikeCount >= 3) {
-        winner = opp;
-        winReason = "eight_ball_early";
-        events.push({ type: "loss", reason: winReason });
-      } else {
-        if (me === "host") newState.hostEarlyEight = strikeCount;
-        else newState.guestEarlyEight = strikeCount;
-
-        const eightBall = balls.find(b => b.id === 8);
-        if (eightBall) {
-          eightBall.pocketed = false;
-          eightBall.x = RACK_X;
-          eightBall.y = RACK_Y;
-          eightBall.vx = 0;
-          eightBall.vy = 0;
-        }
-        const cueBallAfter = balls.find(b => b.id === 0);
-        if (cueBallAfter) cueBallAfter.pocketed = true;
-        newState.turn = opp;
-        newState.phase = "cue_in_hand";
-        events.push({ type: "early_eight", strikes: strikeCount });
-      }
-    } else if (scratched || hasFoul || !allMyGroupCleared) {
-      // Foul/scratch while pocketing 8-ball, OR early 8 with foul — immediate loss (standard rules)
+    if (!allMyGroupCleared || scratched || hasFoul) {
       winner = opp;
       winReason = scratched ? "scratch_on_eight" : "eight_ball_early";
       events.push({ type: "loss", reason: winReason });
     } else {
-      // Group cleared, clean shot — win
       winner = me;
       winReason = "pocketed_eight";
       events.push({ type: "win", reason: winReason });
@@ -493,7 +457,6 @@ export interface ShotRecord {
   continuesTurn: boolean;
   foul?: boolean;
   winner?: "host" | "guest";
-  earlyEight?: boolean;
 }
 
 export function encodeShots(shots: ShotRecord[]): string {

@@ -31,9 +31,10 @@ const VOLUME_KEY = "lh_stream_volume";
 
 interface Props {
   streamId: string;
+  isOwner?: boolean;
 }
 
-export default function StreamViewer({ streamId }: Props) {
+export default function StreamViewer({ streamId, isOwner = false }: Props) {
   const roomRef      = useRef<Room | null>(null);
   const videoRef     = useRef<HTMLVideoElement>(null);
   const audioElsRef  = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -44,8 +45,8 @@ export default function StreamViewer({ streamId }: Props) {
 
   const mutedRef    = useRef(false);
   const volumeRef   = useRef(1);
-  // Ref-copy of quality so attachTrack stays stable and doesn't trigger LiveKit reconnect
   const qualityRef  = useRef<Quality>("high");
+  const camVideoRef = useRef<HTMLVideoElement>(null);
 
   const [status,       setStatus]     = useState<Status>("connecting");
   const [error,        setError]      = useState<string | null>(null);
@@ -59,6 +60,12 @@ export default function StreamViewer({ streamId }: Props) {
   const [reconnecting, setReconnecting] = useState(false);
   const [hasFinePointer, setHasFinePointer] = useState(true);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [camCfg,         setCamCfg]         = useState<import("@/lib/stream-overlay").CamCfg | null>(null);
+  const [supportCfg,     setSupportCfg]     = useState<import("@/lib/stream-overlay").SupportCfg | null>(null);
+  const [chatOverlayPos, setChatOverlayPos] = useState<import("@/lib/stream-overlay").XY>({ x: 68, y: 8 });
+  const [chatOverlay,    setChatOverlay]     = useState<{ id: string; userName: string; text: string }[]>([]);
+  const [showChatOverlay,setShowChatOverlay] = useState(true);
+  const [supportToasts,  setSupportToasts]  = useState<{ id: string; userName: string; text: string }[]>([]);
 
   // Track mounted state to avoid setState on unmounted component
   useEffect(() => {
@@ -76,6 +83,20 @@ export default function StreamViewer({ streamId }: Props) {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  // Load overlay settings + subscribe to overlay SSE updates
+  useEffect(() => {
+    if (!streamId) return;
+    fetch(`/api/streams/${streamId}/overlay`)
+      .then(r => r.json())
+      .then((d: { cam: import("@/lib/stream-overlay").CamCfg; support: import("@/lib/stream-overlay").SupportCfg; chatPos?: import("@/lib/stream-overlay").XY; chatEnabled?: boolean }) => {
+        setCamCfg(d.cam);
+        setSupportCfg(d.support);
+        if (d.chatPos) setChatOverlayPos(d.chatPos);
+        if (d.chatEnabled !== undefined) setShowChatOverlay(d.chatEnabled);
+      })
+      .catch(() => {});
+  }, [streamId]);
 
   // Restore saved volume on mount
   useEffect(() => {
@@ -181,6 +202,11 @@ export default function StreamViewer({ streamId }: Props) {
   // never triggers the LiveKit connect effect to disconnect/reconnect on quality change.
   const attachTrack = useCallback((track: RemoteTrack, pub?: RemoteTrackPublication) => {
     if (track.kind === Track.Kind.Video) {
+      if (pub?.source === Track.Source.Camera) {
+        const el = camVideoRef.current;
+        if (el) track.attach(el);
+        return;
+      }
       const el = videoRef.current;
       if (!el) return;
       track.attach(el);
@@ -300,7 +326,7 @@ export default function StreamViewer({ streamId }: Props) {
     };
   }, [streamId, attachTrack, detachTrack]);
 
-  // SSE for stream_ended
+  // SSE — stream events + overlay settings + chat overlay + support toasts
   useEffect(() => {
     if (!streamId) return;
     const es = new EventSource(`/api/streams/${streamId}/sse`);
@@ -312,6 +338,21 @@ export default function StreamViewer({ streamId }: Props) {
           if (videoRef.current) videoRef.current.srcObject = null;
           audioElsRef.current.forEach(el => { el.srcObject = null; el.remove(); });
           audioElsRef.current.clear();
+        }
+        if (data.type === "overlay_settings") {
+          if (data.cam)     setCamCfg(data.cam);
+          if (data.support) setSupportCfg(data.support);
+          if (data.chatPos) setChatOverlayPos(data.chatPos as import("@/lib/stream-overlay").XY);
+          if (data.chatEnabled !== undefined) setShowChatOverlay(data.chatEnabled as boolean);
+        }
+        if (data.type === "chat") {
+          const msg = { id: data.id as string, userName: data.userName as string, text: data.text as string };
+          setChatOverlay(prev => [...prev.slice(-19), msg]);
+          if (data.isSupport) {
+            const toast = { id: data.id as string, userName: data.userName as string, text: data.text as string };
+            setSupportToasts(prev => [...prev, toast]);
+            setTimeout(() => setSupportToasts(p => p.filter(t => t.id !== toast.id)), ((data.duration as number) ?? 6) * 1000);
+          }
         }
       } catch { /* ignore */ }
     };
@@ -442,6 +483,93 @@ export default function StreamViewer({ streamId }: Props) {
           </div>
         )}
 
+        {/* ── Camera PiP ── always in DOM so camVideoRef exists when the track arrives */}
+        <div style={{
+          position: "absolute",
+          left: `${camCfg?.pos.x ?? 65}%`,
+          top:  `${camCfg?.pos.y ?? 65}%`,
+          width: `${camCfg?.widthPct ?? 25}%`,
+          zIndex: 8,
+          display: (isLive && camCfg?.enabled) ? "block" : "none",
+        }}>
+          <video
+            ref={camVideoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              aspectRatio: "16/9",
+              objectFit: "cover",
+              display: "block",
+              border: camCfg?.borderW && camCfg.borderW > 0
+                ? `${camCfg.borderW}px solid ${camCfg.borderColor}`
+                : "none",
+              borderRadius: camCfg?.borderRadius,
+            }}
+          />
+          {camCfg?.ticker && (
+            <div style={{ overflow: "hidden", background: "rgba(0,0,0,0.55)", paddingTop: 2, paddingBottom: 2 }}>
+              <div style={{
+                display: "inline-block",
+                animation: "camTicker 12s linear infinite",
+                fontSize: camCfg.tickerSize,
+                color: camCfg.tickerColor,
+                fontFamily: `'${camCfg.tickerFont}', sans-serif`,
+                whiteSpace: "nowrap",
+                paddingLeft: "100%",
+              }}>
+                {camCfg.ticker}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Support toasts ── */}
+        {supportToasts.map((t, i) => {
+          const pos: React.CSSProperties = {
+            left: `${supportCfg?.pos?.x ?? 32}%`,
+            top:  `calc(${supportCfg?.pos?.y ?? 4}% + ${i * 52}px)`,
+          };
+          return (
+            <div key={t.id} style={{
+              position: "absolute", ...pos,
+              background: supportCfg?.bgColor ?? "#831843",
+              color: supportCfg?.textColor ?? "#fce7f3",
+              borderRadius: 10, padding: "8px 18px",
+              fontSize: 13, fontWeight: 700,
+              animation: "slideDownIn 0.3s ease",
+              zIndex: 15, whiteSpace: "nowrap",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+            }}>
+              ❤️ {t.userName}: {t.text}
+            </div>
+          );
+        })}
+
+        {/* ── Chat overlay ── */}
+        {isLive && showChatOverlay && chatOverlay.length > 0 && (
+          <div style={{
+            position: "absolute",
+            left: `${chatOverlayPos.x}%`,
+            top:  `${chatOverlayPos.y}%`,
+            width: 260, maxHeight: "55%",
+            display: "flex", flexDirection: "column", gap: 4,
+            overflowY: "hidden", zIndex: 9, pointerEvents: "none",
+          }}>
+            {chatOverlay.slice(-10).map(m => (
+              <div key={m.id} style={{
+                background: "rgba(0,0,0,0.72)", borderRadius: 6,
+                padding: "3px 8px", display: "flex", gap: 5,
+                animation: "slideDownIn 0.18s ease",
+              }}>
+                <span style={{ color: "#fb923c", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.userName}:</span>
+                <span style={{ color: "#fff", fontSize: 12, wordBreak: "break-word" }}>{m.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {audioBlocked && isLive && (
           <button
             onClick={unlockAudio}
@@ -490,6 +618,19 @@ export default function StreamViewer({ streamId }: Props) {
               </div>
             )}
             <div className="flex-1" />
+            {/* Chat overlay toggle — owner only */}
+            {isOwner && (
+              <button
+                onClick={() => setShowChatOverlay(v => !v)}
+                title={showChatOverlay ? "Hide chat overlay" : "Show chat overlay"}
+                className="text-white/70 hover:text-white transition-colors p-1"
+                style={{ color: showChatOverlay ? "#fb923c" : undefined }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+            )}
             <button
               onClick={() => setShowQuality((v) => !v)}
               title="Quality"
@@ -546,6 +687,8 @@ export default function StreamViewer({ streamId }: Props) {
         .volume-slider{-webkit-appearance:none;appearance:none;height:3px;border-radius:3px;background:rgba(255,255,255,0.25);outline:none;cursor:pointer}
         .volume-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:11px;height:11px;border-radius:50%;background:white;cursor:pointer}
         .volume-slider::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:white;border:none;cursor:pointer}
+        @keyframes slideDownIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes camTicker{from{transform:translateX(0)}to{transform:translateX(-200%)}}
       `}</style>
     </div>
   );

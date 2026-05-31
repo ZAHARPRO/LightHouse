@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Upload, Check, X, ChevronDown, ChevronUp, MessageSquare, Volume2 } from "lucide-react";
 
+function hexToRgb(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
+
 const TTS_KEY         = "lh_tts_settings";
 const TTS_ENABLED_KEY = "lh_tts_enabled";
 const TRIGGERS_KEY    = "lh_tts_triggers";
@@ -31,6 +38,7 @@ function saveTts(s: TtsSettings) {
 export interface CustomFont  { id: string; name: string; }
 export interface CustomFrame { id: string; name: string; url: string; }
 
+/** @deprecated kept for migration only */
 export type PosPreset = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export interface OverlaySettings {
@@ -47,7 +55,7 @@ export interface OverlaySettings {
   maxMessages: number;
   showAvatars: boolean;
   showTimestamps: boolean;
-  posPreset: PosPreset;
+  posXY: { x: number; y: number };
   customFonts: CustomFont[];
   customFrames: CustomFrame[];
 }
@@ -93,7 +101,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   maxMessages: 8,
   showAvatars: true,
   showTimestamps: false,
-  posPreset: "top-right",
+  posXY: { x: 68, y: 4 },
   customFonts: [],
   customFrames: [],
 };
@@ -115,10 +123,25 @@ export function loadGoogleFont(name: string) {
   document.head.appendChild(link);
 }
 
+const PRESET_TO_XY: Record<string, { x: number; y: number }> = {
+  "top-left":     { x: 2,  y: 4  },
+  "top-right":    { x: 68, y: 4  },
+  "bottom-left":  { x: 2,  y: 60 },
+  "bottom-right": { x: 68, y: 60 },
+};
+
 export function loadSettings(): OverlaySettings {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old posPreset → posXY
+      if (parsed.posPreset && !parsed.posXY) {
+        parsed.posXY = PRESET_TO_XY[parsed.posPreset] ?? DEFAULT_SETTINGS.posXY;
+        delete parsed.posPreset;
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    }
   } catch { /* ignore */ }
   return { ...DEFAULT_SETTINGS };
 }
@@ -151,6 +174,127 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
         style={{ left: value ? "calc(100% - 18px)" : "2px" }} />
     </button>
+  );
+}
+
+// ─── Overlay position drag area ──────────────────────────────────────────────
+
+function OverlayDragArea({
+  settings,
+  onPosChange,
+}: {
+  settings: OverlaySettings;
+  onPosChange: (p: { x: number; y: number }) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pos = settings.posXY;
+  const STEP = 1;
+
+  function startDrag(e: React.MouseEvent) {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const ox = (e.clientX - rect.left) / rect.width  * 100 - pos.x;
+    const oy = (e.clientY - rect.top)  / rect.height * 100 - pos.y;
+
+    function onMove(ev: MouseEvent) {
+      onPosChange({
+        x: Math.max(0, Math.min(82, (ev.clientX - rect.left) / rect.width  * 100 - ox)),
+        y: Math.max(0, Math.min(60, (ev.clientY - rect.top)  / rect.height * 100 - oy)),
+      });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup",   onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+  }
+
+  function nudge(dx: number, dy: number) {
+    onPosChange({
+      x: Math.max(0, Math.min(82, pos.x + dx)),
+      y: Math.max(0, Math.min(60, pos.y + dy)),
+    });
+  }
+
+  const overlayBg = `rgba(${hexToRgb(settings.overlayBgColor)},${settings.overlayBgOpacity / 100})`;
+  const msgBg     = `rgba(${hexToRgb(settings.msgBgColor)},${settings.msgBgOpacity / 100})`;
+  const fakeMsgs  = ["Alice: Hello! 👋", "Bob: pog", "Carol: 🔥"];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        ref={containerRef}
+        className="relative w-full rounded-[6px] overflow-hidden border border-[var(--border-subtle)] bg-[#0c0c0c]"
+        style={{ aspectRatio: "16/9", cursor: "crosshair", userSelect: "none" }}
+      >
+        {/* Grid */}
+        <div className="absolute inset-0 opacity-[0.05]" style={{
+          backgroundImage: [
+            "repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(255,255,255,1) 25px)",
+            "repeating-linear-gradient(90deg,transparent,transparent 24px,rgba(255,255,255,1) 25px)",
+          ].join(","),
+        }} />
+
+        {/* Chat panel handle */}
+        <div
+          onMouseDown={startDrag}
+          style={{
+            position: "absolute",
+            left: `${pos.x}%`,
+            top:  `${pos.y}%`,
+            width: "18%",
+            cursor: "grab",
+            zIndex: 10,
+          }}
+        >
+          <div style={{
+            background: overlayBg,
+            borderRadius: 4,
+            padding: "3px 4px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            border: "1px solid rgba(249,115,22,0.4)",
+          }}>
+            {fakeMsgs.map((msg, i) => (
+              <div key={i} style={{
+                background: msgBg,
+                borderRadius: 2,
+                padding: "1px 3px",
+                fontSize: 5,
+                display: "flex",
+                gap: 2,
+                fontFamily: `'${settings.fontFamily}', sans-serif`,
+                fontWeight: settings.fontWeight,
+                color: settings.textColor,
+              }}>
+                <span style={{ color: "#fb923c" }}>{msg.split(":")[0]}:</span>
+                {msg.split(":").slice(1).join(":")}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Nudge */}
+      <div className="flex items-center gap-2">
+        <span className="text-[0.6875rem] text-[var(--text-muted)]">
+          Fine-tune: ({Math.round(pos.x)}, {Math.round(pos.y)})
+        </span>
+        <div className="flex gap-1 ml-auto">
+          {([["↑",0,-STEP],["↓",0,STEP],["←",-STEP,0],["→",STEP,0]] as const).map(([l,dx,dy]) => (
+            <button key={l} onClick={() => nudge(dx, dy)}
+              className="w-6 h-6 flex items-center justify-center rounded-[4px] text-[0.75rem] font-bold transition-colors hover:bg-[var(--bg-card)]"
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -476,12 +620,12 @@ export default function StreamOverlaySettings() {
               </button>
 
               <p className="text-[0.6875rem] text-[var(--text-muted)]">
-                When TTS is on, incoming chat messages are read aloud for you.
+                TTS reads only messages that contain a trigger word. If no words are set, your username is used by default.
               </p>
 
               <SectionLabel>Trigger words</SectionLabel>
               <p className="text-[0.6875rem] text-[var(--text-muted)] -mt-2">
-                Messages containing these words are always read aloud.
+                Only messages containing one of these words will be read aloud.
               </p>
               <div className="flex gap-2">
                 <input
@@ -496,19 +640,23 @@ export default function StreamOverlaySettings() {
                   <Plus size={14} />
                 </button>
               </div>
-              {triggers.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {triggers.map(word => (
-                    <span key={word} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] font-semibold"
-                      style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.3)", color: "var(--accent-orange)" }}>
-                      {word}
-                      <button onClick={() => removeTrigger(word)} className="opacity-60 hover:opacity-100 transition-opacity ml-0.5">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1.5">
+                {triggers.length === 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] font-semibold"
+                    style={{ background: "rgba(99,102,241,0.08)", border: "1px dashed rgba(99,102,241,0.3)", color: "rgba(129,140,248,0.7)" }}>
+                    default: your username
+                  </span>
+                )}
+                {triggers.map(word => (
+                  <span key={word} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] font-semibold"
+                    style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.3)", color: "var(--accent-orange)" }}>
+                    {word}
+                    <button onClick={() => removeTrigger(word)} className="opacity-60 hover:opacity-100 transition-opacity ml-0.5">
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
             </>)}
 
             {/* ── LAYOUT ── */}
@@ -519,28 +667,10 @@ export default function StreamOverlaySettings() {
                   className="w-32" />
               </Row>
 
-              <SectionLabel>Position</SectionLabel>
-              <div className="grid grid-cols-2 gap-1.5">
-                {([
-                  { id: "top-left",     label: "↖ Top left" },
-                  { id: "top-right",    label: "↗ Top right" },
-                  { id: "bottom-left",  label: "↙ Bottom left" },
-                  { id: "bottom-right", label: "↘ Bottom right" },
-                ] as { id: PosPreset; label: string }[]).map(p => (
-                  <button key={p.id} onClick={() => save({ ...settings, posPreset: p.id })}
-                    className="px-2 py-1.5 rounded-[6px] text-[0.7rem] font-display font-semibold transition-colors"
-                    style={{
-                      background: settings.posPreset === p.id ? "rgba(249,115,22,0.12)" : "var(--bg-elevated)",
-                      border: `1px solid ${settings.posPreset === p.id ? "rgba(249,115,22,0.4)" : "var(--border-subtle)"}`,
-                      color: settings.posPreset === p.id ? "var(--accent-orange)" : "var(--text-secondary)",
-                    }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+              <SectionLabel>Position — drag to place</SectionLabel>
+              <OverlayDragArea settings={settings} onPosChange={p => save({ ...settings, posXY: p })} />
               <p className="text-[0.6875rem] text-[var(--text-muted)]">
-                You can also drag the panel in the overlay window for fine-tuning.
+                You can also drag the panel directly in the overlay window.
               </p>
             </>)}
           </div>

@@ -93,7 +93,7 @@ export default function StreamIdPageClient({
           <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[12px] sm:rounded-[14px] p-2 sm:p-4">
             {isStreamOwner
               ? <StreamBroadcaster existingStreamId={streamId} onStreamChange={handleStreamChange} />
-              : <StreamViewer streamId={streamId} />
+              : <StreamViewer streamId={streamId} isOwner={isStreamOwner} />
             }
           </div>
 

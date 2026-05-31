@@ -64,7 +64,7 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
   // Default: top-right — calculated client-side after mount
   const posRef    = useRef({ x: -1, y: 20 }); // x=-1 = not yet initialised
 
-  const prevPresetRef = useRef<PosPreset | null>(null);
+  const prevPosXYRef = useRef<{ x: number; y: number } | null>(null);
 
   function applyPos(pos: { x: number; y: number }) {
     posRef.current = pos;
@@ -74,12 +74,20 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
     }
   }
 
-  // Initial position: saved drag pos → else preset
+  function pctToPixels(pct: { x: number; y: number }) {
+    return {
+      x: pct.x * window.innerWidth  / 100,
+      y: pct.y * window.innerHeight / 100,
+    };
+  }
+
+  // Initial position: saved drag pos → else posXY percent
   useEffect(() => {
     const saved = loadSavedPos();
     const s = loadSettings();
-    applyPos(saved ?? calcPos(s.posPreset ?? "top-right"));
-    prevPresetRef.current = s.posPreset ?? "top-right";
+    const posXY = s.posXY ?? { x: 68, y: 4 };
+    applyPos(saved ?? pctToPixels(posXY));
+    prevPosXYRef.current = posXY;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -98,12 +106,13 @@ export default function StreamChatOverlay({ streamId }: { streamId: string }) {
       setSettings(s);
       if (GOOGLE_FONTS.includes(s.fontFamily)) loadGoogleFont(s.fontFamily);
       s.customFonts.forEach(f => loadGoogleFont(f.name));
-      // If posPreset changed in settings, jump to new preset (clears saved drag pos)
-      const preset = s.posPreset ?? "top-right";
-      if (preset !== prevPresetRef.current) {
-        prevPresetRef.current = preset;
+      // If posXY changed in settings, jump to new position (clears saved drag pos)
+      const posXY = s.posXY ?? { x: 68, y: 4 };
+      const prev  = prevPosXYRef.current;
+      if (!prev || prev.x !== posXY.x || prev.y !== posXY.y) {
+        prevPosXYRef.current = posXY;
         localStorage.removeItem(POS_KEY);
-        applyPos(calcPos(preset));
+        applyPos(pctToPixels(posXY));
       }
     }, 2000);
     return () => clearInterval(t);

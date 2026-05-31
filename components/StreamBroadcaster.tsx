@@ -7,9 +7,16 @@ import {
   ChevronDown, Link2, Check, Eye, EyeOff,
   Mic, MicOff, MousePointer, Mouse, ImagePlus, X,
   Volume2, VolumeX, RefreshCw, Gamepad2, Info, Plus,
-  Pause, Play, Timer,
+  Pause, Play, Timer, Camera, CameraOff, Settings2, ChevronUp, MessageSquare,
 } from "lucide-react";
 import StreamOverlaySettings from "@/components/StreamOverlaySettings";
+import StreamOverlayPositioner from "@/components/StreamOverlayPositioner";
+
+const CAM_ENABLED_KEY       = "lh_cam_enabled";
+const CAM_CFG_KEY           = "lh_cam_cfg";
+const SUPPORT_CFG_KEY       = "lh_support_cfg";
+const CHAT_POS_KEY          = "lh_chat_pos";
+const CHAT_OVERLAY_KEY      = "lh_chat_overlay_enabled";
 
 type Status = "idle" | "connecting" | "live" | "error";
 
@@ -197,7 +204,49 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
   const [isPaused,          setIsPaused]         = useState(false);
   const [pauseSecondsLeft,  setPauseSecondsLeft] = useState(0);
   const [showPauseMenu,     setShowPauseMenu]    = useState(false);
+  const [camEnabled,          setCamEnabled]         = useState(false);
+  const [chatOverlayEnabled,  setChatOverlayEnabled] = useState(true);
+  const [showCamPanel,        setShowCamPanel]       = useState(false);
+  const [camCfg, setCamCfg] = useState({ pos: { x: 1, y: 65 }, widthPct: 25, borderW: 3, borderColor: "#fb923c", borderRadius: 8, ticker: "", tickerSize: 13, tickerColor: "#ffffff", tickerFont: "Inter" });
+  const [supportCfg, setSupportCfg] = useState({ pos: { x: 32, y: 4 }, bgColor: "#831843", textColor: "#fce7f3", tts: false, duration: 6 });
+  const [chatPos,    setChatPos]     = useState({ x: 68, y: 8 });
+  const [showSupportPanel,  setShowSupportPanel] = useState(false);
+  const [showPositioner,    setShowPositioner]   = useState(false);
+  const [camPreviewAll,     setCamPreviewAll]    = useState(false);
+  const [supPreviewAll,     setSupPreviewAll]    = useState(false);
   const pauseMenuRef                             = useRef<HTMLDivElement>(null);
+  const camRawTrackRef    = useRef<MediaStreamTrack | null>(null);
+  const camLiveTrackRef   = useRef<LocalVideoTrack | null>(null);
+  const camPreviewRef     = useRef<HTMLVideoElement>(null);
+
+  // Load prefs from localStorage on mount
+  useEffect(() => {
+    try {
+      const rawCam = localStorage.getItem(CAM_CFG_KEY);
+      if (rawCam) setCamCfg(prev => ({ ...prev, ...JSON.parse(rawCam) }));
+      const rawSupport = localStorage.getItem(SUPPORT_CFG_KEY);
+      if (rawSupport) setSupportCfg(prev => ({ ...prev, ...JSON.parse(rawSupport) }));
+      const rawChat = localStorage.getItem(CHAT_POS_KEY);
+      if (rawChat) setChatPos(JSON.parse(rawChat));
+      const rawChatOverlay = localStorage.getItem(CHAT_OVERLAY_KEY);
+      if (rawChatOverlay !== null) setChatOverlayEnabled(rawChatOverlay === "true");
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist prefs
+  useEffect(() => {
+    try { localStorage.setItem(CAM_ENABLED_KEY, String(camEnabled)); } catch { /* ignore */ }
+  }, [camEnabled]);
+  useEffect(() => {
+    try { localStorage.setItem(CAM_CFG_KEY, JSON.stringify(camCfg)); } catch { /* ignore */ }
+  }, [camCfg]);
+  useEffect(() => {
+    try { localStorage.setItem(SUPPORT_CFG_KEY, JSON.stringify(supportCfg)); } catch { /* ignore */ }
+  }, [supportCfg]);
+  useEffect(() => {
+    try { localStorage.setItem(CHAT_POS_KEY, JSON.stringify(chatPos)); } catch { /* ignore */ }
+  }, [chatPos]);
 
   // Attach/detach track to inline preview
   useEffect(() => {
@@ -633,6 +682,17 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       videoEndedCleanupRef.current = () => videoMediaTrack.removeEventListener("ended", endedHandler);
 
       setStatus("live");
+
+      // Auto-publish camera if it was already on (captured in setup)
+      if (camRawTrackRef.current?.readyState === "live") {
+        const live = new LocalVideoTrack(camRawTrackRef.current, undefined, true);
+        camLiveTrackRef.current = live;
+        await room.localParticipant.publishTrack(live, {
+          source: Track.Source.Camera,
+          videoCodec: "vp9",
+          videoEncoding: { maxBitrate: 1_500_000, maxFramerate: 30 },
+        }).catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       setError(
@@ -679,6 +739,11 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
     micRawTrackRef.current?.stop();
     micRawTrackRef.current = null;
     micLiveTrackRef.current = null;
+
+    camRawTrackRef.current?.stop();
+    camRawTrackRef.current = null;
+    camLiveTrackRef.current = null;
+    setCamEnabled(false);
 
     // Tear down all audio sources (mixer or direct)
     audioSourcesRef.current.forEach(src => {
@@ -741,6 +806,68 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
       if (ok) setMicMuted(false);
     }
   }, [micMuted, publishMic]);
+
+  const broadcastOverlay = useCallback((overrideCam?: typeof camCfg, overrideEnabled?: boolean, overrideChatEnabled?: boolean) => {
+    const id = streamIdRef.current;
+    if (!id) return;
+    const cfg = {
+      cam: { ...(overrideCam ?? camCfg), enabled: overrideEnabled ?? camEnabled },
+      support: supportCfg,
+      chatPos,
+      chatEnabled: overrideChatEnabled ?? chatOverlayEnabled,
+    };
+    fetch(`/api/streams/${id}/overlay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    }).catch(() => {});
+  }, [camCfg, camEnabled, supportCfg, chatPos, chatOverlayEnabled]);
+
+  const toggleCam = useCallback(async () => {
+    const isLiveNow = status === "live" && !!roomRef.current;
+
+    if (camEnabled) {
+      // Disable camera
+      if (isLiveNow && camLiveTrackRef.current) {
+        await roomRef.current!.localParticipant.unpublishTrack(camLiveTrackRef.current).catch(() => {});
+        camLiveTrackRef.current = null;
+        broadcastOverlay(undefined, false);
+      }
+      camRawTrackRef.current?.stop();
+      camRawTrackRef.current = null;
+      if (camPreviewRef.current) { camPreviewRef.current.srcObject = null; }
+      setCamEnabled(false);
+    } else {
+      // Enable camera — capture regardless of live status (preview in setup, publish when live)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, frameRate: 30 }, audio: false });
+        const raw = stream.getVideoTracks()[0];
+        camRawTrackRef.current = raw;
+        // Local preview (setup or live)
+        if (camPreviewRef.current) {
+          camPreviewRef.current.srcObject = new MediaStream([raw]);
+          camPreviewRef.current.play().catch(() => {});
+        }
+        raw.addEventListener("ended", () => {
+          setCamEnabled(false);
+          camRawTrackRef.current = null;
+          camLiveTrackRef.current = null;
+        });
+        // Publish to LiveKit if already streaming
+        if (isLiveNow) {
+          const live = new LocalVideoTrack(raw, undefined, true);
+          camLiveTrackRef.current = live;
+          await roomRef.current!.localParticipant.publishTrack(live, {
+            source: Track.Source.Camera,
+            videoCodec: "vp9",
+            videoEncoding: { maxBitrate: 1_500_000, maxFramerate: 30 },
+          });
+          broadcastOverlay(undefined, true);
+        }
+        setCamEnabled(true);
+      } catch { /* permission denied or no camera */ }
+    }
+  }, [camEnabled, status, broadcastOverlay]);
 
   // Switch capture window while streaming
   const switchScreen = useCallback(async () => {
@@ -1007,7 +1134,236 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
+              {/* Camera section */}
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={toggleCam}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border text-[0.8125rem] font-display font-semibold transition-colors"
+                    style={{
+                      borderColor: camEnabled ? "rgba(99,102,241,0.4)" : "var(--border-subtle)",
+                      background:  camEnabled ? "rgba(99,102,241,0.08)" : "var(--bg-card)",
+                      color:       camEnabled ? "#818cf8" : "var(--text-muted)",
+                    }}
+                  >
+                    {camEnabled ? <Camera size={13} /> : <CameraOff size={13} />}
+                    {camEnabled ? "Webcam on" : "Webcam off"}
+                  </button>
+
+                  {camEnabled && (
+                    <button
+                      onClick={() => setShowCamPanel(v => !v)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[0.75rem] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors font-display font-semibold"
+                    >
+                      <Settings2 size={12} />
+                      {showCamPanel ? "Hide settings" : "Cam settings"}
+                      {showCamPanel ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-[8px] overflow-hidden border border-[var(--border-subtle)] bg-[#0a0a0a]" style={{ maxWidth: 200, display: camEnabled ? "block" : "none" }}>
+                  <video ref={camPreviewRef} autoPlay muted playsInline className="w-full aspect-video object-cover" />
+                </div>
+
+                {showCamPanel && camEnabled && (
+                  <div className="flex flex-col gap-3 p-3 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[0.8125rem]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-[var(--text-muted)]">Webcam overlay settings</p>
+                      <button
+                        onClick={() => setCamPreviewAll(v => !v)}
+                        className="flex items-center gap-1 text-[0.65rem] font-display font-semibold px-2 py-0.5 rounded-[5px] transition-colors"
+                        style={{
+                          background: camPreviewAll ? "rgba(249,115,22,0.12)" : "var(--bg-card)",
+                          border: `1px solid ${camPreviewAll ? "rgba(249,115,22,0.3)" : "var(--border-subtle)"}`,
+                          color: camPreviewAll ? "var(--accent-orange)" : "var(--text-muted)",
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        {camPreviewAll ? "Cam only" : "Preview all"}
+                      </button>
+                    </div>
+
+                    <StreamOverlayPositioner
+                      camPos={camCfg.pos}
+                      supportPos={supportCfg.pos}
+                      chatPos={chatPos}
+                      onCam={p => setCamCfg(c => ({...c, pos: p}))}
+                      onSupport={p => setSupportCfg(c => ({...c, pos: p}))}
+                      onChat={setChatPos}
+                      camCfg={camCfg}
+                      supportCfg={{ bgColor: supportCfg.bgColor, textColor: supportCfg.textColor }}
+                      visibleItems={camPreviewAll ? undefined : ["cam"]}
+                      onCamResize={pct => setCamCfg(c => ({...c, widthPct: Math.round(pct)}))}
+                    />
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">Size: {camCfg.widthPct}%</span>
+                        <input type="range" min={12} max={45} value={camCfg.widthPct}
+                          onChange={e => setCamCfg(c => ({...c, widthPct: +e.target.value}))}
+                          className="accent-indigo-400" />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">Border: {camCfg.borderW}px</span>
+                        <input type="range" min={0} max={8} value={camCfg.borderW}
+                          onChange={e => setCamCfg(c => ({...c, borderW: +e.target.value}))}
+                          className="accent-indigo-400" />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">Border color</span>
+                        <input type="color" value={camCfg.borderColor}
+                          onChange={e => setCamCfg(c => ({...c, borderColor: e.target.value}))}
+                          className="w-8 h-6 rounded cursor-pointer border-0" />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">Radius: {camCfg.borderRadius}px</span>
+                        <input type="range" min={0} max={50} value={camCfg.borderRadius}
+                          onChange={e => setCamCfg(c => ({...c, borderRadius: +e.target.value}))}
+                          className="accent-indigo-400" />
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-[var(--border-subtle)]" />
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[0.6875rem] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Label under webcam</span>
+                      <input className="input-field h-8 px-2 text-sm" placeholder="e.g. John Doe · Streamer"
+                        value={camCfg.ticker}
+                        onChange={e => setCamCfg(c => ({...c, ticker: e.target.value}))} />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[0.6875rem] text-[var(--text-muted)]">Size: {camCfg.tickerSize}px</span>
+                          <input type="range" min={10} max={22} value={camCfg.tickerSize}
+                            onChange={e => setCamCfg(c => ({...c, tickerSize: +e.target.value}))}
+                            className="accent-indigo-400" />
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[0.6875rem] text-[var(--text-muted)]">Color</span>
+                          <input type="color" value={camCfg.tickerColor}
+                            onChange={e => setCamCfg(c => ({...c, tickerColor: e.target.value}))}
+                            className="w-7 h-6 rounded cursor-pointer border-0" />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[0.6875rem] text-[var(--text-muted)]">Font</span>
+                          <select value={camCfg.tickerFont}
+                            onChange={e => setCamCfg(c => ({...c, tickerFont: e.target.value}))}
+                            className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[5px] px-1 py-0.5 text-[0.6875rem] text-[var(--text-primary)] outline-none">
+                            {["Inter","Roboto","Oswald","Montserrat","Press Start 2P"].map(f => <option key={f}>{f}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Support overlay settings */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => setShowSupportPanel(v => !v)}
+                  className="flex items-center gap-1.5 w-fit px-3 py-1.5 rounded-[8px] border text-[0.8125rem] font-display font-semibold transition-colors"
+                  style={{
+                    borderColor: showSupportPanel ? "rgba(236,72,153,0.4)" : "var(--border-subtle)",
+                    background:  showSupportPanel ? "rgba(236,72,153,0.08)" : "var(--bg-card)",
+                    color:       showSupportPanel ? "#ec4899" : "var(--text-muted)",
+                  }}
+                >
+                  ❤️
+                  {showSupportPanel ? "Hide support settings" : "Support overlay"}
+                  {showSupportPanel ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                </button>
+
+                {showSupportPanel && (
+                  <div className="flex flex-col gap-3 p-3 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[0.8125rem]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[0.6875rem] font-display font-bold tracking-[0.06em] uppercase text-[var(--text-muted)]">Support notification</p>
+                      <button
+                        onClick={() => setSupPreviewAll(v => !v)}
+                        className="flex items-center gap-1 text-[0.65rem] font-display font-semibold px-2 py-0.5 rounded-[5px] transition-colors"
+                        style={{
+                          background: supPreviewAll ? "rgba(249,115,22,0.12)" : "var(--bg-card)",
+                          border: `1px solid ${supPreviewAll ? "rgba(249,115,22,0.3)" : "var(--border-subtle)"}`,
+                          color: supPreviewAll ? "var(--accent-orange)" : "var(--text-muted)",
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        {supPreviewAll ? "Support only" : "Preview all"}
+                      </button>
+                    </div>
+
+                    <StreamOverlayPositioner
+                      camPos={camCfg.pos}
+                      supportPos={supportCfg.pos}
+                      chatPos={chatPos}
+                      onCam={p => setCamCfg(c => ({...c, pos: p}))}
+                      onSupport={p => setSupportCfg(c => ({...c, pos: p}))}
+                      onChat={setChatPos}
+                      camCfg={camCfg}
+                      supportCfg={{ bgColor: supportCfg.bgColor, textColor: supportCfg.textColor }}
+                      visibleItems={supPreviewAll ? undefined : ["support"]}
+                    />
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[0.6875rem] text-[var(--text-muted)]">Background</span>
+                          <input type="color" value={supportCfg.bgColor}
+                            onChange={e => setSupportCfg(c => ({...c, bgColor: e.target.value}))}
+                            className="w-8 h-6 rounded cursor-pointer border-0" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[0.6875rem] text-[var(--text-muted)]">Text color</span>
+                          <input type="color" value={supportCfg.textColor}
+                            onChange={e => setSupportCfg(c => ({...c, textColor: e.target.value}))}
+                            className="w-8 h-6 rounded cursor-pointer border-0" />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">Duration: {supportCfg.duration}s</span>
+                        <input type="range" min={3} max={15} value={supportCfg.duration}
+                          onChange={e => setSupportCfg(c => ({...c, duration: +e.target.value}))}
+                          className="accent-pink-400" />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[0.6875rem] text-[var(--text-muted)]">TTS voice</span>
+                        <button
+                          onClick={() => setSupportCfg(c => ({...c, tts: !c.tts}))}
+                          className="relative w-9 h-5 rounded-full shrink-0 transition-colors"
+                          style={{ background: supportCfg.tts ? "#ec4899" : "rgba(255,255,255,0.1)" }}
+                        >
+                          <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                            style={{ left: supportCfg.tts ? "calc(100% - 18px)" : "2px" }} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[0.6875rem] text-[var(--text-muted)] uppercase tracking-wide font-semibold">Preview</span>
+                      <div className="flex justify-center py-2">
+                        <div style={{
+                          background: supportCfg.bgColor,
+                          color: supportCfg.textColor,
+                          borderRadius: 10, padding: "8px 18px",
+                          fontSize: 13, fontWeight: 700,
+                          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                        }}>
+                          ❤️ John Doe: Thanks for the stream!
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setCaptureAudio((v) => !v)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border text-[0.8125rem] font-display font-semibold transition-colors"
@@ -1171,6 +1527,51 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
             {(!micMuted && micLiveTrackRef.current) ? "Mic on" : "Mic off"}
           </button>
 
+          {/* Camera toggle */}
+          <button
+            onClick={toggleCam}
+            title={camEnabled ? "Disable camera" : "Enable camera"}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border text-[0.8125rem] font-display font-semibold transition-colors"
+            style={{
+              borderColor: camEnabled ? "rgba(99,102,241,0.4)" : "var(--border-subtle)",
+              background:  camEnabled ? "rgba(99,102,241,0.08)" : "var(--bg-card)",
+              color:       camEnabled ? "#818cf8" : "var(--text-muted)",
+            }}
+          >
+            {camEnabled ? <Camera size={13} /> : <CameraOff size={13} />}
+            {camEnabled ? "Cam on" : "Cam off"}
+          </button>
+
+          {/* Chat overlay toggle */}
+          <button
+            onClick={() => {
+              const next = !chatOverlayEnabled;
+              setChatOverlayEnabled(next);
+              try { localStorage.setItem(CHAT_OVERLAY_KEY, String(next)); } catch { /* ignore */ }
+              broadcastOverlay(undefined, undefined, next);
+            }}
+            title={chatOverlayEnabled ? "Hide chat overlay" : "Show chat overlay"}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border text-[0.8125rem] font-display font-semibold transition-colors"
+            style={{
+              borderColor: chatOverlayEnabled ? "rgba(251,146,60,0.4)" : "var(--border-subtle)",
+              background:  chatOverlayEnabled ? "rgba(251,146,60,0.08)" : "var(--bg-card)",
+              color:       chatOverlayEnabled ? "#fb923c" : "var(--text-muted)",
+            }}
+          >
+            <MessageSquare size={13} />
+            {chatOverlayEnabled ? "Chat on" : "Chat off"}
+          </button>
+
+          {/* Overlay settings toggle */}
+          <button
+            onClick={() => { setShowCamPanel(v => !v); setShowSupportPanel(false); }}
+            title="Overlay settings"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] border text-[0.8125rem] font-display font-semibold transition-colors ${showCamPanel ? "border-orange-500/30 bg-orange-500/8 text-orange-400" : "border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
+          >
+            <Settings2 size={13} />
+            Overlays
+          </button>
+
           {/* Switch capture window */}
           <button
             onClick={switchScreen}
@@ -1223,6 +1624,170 @@ export default function StreamBroadcaster({ existingStreamId, onStreamChange }: 
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Camera & Overlay settings panel ── */}
+      {status === "live" && (showCamPanel || showSupportPanel) && (
+        <div className="flex flex-col gap-3 p-3 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[0.8125rem]">
+
+          {/* Tab row */}
+          <div className="flex gap-1">
+            {([["cam", "📷 Camera PiP"], ["support", "❤️ Support Overlay"]] as const).map(([key, label]) => (
+              <button key={key}
+                onClick={() => { setShowCamPanel(key === "cam"); setShowSupportPanel(key === "support"); }}
+                className="px-3 py-1.5 rounded-[7px] font-display font-semibold text-[0.75rem] transition-colors"
+                style={{
+                  background: (key === "cam" ? showCamPanel : showSupportPanel) ? "rgba(249,115,22,0.12)" : "var(--bg-card)",
+                  color: (key === "cam" ? showCamPanel : showSupportPanel) ? "var(--accent-orange)" : "var(--text-muted)",
+                  border: `1px solid ${(key === "cam" ? showCamPanel : showSupportPanel) ? "rgba(249,115,22,0.3)" : "var(--border-subtle)"}`,
+                }}>
+                {label}
+              </button>
+            ))}
+            <button onClick={() => { setShowCamPanel(false); setShowSupportPanel(false); }}
+              className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1">
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Positions drag layer */}
+          {(() => {
+            const previewAll = showCamPanel ? camPreviewAll : supPreviewAll;
+            const setPreviewAll = showCamPanel ? setCamPreviewAll : setSupPreviewAll;
+            const activeItem = showCamPanel ? "cam" : "support";
+            return (
+              <>
+                <div className="flex items-center justify-between -mb-1">
+                  <span className="text-[0.6rem] font-display font-bold tracking-[0.06em] uppercase text-[var(--text-muted)]">Position</span>
+                  <button
+                    onClick={() => setPreviewAll(v => !v)}
+                    className="flex items-center gap-1 text-[0.65rem] font-display font-semibold px-2 py-0.5 rounded-[5px] transition-colors"
+                    style={{
+                      background: previewAll ? "rgba(249,115,22,0.12)" : "var(--bg-card)",
+                      border: `1px solid ${previewAll ? "rgba(249,115,22,0.3)" : "var(--border-subtle)"}`,
+                      color: previewAll ? "var(--accent-orange)" : "var(--text-muted)",
+                    }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    {previewAll ? `${activeItem === "cam" ? "Cam" : "Support"} only` : "Preview all"}
+                  </button>
+                </div>
+                <StreamOverlayPositioner
+                  camPos={camCfg.pos}
+                  supportPos={supportCfg.pos}
+                  chatPos={chatPos}
+                  onCam={p => { setCamCfg(c => ({...c, pos: p})); broadcastOverlay({...camCfg, pos: p}); }}
+                  onSupport={p => { setSupportCfg(c => ({...c, pos: p})); broadcastOverlay(); }}
+                  onChat={p => { setChatPos(p); broadcastOverlay(); }}
+                  camCfg={camCfg}
+                  supportCfg={{ bgColor: supportCfg.bgColor, textColor: supportCfg.textColor }}
+                  visibleItems={previewAll ? undefined : [activeItem]}
+                  onCamResize={pct => { setCamCfg(c => ({...c, widthPct: Math.round(pct)})); broadcastOverlay({...camCfg, widthPct: Math.round(pct)}); }}
+                />
+              </>
+            );
+          })()}
+
+          {/* Camera settings */}
+          {showCamPanel && (<>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">Width: {camCfg.widthPct}%</span>
+                <input type="range" min={12} max={45} value={camCfg.widthPct}
+                  onChange={e => setCamCfg(c => ({...c, widthPct: +e.target.value}))}
+                  onMouseUp={() => broadcastOverlay()} className="accent-orange-500" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">Border: {camCfg.borderW}px</span>
+                <input type="range" min={0} max={8} value={camCfg.borderW}
+                  onChange={e => setCamCfg(c => ({...c, borderW: +e.target.value}))}
+                  onMouseUp={() => broadcastOverlay()} className="accent-orange-500" />
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">Border color</span>
+                <input type="color" value={camCfg.borderColor}
+                  onChange={e => { setCamCfg(c => ({...c, borderColor: e.target.value})); broadcastOverlay({...camCfg, borderColor: e.target.value}); }}
+                  className="w-8 h-6 rounded cursor-pointer border-0" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">Radius: {camCfg.borderRadius}px</span>
+                <input type="range" min={0} max={50} value={camCfg.borderRadius}
+                  onChange={e => setCamCfg(c => ({...c, borderRadius: +e.target.value}))}
+                  onMouseUp={() => broadcastOverlay()} className="accent-orange-500" />
+              </div>
+            </div>
+
+            <div className="h-px bg-[var(--border-subtle)]" />
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[0.6875rem] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Ticker text</span>
+              <input className="input-field h-8 px-2 text-sm" placeholder="e.g. John Doe · Streamer"
+                value={camCfg.ticker}
+                onChange={e => setCamCfg(c => ({...c, ticker: e.target.value}))}
+                onBlur={() => broadcastOverlay()} />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[0.6875rem] text-[var(--text-muted)]">Size: {camCfg.tickerSize}px</span>
+                  <input type="range" min={10} max={22} value={camCfg.tickerSize}
+                    onChange={e => setCamCfg(c => ({...c, tickerSize: +e.target.value}))}
+                    onMouseUp={() => broadcastOverlay()} className="accent-orange-500" />
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[0.6875rem] text-[var(--text-muted)]">Color</span>
+                  <input type="color" value={camCfg.tickerColor}
+                    onChange={e => { setCamCfg(c => ({...c, tickerColor: e.target.value})); broadcastOverlay({...camCfg, tickerColor: e.target.value}); }}
+                    className="w-7 h-6 rounded cursor-pointer border-0" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[0.6875rem] text-[var(--text-muted)]">Font</span>
+                  <select value={camCfg.tickerFont}
+                    onChange={e => { setCamCfg(c => ({...c, tickerFont: e.target.value})); broadcastOverlay({...camCfg, tickerFont: e.target.value}); }}
+                    className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[5px] px-1 py-0.5 text-[0.6875rem] text-[var(--text-primary)] outline-none">
+                    {["Inter","Roboto","Oswald","Montserrat","Press Start 2P"].map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </>)}
+
+          {/* Support overlay settings */}
+          {showSupportPanel && (<>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[0.6875rem] text-[var(--text-muted)]">Background</span>
+                  <input type="color" value={supportCfg.bgColor}
+                    onChange={e => { setSupportCfg(c => ({...c, bgColor: e.target.value})); broadcastOverlay(); }}
+                    className="w-8 h-6 rounded cursor-pointer border-0" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[0.6875rem] text-[var(--text-muted)]">Text color</span>
+                  <input type="color" value={supportCfg.textColor}
+                    onChange={e => { setSupportCfg(c => ({...c, textColor: e.target.value})); broadcastOverlay(); }}
+                    className="w-8 h-6 rounded cursor-pointer border-0" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">Duration: {supportCfg.duration}s</span>
+                <input type="range" min={3} max={15} value={supportCfg.duration}
+                  onChange={e => setSupportCfg(c => ({...c, duration: +e.target.value}))}
+                  onMouseUp={() => broadcastOverlay()} className="accent-orange-500" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[0.6875rem] text-[var(--text-muted)]">TTS</span>
+                <button onClick={() => { setSupportCfg(c => ({...c, tts: !c.tts})); broadcastOverlay(); }}
+                  className="relative w-9 h-5 rounded-full shrink-0 transition-colors"
+                  style={{ background: supportCfg.tts ? "var(--accent-orange)" : "rgba(255,255,255,0.1)" }}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                    style={{ left: supportCfg.tts ? "calc(100% - 18px)" : "2px" }} />
+                </button>
+              </div>
+            </div>
+          </>)}
         </div>
       )}
 

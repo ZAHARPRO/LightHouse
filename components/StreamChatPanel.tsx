@@ -82,11 +82,15 @@ export default function StreamChatPanel({
   const inputRef    = useRef<HTMLInputElement>(null);
   const emojiRef    = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
-  const ttsRef      = useRef({ enabled: ttsEnabled, settings: ttsSettings });
-  const triggersRef = useRef<string[]>([]);
+  const ttsRef           = useRef({ enabled: ttsEnabled, settings: ttsSettings });
+  const triggersRef      = useRef<string[]>([]);
+  const defaultTriggerRef = useRef<string>("");
 
   useEffect(() => { ttsRef.current = { enabled: ttsEnabled, settings: ttsSettings }; }, [ttsEnabled, ttsSettings]);
   useEffect(() => { triggersRef.current = triggerWords; }, [triggerWords]);
+  useEffect(() => {
+    defaultTriggerRef.current = (currentUserName ?? "").toLowerCase().replace(/\s+/g, "");
+  }, [currentUserName]);
 
   // Load localStorage + modstate on mount
   useEffect(() => {
@@ -143,14 +147,14 @@ export default function StreamChatPanel({
         if (data.type === "chat") {
           const msg = data as ChatMsg;
           setMsgs(prev => [...prev, msg]);
-          if (msg.userId !== currentUserId) {
-            const s = ttsRef.current.settings;
-            if (ttsRef.current.enabled) {
-              speak(msg.userName, msg.text, s);
-            } else if (triggersRef.current.length > 0) {
+          if (msg.userId !== currentUserId && ttsRef.current.enabled) {
+            const words = triggersRef.current.length > 0
+              ? triggersRef.current
+              : defaultTriggerRef.current ? [defaultTriggerRef.current] : [];
+            if (words.length > 0) {
               const lower = msg.text.toLowerCase();
-              if (triggersRef.current.some(w => lower.includes(w.toLowerCase()))) {
-                speak(msg.userName, msg.text, s);
+              if (words.some(w => lower.includes(w))) {
+                speak(msg.userName, msg.text, ttsRef.current.settings);
               }
             }
           }
@@ -524,10 +528,12 @@ export default function StreamChatPanel({
             <Smile size={16} />
           </button>
 
-          <button onClick={toggleTts} title={ttsEnabled ? "Disable TTS" : "Enable TTS"}
-            className={`p-1.5 rounded-[7px] transition-colors shrink-0 ${ttsEnabled ? "bg-[var(--bg-elevated)] text-[var(--accent-orange)]" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
-            {ttsEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-          </button>
+          {(isStreamOwner || isCurrentUserMod) && (
+            <button onClick={toggleTts} title={ttsEnabled ? "Enable TTS" : "Disable TTS"}
+              className={`p-1.5 rounded-[7px] transition-colors shrink-0 ${ttsEnabled ? "bg-[var(--bg-elevated)] text-[var(--accent-orange)]" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
+              {ttsEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+          )}
 
           <input
             ref={inputRef}

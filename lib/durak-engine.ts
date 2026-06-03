@@ -18,6 +18,7 @@ import {
   cardsEqual,
 } from "@/lib/durak";
 import { finalizeRatedDurak, roomInclude } from "@/lib/durak-room";
+import { getBotAction, type BotDifficulty, type ClientBotState } from "@/lib/durak-bot";
 
 type SlotRow = {
   id: string;
@@ -25,6 +26,13 @@ type SlotRow = {
   seatIdx: number;
   handJson: string;
   timeMs: number | null;
+  isOut: boolean;
+};
+
+export type BotSlotData = {
+  seatIdx: number;
+  difficulty: BotDifficulty;
+  handJson: string;
   isOut: boolean;
 };
 
@@ -45,8 +53,17 @@ type RoomRow = {
   phase: string;
   lastMoveAt: Date | null;
   winner: string | null;
+  botsJson: string;
   players: SlotRow[];
 };
+
+function parseBots(botsJson: string): BotSlotData[] {
+  try { return JSON.parse(botsJson) as BotSlotData[]; } catch { return []; }
+}
+
+function isBotSeat(room: RoomRow, seatIdx: number): boolean {
+  return parseBots(room.botsJson).some((b) => b.seatIdx === seatIdx);
+}
 
 type Mutable = {
   hands: Card[][];
@@ -72,9 +89,15 @@ function loadState(room: RoomRow): Mutable {
   const playerCount = room.maxPlayers;
   const hands: Card[][] = Array.from({ length: playerCount }, () => []);
   const outPlayers = new Set<number>();
+  // Real player slots
   for (const slot of room.players) {
     hands[slot.seatIdx] = parse<Card[]>(slot.handJson, []);
     if (slot.isOut) outPlayers.add(slot.seatIdx);
+  }
+  // Bot slots
+  for (const bot of parseBots(room.botsJson)) {
+    hands[bot.seatIdx] = parse<Card[]>(bot.handJson, []);
+    if (bot.isOut) outPlayers.add(bot.seatIdx);
   }
   return {
     hands,
@@ -130,8 +153,12 @@ function resolveBout(room: RoomRow, state: Mutable, defenderTook: boolean): stri
 
   // Mark players who ran out of cards (deck empty) as out.
   if (state.deck.length === 0) {
+    const occupiedSeats = new Set([
+      ...room.players.map((s) => s.seatIdx),
+      ...parseBots(room.botsJson).map((b) => b.seatIdx),
+    ]);
     for (let p = 0; p < playerCount; p++) {
-      if (!state.outPlayers.has(p) && state.hands[p].length === 0 && room.players.some((s) => s.seatIdx === p)) {
+      if (!state.outPlayers.has(p) && state.hands[p].length === 0 && occupiedSeats.has(p)) {
         state.outPlayers.add(p);
       }
     }
@@ -159,7 +186,8 @@ function resolveBout(room: RoomRow, state: Mutable, defenderTook: boolean): stri
 
 /** Treat empty (unoccupied) seats as "out" so win detection ignores them. */
 function withEmptySeatsOut(room: RoomRow, state: Mutable): Set<number> {
-  const occupied = new Set(room.players.map((p) => p.seatIdx));
+  const botSeats = new Set(parseBots(room.botsJson).map((b) => b.seatIdx));
+  const occupied = new Set([...room.players.map((p) => p.seatIdx), ...botSeats]);
   const out = new Set(state.outPlayers);
   for (let i = 0; i < room.maxPlayers; i++) {
     if (!occupied.has(i)) out.add(i);
@@ -170,6 +198,7 @@ function withEmptySeatsOut(room: RoomRow, state: Mutable): Set<number> {
 /** Persist the mutated state back to the room + slots. */
 async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null): Promise<void> {
   const ops: Array<Promise<unknown>> = [];
+  // Real player slots
   for (const slot of room.players) {
     ops.push(
       prisma.durakPlayerSlot.update({
@@ -181,6 +210,12 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
       }),
     );
   }
+  // Bot slots — write back updated hands/isOut into botsJson
+  const updatedBots = parseBots(room.botsJson).map((b) => ({
+    ...b,
+    handJson: JSON.stringify(state.hands[b.seatIdx] ?? []),
+    isOut: state.outPlayers.has(b.seatIdx),
+  }));
 
   const finished = state.phase === "finished";
   ops.push(
@@ -194,6 +229,7 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
         defenderIdx: state.defenderIdx,
         phase: state.phase,
         lastMoveAt: new Date(),
+        botsJson: JSON.stringify(updatedBots),
         ...(finished ? { status: "FINISHED", winner: winnerUserId, endedAt: new Date(), pendingCheatJson: null } : {}),
       },
     }),
@@ -201,8 +237,12 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
   await Promise.all(ops);
 
   if (finished && room.rated && winnerUserId) {
-    const durakSeat = room.players.find((p) => p.userId === winnerUserId)?.seatIdx;
-    if (durakSeat != null) await finalizeRatedDurak(room.id, durakSeat);
+    // Only finalize ELO if the durak is a real player (not a bot)
+    const isBot = isBotSeat(room, room.players.find((p) => p.userId === winnerUserId)?.seatIdx ?? -1);
+    if (!isBot) {
+      const durakSeat = room.players.find((p) => p.userId === winnerUserId)?.seatIdx;
+      if (durakSeat != null) await finalizeRatedDurak(room.id, durakSeat);
+    }
   }
 }
 
@@ -321,6 +361,114 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
 
   await persist(room, state, winnerUserId);
   return { ok: true };
+}
+
+/**
+ * Process all consecutive bot turns after a human (or previous bot) move.
+ * Called after applyMove / start so bots act immediately without a separate poll.
+ */
+export async function processBotTurns(roomId: string): Promise<void> {
+  const MAX_BOT_TURNS = 30; // safety cap to prevent infinite loops
+  for (let i = 0; i < MAX_BOT_TURNS; i++) {
+    const room = await prisma.durakRoom.findUnique({
+      where: { id: roomId },
+      include: roomInclude,
+    }) as RoomRow | null;
+    if (!room || room.status !== "PLAYING") return;
+
+    const bots = parseBots(room.botsJson);
+    if (bots.length === 0) return;
+
+    const state = loadState(room);
+    if (state.phase === "finished") return;
+
+    // Which seat needs to act?
+    const actingSeat = state.phase === "defense" ? state.defenderIdx : state.attackerIdx;
+    const actingBot = bots.find((b) => b.seatIdx === actingSeat);
+    if (!actingBot) return; // human's turn
+
+    const trumpSuit = (room.trumpSuit ?? "S") as Suit;
+    const variant = room.variant as Variant;
+
+    // Build ClientBotState for the bot
+    const allSeats = [...room.players.map((p) => p.seatIdx), ...bots.map((b) => b.seatIdx)];
+    const opponentCardCounts = allSeats
+      .filter((s) => s !== actingSeat)
+      .map((s) => state.hands[s]?.length ?? 0);
+
+    const botState: ClientBotState = {
+      hand: state.hands[actingSeat] ?? [],
+      tableSlots: state.table,
+      deckCount: state.deck.length,
+      trumpSuit,
+      opponentCardCounts,
+      phase: state.phase as ClientBotState["phase"],
+      attackerIdx: state.attackerIdx,
+      defenderIdx: state.defenderIdx,
+      myIdx: actingSeat,
+      variant,
+    };
+
+    const action = getBotAction(botState, actingBot.difficulty as BotDifficulty);
+    let winnerUserId: string | null = null;
+
+    switch (action.action) {
+      case "attack":
+      case "throw": {
+        if (!action.card) break;
+        if (!canAttack(action.card, state.table)) break;
+        const defHand = state.hands[state.defenderIdx]?.length ?? 0;
+        const undefended = state.table.filter((s) => !s.defense).length;
+        if (state.table.length >= 6 || undefended >= maxAttackCards(defHand)) break;
+        if (state.table.length === 0 && actingSeat !== state.attackerIdx) break; // must be main attacker
+        const idx = (state.hands[actingSeat] ?? []).findIndex((c) => cardsEqual(c, action.card!));
+        if (idx < 0) break;
+        state.hands[actingSeat].splice(idx, 1);
+        state.table.push({ attack: action.card, defense: null });
+        state.phase = "defense";
+        break;
+      }
+      case "defend": {
+        const slot = state.table[action.slotIdx ?? 0];
+        if (!slot || slot.defense || !action.card) break;
+        if (!canDefend(slot.attack, action.card, trumpSuit)) break;
+        const idx = (state.hands[actingSeat] ?? []).findIndex((c) => cardsEqual(c, action.card!));
+        if (idx < 0) break;
+        state.hands[actingSeat].splice(idx, 1);
+        state.table[action.slotIdx ?? 0] = { ...slot, defense: action.card };
+        break;
+      }
+      case "transfer": {
+        if (!action.card) break;
+        const nextDef = nextActive(state.defenderIdx, room.maxPlayers, state.outPlayers);
+        if (!canTransfer(action.card, state.table, variant, state.hands[nextDef]?.length ?? 0)) break;
+        const idx = (state.hands[actingSeat] ?? []).findIndex((c) => cardsEqual(c, action.card!));
+        if (idx < 0) break;
+        state.hands[actingSeat].splice(idx, 1);
+        state.table.push({ attack: action.card, defense: null });
+        state.attackerIdx = state.defenderIdx;
+        state.defenderIdx = nextDef;
+        state.phase = "defense";
+        break;
+      }
+      case "take": {
+        winnerUserId = resolveBout(room, state, true);
+        break;
+      }
+      case "pass": {
+        if (state.table.length === 0) { state.phase = "attack"; break; }
+        if (isFullyDefended(state.table)) {
+          winnerUserId = resolveBout(room, state, false);
+        } else {
+          state.phase = "attack";
+        }
+        break;
+      }
+    }
+
+    await persist(room, state, winnerUserId);
+    if (state.phase === "finished") return;
+  }
 }
 
 /**

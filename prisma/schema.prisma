@@ -1016,6 +1016,8 @@ model DurakRoom {
 
   winner      String?  // userId of the durak (loser)
 
+  // Bot slots: [{seatIdx, difficulty, handJson, isOut}]
+  botsJson       String @default("[]") @db.Text
   chatJson       String @default("[]") @db.Text
   spectatorsJson String @default("[]") @db.Text
 

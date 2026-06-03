@@ -25,6 +25,8 @@ export type ClientPlayerData = {
   timeMs: number | null;
   elo: number;
   eloDelta: number | null;
+  isBot?: boolean;
+  botDifficulty?: string;
 };
 
 export type ClientRoomData = {
@@ -54,6 +56,7 @@ export type ClientRoomData = {
   winner: string | null;
   chat: ChatMsg[];
   spectatorCount: number;
+  botsJson: string;
 };
 
 type SlotWithUser = {
@@ -88,6 +91,7 @@ type RoomWithSlots = {
   phase: string;
   pendingCheatJson: string | null;
   winner: string | null;
+  botsJson: string;
   chatJson: string;
   spectatorsJson: string;
   players: SlotWithUser[];
@@ -147,7 +151,29 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
     timeMs: s.timeMs,
     elo: s.user.durakElo,
     eloDelta: s.eloDelta,
+    isBot: false,
   }));
+
+  // Merge bot virtual players
+  type BotEntry = { seatIdx: number; difficulty: string; handJson: string; isOut: boolean };
+  const botEntries = parseJSON<BotEntry[]>(room.botsJson, []);
+  for (const bot of botEntries) {
+    players.push({
+      userId: `__bot_${bot.seatIdx}__`,
+      name: `Bot (${bot.difficulty})`,
+      image: null,
+      seatIdx: bot.seatIdx,
+      cardCount: parseJSON<Card[]>(bot.handJson, []).length,
+      isOut: bot.isOut,
+      isReady: true,
+      timeMs: null,
+      elo: 0,
+      eloDelta: null,
+      isBot: true,
+      botDifficulty: bot.difficulty,
+    });
+  }
+  players.sort((a, b) => a.seatIdx - b.seatIdx);
 
   return {
     id: room.id,
@@ -176,6 +202,7 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
     winner: room.winner,
     chat: parseJSON<ChatMsg[]>(room.chatJson, []),
     spectatorCount,
+    botsJson: room.botsJson,
   };
 }
 

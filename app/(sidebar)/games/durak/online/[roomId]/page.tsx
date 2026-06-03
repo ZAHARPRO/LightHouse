@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play } from "lucide-react";
+import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play, Bot, Plus, Trash2 } from "lucide-react";
 import DurakCard from "@/components/DurakCard";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
@@ -53,6 +53,7 @@ type RoomData = {
   winner: string | null;
   chat: ChatMsg[];
   spectatorCount: number;
+  botsJson: string;
 };
 
 const API = "/api/durak-rooms";
@@ -68,6 +69,7 @@ export default function DurakRoomPage() {
   const [conn, setConn] = useState<ConnStatus>("ok");
   const [selected, setSelected] = useState<Card | null>(null);
   const [busy, setBusy] = useState(false);
+  const [botDifficulties, setBotDifficulties] = useState<Record<number, string>>({});
   const [catchWindow, setCatchWindow] = useState<number>(0); // ms remaining
   const [showPeek, setShowPeek] = useState<Card | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -189,6 +191,19 @@ export default function DurakRoomPage() {
 
   // ── WAITING lobby view ──────────────────────────────────────────────
   if (room.status === "WAITING") {
+    type BotEntry = { seatIdx: number; difficulty: string };
+    const currentBots: BotEntry[] = (() => { try { return JSON.parse(room.botsJson ?? "[]"); } catch { return []; } })();
+
+    async function addBot(seat: number) {
+      const diff = botDifficulties[seat] ?? "medium";
+      await post("bot", { action: "add", seatIdx: seat, difficulty: diff });
+    }
+    async function removeBot(seat: number) {
+      await post("bot", { action: "remove", seatIdx: seat });
+    }
+
+    const totalOccupied = room.players.length + currentBots.length;
+
     return (
       <main className="max-w-xl mx-auto px-4 py-12">
         <Link href="/games/durak/online" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">
@@ -204,6 +219,8 @@ export default function DurakRoomPage() {
         <div className="flex flex-col gap-2 mb-6">
           {Array.from({ length: room.maxPlayers }).map((_, seat) => {
             const p = room.players.find((pl) => pl.seatIdx === seat);
+            const bot = currentBots.find((b) => b.seatIdx === seat);
+            const isEmpty = !p && !bot;
             return (
               <div
                 key={seat}
@@ -231,8 +248,66 @@ export default function DurakRoomPage() {
                       <span className="text-[var(--text-muted)] text-xs">{t("notReady")}</span>
                     )}
                   </>
+                ) : bot ? (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
+                      <Bot size={16} className="text-purple-400" />
+                    </div>
+                    <span className="font-display font-semibold text-[var(--text-secondary)] text-sm flex-1">
+                      Bot · {bot.difficulty}
+                    </span>
+                    {isHost && (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={bot.difficulty}
+                          onChange={(e) => {
+                            // Update difficulty: remove then re-add
+                            removeBot(seat).then(() => {
+                              setBotDifficulties((prev) => ({ ...prev, [seat]: e.target.value }));
+                              setTimeout(() => addBot(seat), 100);
+                            });
+                          }}
+                          className="text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-2 py-1 text-[var(--text-secondary)]"
+                        >
+                          <option value="easy">{t("easy")}</option>
+                          <option value="medium">{t("medium")}</option>
+                          <option value="hard">{t("hard")}</option>
+                        </select>
+                        <button
+                          onClick={() => removeBot(seat)}
+                          disabled={busy}
+                          className="p-1.5 rounded-lg hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                          title="Remove bot"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <span className="text-[var(--text-muted)] text-sm italic">{t("emptySeat")}</span>
+                  <>
+                    <span className="text-[var(--text-muted)] text-sm italic flex-1">{t("emptySeat")}</span>
+                    {isHost && (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={botDifficulties[seat] ?? "medium"}
+                          onChange={(e) => setBotDifficulties((prev) => ({ ...prev, [seat]: e.target.value }))}
+                          className="text-xs bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-2 py-1 text-[var(--text-secondary)]"
+                        >
+                          <option value="easy">{t("easy")}</option>
+                          <option value="medium">{t("medium")}</option>
+                          <option value="hard">{t("hard")}</option>
+                        </select>
+                        <button
+                          onClick={() => addBot(seat)}
+                          disabled={busy}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                        >
+                          <Plus size={12} /> Bot
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
@@ -258,7 +333,7 @@ export default function DurakRoomPage() {
           {isHost && (
             <button
               onClick={() => post("start")}
-              disabled={busy || room.players.length < 2}
+              disabled={busy || totalOccupied < 2}
               className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               <Play size={15} /> {t("startGame")}
@@ -363,7 +438,11 @@ export default function DurakRoomPage() {
               return (
                 <div key={p.userId} className={`flex flex-col items-center gap-1 ${p.isOut ? "opacity-40" : ""}`}>
                   <div className="flex items-center gap-1.5">
-                    {p.image ? (
+                    {p.isBot ? (
+                      <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
+                        <Bot size={14} className="text-purple-400" />
+                      </div>
+                    ) : p.image ? (
                       <Image src={p.image} alt="" width={28} height={28} className="rounded-full" />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-[0.6rem]">

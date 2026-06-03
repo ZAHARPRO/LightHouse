@@ -17,10 +17,11 @@ export default function DurakHomePage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [deckSize, setDeckSize] = useState<DeckSize>(36);
   const [variant, setVariant] = useState<Variant>("podkidnoy");
+  const [playerCount, setPlayerCount] = useState(2);
 
   function startBotGame() {
     router.push(
-      `/games/durak/bot?difficulty=${difficulty}&deck=${deckSize}&variant=${variant}`,
+      `/games/durak/bot?difficulty=${difficulty}&deck=${deckSize}&variant=${variant}&players=${playerCount}`,
     );
   }
 
@@ -70,6 +71,29 @@ export default function DurakHomePage() {
                 ].join(" ")}
               >
                 {d === "easy" ? t("easy") : d === "medium" ? t("medium") : t("hard")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Player count */}
+        <div className="mb-4">
+          <p className="text-xs text-[var(--text-muted)] mb-2 font-semibold uppercase tracking-wide">
+            {t("botCount")} ({playerCount - 1})
+          </p>
+          <div className="flex gap-2">
+            {[2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                onClick={() => setPlayerCount(n)}
+                className={[
+                  "flex-1 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
+                  playerCount === n
+                    ? "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
+                    : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                ].join(" ")}
+              >
+                {n === 2 ? "1v1" : `${n - 1} bot${n > 2 ? "s" : ""}`}
               </button>
             ))}
           </div>

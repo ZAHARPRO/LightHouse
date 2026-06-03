@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/durak-sse";
+import { processBotTurns } from "@/lib/durak-engine";
 import {
   createDeck,
   dealCards,
@@ -22,15 +23,22 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (room.hostId !== session.user.id) return NextResponse.json({ error: "Not host" }, { status: 403 });
   if (room.status !== "WAITING") return NextResponse.json({ error: "Already started" }, { status: 400 });
-  if (room.players.length < 2) return NextResponse.json({ error: "Need 2+ players" }, { status: 400 });
+  const bots: { seatIdx: number; difficulty: string; handJson: string; isOut: boolean }[] =
+    (() => { try { return JSON.parse(room.botsJson ?? "[]"); } catch { return []; } })();
+  const totalPlayers = room.players.length + bots.length;
+  if (totalPlayers < 2) return NextResponse.json({ error: "Need 2+ players" }, { status: 400 });
   if (!room.players.every((p) => p.isReady || p.userId === room.hostId)) {
     return NextResponse.json({ error: "Not everyone ready" }, { status: 400 });
   }
 
-  // Deal. Hands are dealt by player order; map them onto actual seat indices.
+  // Deal to all seats (real players + bots), ordered by seatIdx.
   const deck = createDeck(room.deckSize as 36 | 52);
+  const allSeats = [
+    ...room.players.map((p) => ({ seatIdx: p.seatIdx, isBot: false as const, id: p.id })),
+    ...bots.map((b) => ({ seatIdx: b.seatIdx, isBot: true as const, difficulty: b.difficulty })),
+  ].sort((a, b) => a.seatIdx - b.seatIdx);
   const ordered = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
-  const { hands, remaining } = dealCards(deck, ordered.length);
+  const { hands, remaining } = dealCards(deck, allSeats.length);
 
   // The trump is the bottom card of the remaining deck (drawn last).
   const trumpCard = remaining[remaining.length - 1] ?? null;
@@ -38,13 +46,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   // Seat-indexed hands for first-attacker computation.
   const seatHands: Record<number, typeof hands[number]> = {};
-  ordered.forEach((p, i) => (seatHands[p.seatIdx] = hands[i]));
+  allSeats.forEach((seat, i) => (seatHands[seat.seatIdx] = hands[i]));
 
   // Build a dense hands array over maxPlayers seats for findFirstAttacker.
   const denseHands = Array.from({ length: room.maxPlayers }, (_, s) => seatHands[s] ?? []);
   const firstAttacker = findFirstAttacker(denseHands, trumpSuit);
   // Ensure the attacker seat is occupied; otherwise fall back to first seat.
-  const occupied = new Set(ordered.map((p) => p.seatIdx));
+  const occupied = new Set(allSeats.map((s) => s.seatIdx));
   const outSet = new Set<number>();
   for (let i = 0; i < room.maxPlayers; i++) if (!occupied.has(i)) outSet.add(i);
   const attackerIdx = occupied.has(firstAttacker)
@@ -54,11 +62,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const perMove = room.timeControl === "none" ? null : parseInt(room.timeControl, 10) * 1000;
 
+  // Updated bots JSON with dealt hands
+  const updatedBots = bots.map((b) => ({
+    ...b,
+    handJson: JSON.stringify(seatHands[b.seatIdx] ?? []),
+    isOut: false,
+  }));
+
   await prisma.$transaction([
     ...ordered.map((p) =>
       prisma.durakPlayerSlot.update({
         where: { id: p.id },
-        data: { handJson: JSON.stringify(seatHands[p.seatIdx]), timeMs: perMove, isOut: false },
+        data: { handJson: JSON.stringify(seatHands[p.seatIdx] ?? []), timeMs: perMove, isOut: false },
       }),
     ),
     prisma.durakRoom.update({
@@ -77,9 +92,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         startedAt: new Date(),
         pendingCheatJson: null,
         winner: null,
+        botsJson: JSON.stringify(updatedBots),
       },
     }),
   ]);
+
+  // Process initial bot turns if the first attacker is a bot
+  await processBotTurns(id);
 
   broadcast(id, { type: "update" });
   return NextResponse.json({ ok: true });

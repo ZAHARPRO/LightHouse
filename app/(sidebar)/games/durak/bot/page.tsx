@@ -176,9 +176,7 @@ function DurakBotGame() {
   const difficulty = (searchParams.get("difficulty") ?? "medium") as BotDifficulty;
   const deckSize = (Number(searchParams.get("deck") ?? "36") === 52 ? 52 : 36) as 36 | 52;
   const variant = (searchParams.get("variant") ?? "podkidnoy") as Variant;
-
-  // Always 2 players (player + 1 bot) for simplicity
-  const playerCount = 2;
+  const playerCount = Math.min(6, Math.max(2, Number(searchParams.get("players") ?? "2")));
 
   const [game, setGame] = useState<BotGameState>(() =>
     initGame(deckSize, playerCount),
@@ -737,53 +735,46 @@ function DurakBotGame() {
 
           {/* Main game area */}
           <div className="flex flex-col flex-1 min-h-0">
-            {/* Bot hand area (top) */}
-            <div className="flex flex-col items-center gap-2 py-4 px-4 shrink-0">
-              <p className="text-xs font-semibold text-[var(--text-muted)]">
-                Bot 1
-                {game.attackerIdx === 1 && (
-                  <span className="ml-2 text-[var(--accent-orange)] text-[0.65rem]">
-                    [{t("attacker")}]
-                  </span>
-                )}
-                {game.defenderIdx === 1 && (
-                  <span className="ml-2 text-blue-400 text-[0.65rem]">
-                    [{t("defender")}]
-                  </span>
-                )}
-                {game.outPlayers.has(1) && (
-                  <span className="ml-2 text-green-400 text-[0.65rem]">
-                    [{t("done")}]
-                  </span>
-                )}
-              </p>
-              {/* Card backs fan */}
-              <div className="flex items-end" style={{ height: 70, position: "relative" }}>
-                {(game.hands[1] ?? []).map((_, i) => {
-                  const count = (game.hands[1] ?? []).length;
-                  const spread = Math.min(22, 180 / Math.max(1, count));
-                  const angle = (i - (count - 1) / 2) * spread;
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        position: "absolute",
-                        left: "50%",
-                        bottom: 0,
-                        transform: `translateX(calc(-50% + ${(i - (count - 1) / 2) * 14}px)) rotate(${angle}deg)`,
-                        transformOrigin: "bottom center",
-                      }}
-                    >
-                      <DurakCard faceDown size="sm" />
+            {/* Bot hands area (top) — all bots in a row */}
+            <div className="flex flex-wrap justify-center gap-4 py-3 px-4 shrink-0">
+              {Array.from({ length: playerCount - 1 }, (_, idx) => {
+                const botIdx = idx + 1;
+                const botHand = game.hands[botIdx] ?? [];
+                const count = botHand.length;
+                const spread = Math.min(22, 180 / Math.max(1, count));
+                return (
+                  <div key={botIdx} className="flex flex-col items-center gap-1">
+                    <p className="text-[0.65rem] font-semibold text-[var(--text-muted)]">
+                      {botName(botIdx)}
+                      {game.attackerIdx === botIdx && <span className="ml-1 text-[var(--accent-orange)]">[A]</span>}
+                      {game.defenderIdx === botIdx && <span className="ml-1 text-blue-400">[D]</span>}
+                      {game.outPlayers.has(botIdx) && <span className="ml-1 text-green-400">✓</span>}
+                    </p>
+                    <div style={{ position: "relative", height: 64, width: Math.max(48, count * 12 + 36) }}>
+                      {botHand.map((_, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            bottom: 0,
+                            transform: `translateX(calc(-50% + ${(i - (count - 1) / 2) * 12}px)) rotate(${(i - (count - 1) / 2) * spread}deg)`,
+                            transformOrigin: "bottom center",
+                          }}
+                        >
+                          <DurakCard faceDown size="sm" />
+                        </div>
+                      ))}
+                      {count === 0 && (
+                        <span className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-[0.6rem]">
+                          {game.outPlayers.has(botIdx) ? "✓" : "—"}
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
-                {(game.hands[1] ?? []).length === 0 && (
-                  <span className="text-[var(--text-muted)] text-xs">
-                    {game.outPlayers.has(1) ? "✓ Out" : "No cards"}
-                  </span>
-                )}
-              </div>
+                    <span className="text-[0.6rem] text-[var(--text-muted)]">{count} 🂠</span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Table area (center) */}

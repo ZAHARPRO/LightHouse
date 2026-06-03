@@ -1063,6 +1063,18 @@
     "phase_attack": "Attack",
     "phase_defense": "Defense",
     "phase_throwing": "Throwin",
-    "phase_finished": "Done"
+    "phase_finished": "Done",
+    "vsBot": "1v1 da Bot",
+    "botThinking": "Bot cookin... 🤖",
+    "youAreDurak": "U r da Durak frfr 😭",
+    "youWin": "GG EZ no diff 🏆",
+    "playAgain": "Run it back",
+    "selectDifficulty": "Pick ur doom",
+    "deckSize": "deck vibes",
+    "botCount": "bots",
+    "cards": "cards",
+    "easy": "Ez",
+    "medium": "Mid",
+    "hard": "Hard diff"
   }
 }

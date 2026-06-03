@@ -11,7 +11,8 @@ export async function GET(req: Request) {
   const isBattleship = game === "battleship";
   const isMinesweeper = game === "minesweeper";
   const isBilliards = game === "billiards";
-  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : isBattleship ? "battleshipElo" : isBilliards ? "billiardsElo" : "minesweeperElo";
+  const isDurak = game === "durak";
+  const field = isChess ? "chessElo" : isCheckers ? "checkersElo" : isBattleship ? "battleshipElo" : isBilliards ? "billiardsElo" : isDurak ? "durakElo" : "minesweeperElo";
   const search = searchParams.get("search")?.trim() ?? "";
 
   const users = await prisma.user.findMany({
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     },
     orderBy: { [field]: "desc" },
     take: limit,
-    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true, battleshipElo: true, billiardsElo: true },
+    select: { id: true, name: true, image: true, chessElo: true, minesweeperElo: true, checkersElo: true, battleshipElo: true, billiardsElo: true, durakElo: true },
   });
 
   // Compute wins + max win streak per user
@@ -116,6 +117,28 @@ export async function GET(req: Request) {
       for (const r of userRooms) {
         const myRole = r.hostId === uid ? "host" : "guest";
         const won = r.winner === myRole;
+        if (won) { wins++; streak++; maxStreak = Math.max(maxStreak, streak); }
+        else streak = 0;
+      }
+      winStreaks[uid] = { wins, maxStreak };
+    }
+  } else if (isDurak) {
+    const rooms = await prisma.durakRoom.findMany({
+      where: {
+        status: "FINISHED",
+        rated: true,
+        players: { some: { userId: { in: userIds } } },
+      },
+      select: { winner: true, endedAt: true, players: { select: { userId: true } } },
+      orderBy: { endedAt: "asc" },
+    });
+
+    for (const uid of userIds) {
+      const userRooms = rooms.filter(r => r.players.some(p => p.userId === uid));
+      let wins = 0, streak = 0, maxStreak = 0;
+      for (const r of userRooms) {
+        // A "win" in Durak = finishing the game without being the durak (loser).
+        const won = r.winner !== uid;
         if (won) { wins++; streak++; maxStreak = Math.max(maxStreak, streak); }
         else streak = 0;
       }

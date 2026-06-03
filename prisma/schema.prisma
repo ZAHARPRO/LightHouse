@@ -84,6 +84,12 @@ model User {
   billiardsRooms1   BilliardsRoom[] @relation("BilliardsHost")
   billiardsRooms2   BilliardsRoom[] @relation("BilliardsGuest")
 
+  durakElo               Int     @default(400)
+  durakCheaterCatches    Int     @default(0)
+  durakCheaterBanned     Boolean @default(false)
+  durakRoomsHosted       DurakRoom[]       @relation("DurakHost")
+  durakRoomsPlayed       DurakPlayerSlot[]
+
   watchHistory WatchHistory[]
   savedVideos SavedVideo[]
 
@@ -979,4 +985,64 @@ enum BilliardsRoomStatus {
   WAITING
   PLAYING
   FINISHED
+}
+
+model DurakRoom {
+  id          String  @id @default(cuid())
+  status      String  @default("WAITING") // WAITING | PLAYING | FINISHED
+  variant     String  @default("podkidnoy") // podkidnoy | perevodnoy
+  deckSize    Int     @default(36) // 36 | 52
+  maxPlayers  Int     @default(4) // 2-6
+  timeControl String  @default("none") // none | 15 | 30 | 60 (seconds per move)
+  rated       Boolean @default(false)
+  fairPlay    Boolean @default(true)
+
+  hostId      String
+  host        User    @relation("DurakHost", fields: [hostId], references: [id], onDelete: Cascade)
+
+  // Game state JSON
+  deckJson        String  @default("[]") @db.Text  // remaining deck cards
+  tableJson       String  @default("[]") @db.Text  // cards on table: [{attack, defense}]
+  discardCount    Int     @default(0)
+  trumpCard       String? // JSON Card (the revealed bottom card)
+  trumpSuit       String? // "S"|"H"|"D"|"C"
+  attackerIdx     Int     @default(0)
+  defenderIdx     Int     @default(1)
+  phase           String  @default("attack") // attack | defense | throwing | finished
+  lastMoveAt      DateTime?
+
+  // Active cheat event (for catch window)
+  pendingCheatJson String? @db.Text // {type, cheaterIdx, targetIdx, card?, expiresAt}
+
+  winner      String?  // userId of the durak (loser)
+
+  chatJson       String @default("[]") @db.Text
+  spectatorsJson String @default("[]") @db.Text
+
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  players    DurakPlayerSlot[]
+
+  @@index([status, rated])
+}
+
+model DurakPlayerSlot {
+  id       String @id @default(cuid())
+  roomId   String
+  room     DurakRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seatIdx  Int       // 0-5
+  handJson String    @default("[]") @db.Text  // Card[] — server only
+  timeMs   Int?      // remaining time in ms
+  isReady  Boolean   @default(false)
+  isOut    Boolean   @default(false)  // finished (no cards)
+  eloSnapshot Int?
+  eloDelta    Int?
+
+  @@unique([roomId, seatIdx])
+  @@unique([roomId, userId])
 }

@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Star, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Star, ChevronLeft, ChevronRight, Flame, Spade } from "lucide-react";
+
+function DurakIcon({ size = 22 }: { size?: number }) {
+  return <Spade size={size} />;
+}
 
 function MineIcon({ size = 22 }: { size?: number }) {
   return (
@@ -148,6 +152,9 @@ const GAMES = [
   { href: "/games/billiards",                 title: "Billiards vs Bot",   description: "8-ball pool, 3 levels",         icon: BilliardsIcon,   color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20"    },
   { href: "/games/billiards/online",          title: "Billiards Online",   description: "1 vs 1 in real-time",           icon: BilliardsIcon,   color: "text-indigo-400",   bg: "bg-indigo-500/10 border-indigo-500/20"      },
   { href: "/games/billiards/online/rated",    title: "Billiards Rated",    description: "Earn ELO",                      icon: BilliardsIcon,   color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
+  { href: "/games/durak",                     title: "Durak",              description: "Rules & how to play",           icon: DurakIcon,       color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20"  },
+  { href: "/games/durak/online",              title: "Durak Online",       description: "2-6 players in real-time",      icon: DurakIcon,       color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20"  },
+  { href: "/games/durak/online/rated",        title: "Durak Rated",        description: "Earn ELO",                      icon: DurakIcon,       color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20"  },
 ];
 
 type LeaderEntry = {
@@ -159,6 +166,7 @@ type LeaderEntry = {
   checkersElo: number;
   battleshipElo: number;
   billiardsElo: number;
+  durakElo: number;
   wins: number;
   maxStreak: number;
 };
@@ -176,6 +184,7 @@ const LEADERBOARDS = [
   { key: "checkers",    label: "🔴 Checkers",     eloField: "checkersElo"    as const, isPuzzles: false },
   { key: "battleship",  label: "🚢 Battleship",   eloField: "battleshipElo"  as const, isPuzzles: false },
   { key: "billiards",   label: "🎱 Billiards",    eloField: "billiardsElo"   as const, isPuzzles: false },
+  { key: "durak",       label: "🃏 Durak",        eloField: "durakElo"       as const, isPuzzles: false },
   { key: "puzzles",     label: "🧩 Puzzles",      eloField: "chessElo"       as const, isPuzzles: true  },
 ];
 
@@ -363,6 +372,7 @@ export default function GamesPage() {
         { label: "⛂ Checkers",    games: GAMES.filter(g => g.href.includes("checkers"))     },
         { label: "🚢 Battleship",  games: GAMES.filter(g => g.href.includes("battleship"))  },
         { label: "🎱 Billiards",    games: GAMES.filter(g => g.href.includes("billiards"))   },
+        { label: "🃏 Durak",        games: GAMES.filter(g => g.href.includes("durak"))       },
       ].map(({ label, games }) => (
         <div key={label} className="mb-6">
           <p className="text-xs font-display font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">{label}</p>

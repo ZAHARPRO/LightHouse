@@ -69,6 +69,8 @@ export default function DurakRoomPage() {
   const [conn, setConn] = useState<ConnStatus>("ok");
   const [selected, setSelected] = useState<Card | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragCard, setDragCard] = useState<Card | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [botDifficulties, setBotDifficulties] = useState<Record<number, string>>({});
   const [catchWindow, setCatchWindow] = useState<number>(0); // ms remaining
   const [showPeek, setShowPeek] = useState<Card | null>(null);
@@ -357,21 +359,24 @@ export default function DurakRoomPage() {
     else setSelected(card);
   }
 
-  async function doAttack() {
-    if (!selected) return;
-    if (await post("move", { action: "attack", card: selected })) setSelected(null);
+  async function doAttack(card?: Card) {
+    const c = card ?? selected;
+    if (!c) return;
+    if (await post("move", { action: "attack", card: c })) setSelected(null);
   }
-  async function doThrow() {
-    if (!selected) return;
-    if (await post("move", { action: "throw", card: selected })) setSelected(null);
+  async function doThrow(card?: Card) {
+    const c = card ?? selected;
+    if (!c) return;
+    if (await post("move", { action: "throw", card: c })) setSelected(null);
   }
   async function doTransfer() {
     if (!selected) return;
     if (await post("move", { action: "transfer", card: selected })) setSelected(null);
   }
-  async function doDefend(slotIdx: number) {
-    if (!selected) return;
-    if (await post("move", { action: "defend", card: selected, attackSlotIdx: slotIdx })) setSelected(null);
+  async function doDefend(slotIdx: number, card?: Card) {
+    const c = card ?? selected;
+    if (!c) return;
+    if (await post("move", { action: "defend", card: c, attackSlotIdx: slotIdx })) setSelected(null);
   }
   async function doTake() {
     await post("move", { action: "take" });
@@ -511,29 +516,69 @@ export default function DurakRoomPage() {
             </div>
           </div>
 
-          {/* Table slots */}
-          <div className="flex-1 min-h-[120px] flex flex-wrap items-center justify-center gap-3 py-4 rounded-xl bg-[var(--bg-secondary)]/40 border border-[var(--border-subtle)] mb-4">
+          {/* Table slots — drop zone for attack */}
+          <div
+            className="flex-1 min-h-[140px] flex flex-wrap items-center justify-center gap-4 py-4 rounded-xl bg-[var(--bg-secondary)]/40 border border-[var(--border-subtle)] mb-4 transition-colors"
+            style={{ borderColor: dragCard && isAttackerSide && room.table.length === 0 ? "var(--accent-orange)" : undefined }}
+            onDragOver={(e) => {
+              if (dragCard && isAttackerSide && !finished) e.preventDefault();
+            }}
+            onDrop={async (e) => {
+              e.preventDefault();
+              try {
+                const c = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                if (room.table.length === 0) await doAttack(c);
+                else await doThrow(c);
+              } catch { /* ignore */ }
+              setDragCard(null);
+            }}
+          >
             {room.table.length === 0 ? (
               <p className="text-[var(--text-muted)] text-sm italic">{t("emptyTable")}</p>
             ) : (
-              room.table.map((slot, i) => (
-                <div
-                  key={i}
-                  className="relative"
-                  style={{ width: 56, height: 92 }}
-                  onClick={() => isDefender && !slot.defense && selected && doDefend(i)}
-                >
-                  <DurakCard
-                    card={slot.attack}
-                    size="md"
-                    style={{ position: "absolute", top: 0, left: 0 }}
-                    className={isDefender && !slot.defense && selected ? "ring-2 ring-emerald-400 rounded-lg cursor-pointer" : ""}
-                  />
-                  {slot.defense && (
-                    <DurakCard card={slot.defense} size="md" style={{ position: "absolute", top: 12, left: 10 }} />
-                  )}
-                </div>
-              ))
+              room.table.map((slot, i) => {
+                const isSlotDragOver = dragOverSlot === i;
+                const isDefendTarget = isDefender && !slot.defense && (selected || dragCard) && !finished;
+                return (
+                  <div
+                    key={i}
+                    className={[
+                      "relative rounded-xl transition-all",
+                      isSlotDragOver ? "ring-2 ring-emerald-400 bg-emerald-500/10" : "",
+                    ].join(" ")}
+                    style={{ width: 70, height: 116 }}
+                    onClick={() => isDefendTarget && selected && doDefend(i)}
+                    onDragOver={(e) => {
+                      if (dragCard && isDefendTarget) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverSlot(i);
+                      }
+                    }}
+                    onDragLeave={() => setDragOverSlot(null)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDragOverSlot(null);
+                      try {
+                        const c = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                        await doDefend(i, c);
+                      } catch { /* ignore */ }
+                      setDragCard(null);
+                    }}
+                  >
+                    <DurakCard
+                      card={slot.attack}
+                      size="md"
+                      style={{ position: "absolute", top: 0, left: 0 }}
+                      className={isDefendTarget && !isSlotDragOver ? "ring-2 ring-emerald-400 rounded-lg cursor-pointer" : ""}
+                    />
+                    {slot.defense && (
+                      <DurakCard card={slot.defense} size="md" style={{ position: "absolute", top: 16, left: 12 }} />
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -619,7 +664,7 @@ export default function DurakRoomPage() {
                 {room.mySeatIdx === room.attackerIdx && <span className="text-[0.65rem] text-orange-400 font-bold">{t("youAttack")}</span>}
                 {isDefender && <span className="text-[0.65rem] text-red-400 font-bold">{t("youDefend")}</span>}
               </div>
-              <div className="flex flex-wrap items-end justify-center gap-1">
+              <div className="flex flex-wrap items-end justify-center gap-2">
                 {room.myHand.map((card, i) => (
                   <DurakCard
                     key={`${card.suit}-${card.rank}-${i}`}
@@ -627,6 +672,13 @@ export default function DurakRoomPage() {
                     size="lg"
                     selected={!!selected && cardsEqual(selected, card)}
                     onClick={() => onCardClick(card)}
+                    draggable={!finished}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("durak-card", JSON.stringify(card));
+                      setDragCard(card);
+                      setSelected(card);
+                    }}
+                    onDragEnd={() => setDragCard(null)}
                   />
                 ))}
               </div>

@@ -24,6 +24,8 @@ type PlayerData = {
   timeMs: number | null;
   elo: number;
   eloDelta: number | null;
+  isBot?: boolean;
+  botDifficulty?: string;
 };
 
 type RoomData = {

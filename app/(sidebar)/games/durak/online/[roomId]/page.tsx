@@ -611,13 +611,13 @@ export default function DurakRoomPage() {
           {isPlayer && !finished && (
             <div className="flex flex-wrap items-center gap-2 justify-center">
               {isAttackerSide && room.table.length === 0 && (
-                <button onClick={doAttack} disabled={!selected || busy} className={actBtn("orange")}>
+                <button onClick={() => doAttack()} disabled={!selected || busy} className={actBtn("orange")}>
                   {t("attack")}
                 </button>
               )}
               {isAttackerSide && room.table.length > 0 && (
                 <>
-                  <button onClick={doThrow} disabled={!selected || busy} className={actBtn("orange")}>
+                  <button onClick={() => doThrow()} disabled={!selected || busy} className={actBtn("orange")}>
                     {t("throwIn")}
                   </button>
                   <button onClick={doPass} disabled={busy} className={actBtn("muted")}>

@@ -477,7 +477,7 @@ export async function processBotTurns(roomId: string): Promise<void> {
     }
 
     await persist(room, state, winnerUserId);
-    if (state.phase === "finished") return;
+    if ((state.phase as string) === "finished") return;
   }
 }
 

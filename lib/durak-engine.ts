@@ -18,6 +18,7 @@ import {
   cardsEqual,
 } from "@/lib/durak";
 import { finalizeRatedDurak, roomInclude } from "@/lib/durak-room";
+import { awardBadge } from "@/lib/awardBadge";
 import { getBotAction, type BotDifficulty, type ClientBotState } from "@/lib/durak-bot";
 
 type SlotRow = {
@@ -236,12 +237,21 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
   );
   await Promise.all(ops);
 
-  if (finished && room.rated && winnerUserId) {
-    // Only finalize ELO if the durak is a real player (not a bot)
-    const isBot = isBotSeat(room, room.players.find((p) => p.userId === winnerUserId)?.seatIdx ?? -1);
-    if (!isBot) {
-      const durakSeat = room.players.find((p) => p.userId === winnerUserId)?.seatIdx;
-      if (durakSeat != null) await finalizeRatedDurak(room.id, durakSeat);
+  if (finished && winnerUserId) {
+    const durakIsBot = isBotSeat(room, room.players.find((p) => p.userId === winnerUserId)?.seatIdx ?? -1);
+
+    // Award online-win badge to all real-player winners (non-durak, non-bot)
+    const winners = room.players.filter((p) => p.userId !== winnerUserId);
+    for (const w of winners) {
+      await awardBadge(prisma, w.userId, "DURAK_ONLINE_WIN");
+    }
+
+    if (!durakIsBot) {
+      if (room.rated) {
+        // Rated: full ELO + badge finalization (includes ELO rank badges)
+        const durakSeat = room.players.find((p) => p.userId === winnerUserId)?.seatIdx;
+        if (durakSeat != null) await finalizeRatedDurak(room.id, durakSeat);
+      }
     }
   }
 }

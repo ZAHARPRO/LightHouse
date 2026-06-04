@@ -32,6 +32,7 @@
 - Every game must be **connected to the admin panel**: at minimum a room-management entry under `/admin/rooms`, ideally a dedicated admin page for that game's stats and configuration.
 - Game rooms use Prisma models for persistence and SSE (`lib/lobby-sse.ts`) for real-time updates.
 - ELO / rating updates happen server-side in a server action or API route handler — never in client code.
+- **Every new game must include a badge set** in `lib/badges.ts` and `lib/awardBadge.ts`. Minimum required badges: `{GAME}_WIN` (beat the bot), `{GAME}_ONLINE_WIN` (win online), `{GAME}_SILVER/GOLD/PLATINUM/DIAMOND` (ELO milestones at 700/1300/2200/3400). Add the corresponding `RewardType` enum values to `prisma/schema.prisma`. Call `awardGameBadge("{GAME}_WIN")` from the bot game page on player victory, and `awardBadge()` from the engine/API on online wins and ELO thresholds.
 
 ## Authentication
 - Server components / server actions: `const session = await auth()` from `@/auth`.

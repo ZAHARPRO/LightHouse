@@ -103,6 +103,19 @@ export async function awardBilliardsEloBadges(prisma: PrismaClient, userId: stri
   }
 }
 
+const DURAK_ELO_BADGES: [number, string][] = [
+  [700,  "DURAK_SILVER"],
+  [1300, "DURAK_GOLD"],
+  [2200, "DURAK_PLATINUM"],
+  [3400, "DURAK_DIAMOND"],
+];
+
+export async function awardDurakEloBadges(prisma: PrismaClient, userId: string, newElo: number) {
+  for (const [threshold, type] of DURAK_ELO_BADGES) {
+    if (newElo >= threshold) await awardBadge(prisma, userId, type);
+  }
+}
+
 const PUZZLE_MILESTONE_BADGES: [number, string][] = [
   [1,   "PUZZLE_FIRST"],
   [10,  "PUZZLE_10"],

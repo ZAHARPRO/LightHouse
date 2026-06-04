@@ -270,6 +270,57 @@ export const BADGE_DEFS: Record<string, BadgeDef> = {
     category: "games", rare: true,
   },
 
+  // Durak
+  DURAK_WIN: {
+    icon: "🃏", label: "Card Shark", color: "#f97316", points: 50,
+    description: "Won a game of Durak against the bot",
+    how: "Beat the bot in Durak (any difficulty)",
+    howToEarn: "Survive to the end and don't be the last one with cards — beat the AI at any difficulty.",
+    category: "games",
+  },
+  DURAK_ONLINE_WIN: {
+    icon: "🤴", label: "King of Cards", color: "#fb923c", points: 100,
+    description: "Won an online Durak match",
+    how: "Finish an online Durak game without being the Durak",
+    howToEarn: "Play online Durak and make sure someone else is stuck with the cards at the end.",
+    category: "games",
+  },
+  DURAK_NOT_DURAK: {
+    icon: "😏", label: "Not the Durak", color: "#a3e635", points: 75,
+    description: "Survived a 4+ player Durak game without losing",
+    how: "Finish a 4+ player Durak game and not be the Durak",
+    howToEarn: "Get out of your cards in a game with 4 or more players — leave someone else holding the bag.",
+    category: "games",
+  },
+  DURAK_SILVER: {
+    icon: "🥈", label: "Durak Silver", color: "#c0c0c0", points: 75,
+    description: "Reached Silver rank in rated Durak (700+ ELO)",
+    how: "Reach 700 ELO in rated Durak",
+    howToEarn: "Climb to Silver rank by reaching 700 ELO in rated online Durak.",
+    category: "games",
+  },
+  DURAK_GOLD: {
+    icon: "🥇", label: "Durak Gold", color: "#ffd700", points: 150,
+    description: "Reached Gold rank in rated Durak (1300+ ELO)",
+    how: "Reach 1300 ELO in rated Durak",
+    howToEarn: "Prove your skill — reach 1300 ELO in rated online Durak.",
+    category: "games", rare: true,
+  },
+  DURAK_PLATINUM: {
+    icon: "💠", label: "Durak Platinum", color: "#e2e8f0", points: 300,
+    description: "Reached Platinum rank in rated Durak (2200+ ELO)",
+    how: "Reach 2200 ELO in rated Durak",
+    howToEarn: "Elite territory — reach 2200 ELO in rated online Durak.",
+    category: "games", rare: true,
+  },
+  DURAK_DIAMOND: {
+    icon: "💎", label: "Durak Diamond", color: "#67e8f9", points: 500,
+    description: "Reached Diamond rank in rated Durak (3400+ ELO)",
+    how: "Reach 3400 ELO in rated Durak",
+    howToEarn: "The pinnacle — reach Diamond rank (3400 ELO) in rated online Durak.",
+    category: "games", rare: true,
+  },
+
   // Puzzle milestones
   PUZZLE_FIRST: {
     icon: "🧩", label: "First Solve", color: "#34d399", points: 5,

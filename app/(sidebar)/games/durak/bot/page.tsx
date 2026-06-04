@@ -30,6 +30,7 @@ import {
   getBotAction,
   getBotDelay,
 } from "@/lib/durak-bot";
+import { awardGameBadge } from "@/actions/badges";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,13 @@ function DurakBotGame() {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [game.log]);
+
+  // Award badge when player wins vs bot
+  useEffect(() => {
+    if (game.phase === "finished" && game.durak !== null && game.durak !== PLAYER_IDX) {
+      awardGameBadge("DURAK_WIN").catch(() => {});
+    }
+  }, [game.phase, game.durak]);
 
   // ── Apply log helper ────────────────────────────────────────────────────────
 

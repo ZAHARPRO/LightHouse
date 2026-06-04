@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { calculateEloDelta } from "@/lib/elo";
+import { awardBadge, awardDurakEloBadges } from "@/lib/awardBadge";
 import type { Card, TableSlot } from "@/lib/durak";
 
 export type ChatMsg = { userId: string; name: string; text: string; at: number };
@@ -265,4 +266,16 @@ export async function finalizeRatedDurak(
   );
 
   await Promise.all(updates);
+
+  // Award ELO rank badges and online-win badge to all participants
+  for (const { slot, delta } of winnerDeltas) {
+    const newElo = Math.max(100, slot.user.durakElo + delta);
+    await awardBadge(prisma, slot.userId, "DURAK_ONLINE_WIN");
+    await awardDurakEloBadges(prisma, slot.userId, newElo);
+    // Extra badge for surviving a 4+ player game
+    if (winners.length >= 3) await awardBadge(prisma, slot.userId, "DURAK_NOT_DURAK");
+  }
+  // ELO badge check for the durak too (they might still be above a threshold after the loss)
+  const newDurakElo = Math.max(100, durakElo - durakTotalLoss);
+  await awardDurakEloBadges(prisma, durakSlot.userId, newDurakElo);
 }

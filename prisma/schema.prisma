@@ -1001,6 +1001,7 @@ model DurakRoom {
   deckSize    Int     @default(36) // 36 | 52
   maxPlayers  Int     @default(4) // 2-6
   timeControl String  @default("none") // none | 15 | 30 | 60 (seconds per move)
+  throwRule   String  @default("all")  // all | neighbors
   rated       Boolean @default(false)
   fairPlay    Boolean @default(true)
 

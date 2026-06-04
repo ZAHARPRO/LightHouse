@@ -125,64 +125,71 @@ function botDefend(
 
   if (undefendedSlots.length === 0) return { action: "pass" };
 
+  // When deck is empty, defending is always preferred: successfully defending
+  // could empty your hand and win the game; taking guarantees more cards.
+  const deckEmpty = deckCount === 0;
+
+  // Check if ALL undefended slots can be covered
+  const canCoverAll = undefendedSlots.every(({ slot }) =>
+    hand.some((c) => canDefend(slot.attack, c, trumpSuit)),
+  );
+
+  // Helper: find cheapest defense for a slot
+  const cheapestDefense = (slot: TableSlot, slotIdx: number): BotAction | null => {
+    const options = hand.filter((c) => canDefend(slot.attack, c, trumpSuit));
+    if (options.length === 0) return null;
+    if (difficulty === "easy") return { action: "defend", card: pickRandom(options), slotIdx };
+    const sorted = [...options].sort((a, b) => cardScore(a, trumpSuit) - cardScore(b, trumpSuit));
+    return { action: "defend", card: sorted[0], slotIdx };
+  };
+
   if (difficulty === "easy") {
-    // Try to defend each slot randomly; take if any can't be covered
-    for (const { slot, idx } of undefendedSlots) {
-      const options = hand.filter((c) =>
-        canDefend(slot.attack, c, trumpSuit),
-      );
-      if (options.length === 0) return { action: "take" };
-      return { action: "defend", card: pickRandom(options), slotIdx: idx };
-    }
+    // If deck is empty, always try to defend the first slot you can
+    const { slot, idx } = undefendedSlots[0];
+    const def = cheapestDefense(slot, idx);
+    if (deckEmpty && def) return def;
+    if (def) return def;
     return { action: "take" };
   }
 
   if (difficulty === "medium") {
-    // Check if all undefended slots can be covered — if not, just take
-    for (const { slot } of undefendedSlots) {
-      const options = hand.filter((c) => canDefend(slot.attack, c, trumpSuit));
-      if (options.length === 0) return { action: "take" };
+    // If deck is empty, always defend what we can (even one slot at a time)
+    if (deckEmpty) {
+      const { slot, idx } = undefendedSlots[0];
+      const def = cheapestDefense(slot, idx);
+      if (def) return def;
+      return { action: "take" };
     }
-    // Defend with cheapest valid card for the first undefended slot
+    // Deck has cards: only defend if we can cover ALL slots
+    if (!canCoverAll) return { action: "take" };
     const { slot, idx } = undefendedSlots[0];
-    const options = hand.filter((c) => canDefend(slot.attack, c, trumpSuit));
-    const sorted = [...options].sort(
-      (a, b) => cardScore(a, trumpSuit) - cardScore(b, trumpSuit),
-    );
-    return { action: "defend", card: sorted[0], slotIdx: idx };
+    return cheapestDefense(slot, idx) ?? { action: "take" };
   }
 
-  // Hard: evaluate if it's worth defending
+  // Hard: smart evaluation
   {
-    // Check if all slots can be defended
-    const canCoverAll = undefendedSlots.every(({ slot }) =>
-      hand.some((c) => canDefend(slot.attack, c, trumpSuit)),
-    );
-
-    if (!canCoverAll) {
-      // Can't cover all — decide based on card burden
-      const totalTableCards = tableSlots.reduce(
-        (n, s) => n + 1 + (s.defense ? 1 : 0),
-        0,
+    // When deck is empty — always defend if possible (winning opportunity)
+    if (deckEmpty && canCoverAll) {
+      const sorted = [...undefendedSlots].sort(
+        (a, b) => cardScore(b.slot.attack, trumpSuit) - cardScore(a.slot.attack, trumpSuit),
       );
-      // If the deck is almost empty, taking cards hurts more
-      if (deckCount <= 4 && totalTableCards >= 3) return { action: "take" };
-      // Otherwise take if pile is large
-      return totalTableCards >= 4 ? { action: "take" } : { action: "take" };
+      return cheapestDefense(sorted[0].slot, sorted[0].idx) ?? { action: "take" };
     }
 
-    // Defend the highest-value attack with the cheapest valid defense
+    if (!canCoverAll) {
+      // Can't cover all — decide whether taking is worth it
+      const totalTableCards = tableSlots.reduce((n, s) => n + 1 + (s.defense ? 1 : 0), 0);
+      // With empty/low deck, taking is costly; take only if pile is big
+      if (deckEmpty) return { action: "take" };
+      if (deckCount <= 4 && totalTableCards <= 2) return { action: "take" };
+      return { action: "take" };
+    }
+
+    // Can cover all — defend the highest-value attack with cheapest valid card
     const sorted = [...undefendedSlots].sort(
-      (a, b) =>
-        cardScore(b.slot.attack, trumpSuit) -
-        cardScore(a.slot.attack, trumpSuit),
+      (a, b) => cardScore(b.slot.attack, trumpSuit) - cardScore(a.slot.attack, trumpSuit),
     );
-    const { slot, idx } = sorted[0];
-    const options = hand.filter((c) => canDefend(slot.attack, c, trumpSuit));
-    const cheapest = [...options].sort(
-      (a, b) => cardScore(a, trumpSuit) - cardScore(b, trumpSuit),
-    );
-    return { action: "defend", card: cheapest[0], slotIdx: idx };
+    return cheapestDefense(sorted[0].slot, sorted[0].idx) ?? { action: "take" };
   }
 }
 

@@ -9,6 +9,7 @@ import { Users, Star, Spade, Bot } from "lucide-react";
 type Difficulty = "easy" | "medium" | "hard";
 type DeckSize = 36 | 52;
 type Variant = "podkidnoy" | "perevodnoy";
+type ThrowRule = "all" | "neighbors";
 
 export default function DurakHomePage() {
   const t = useTranslations("durak");
@@ -18,10 +19,11 @@ export default function DurakHomePage() {
   const [deckSize, setDeckSize] = useState<DeckSize>(36);
   const [variant, setVariant] = useState<Variant>("podkidnoy");
   const [playerCount, setPlayerCount] = useState(2);
+  const [throwRule, setThrowRule] = useState<ThrowRule>("all");
 
   function startBotGame() {
     router.push(
-      `/games/durak/bot?difficulty=${difficulty}&deck=${deckSize}&variant=${variant}&players=${playerCount}`,
+      `/games/durak/bot?difficulty=${difficulty}&deck=${deckSize}&variant=${variant}&players=${playerCount}&throw=${throwRule}`,
     );
   }
 
@@ -122,28 +124,53 @@ export default function DurakHomePage() {
           </div>
         </div>
 
-        {/* Variant */}
-        <div className="mb-6">
-          <p className="text-xs text-[var(--text-muted)] mb-2 font-semibold uppercase tracking-wide">
-            {t("variant")}
-          </p>
-          <div className="flex gap-2">
-            {(["podkidnoy", "perevodnoy"] as Variant[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setVariant(v)}
-                className={[
-                  "flex-1 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
-                  variant === v
-                    ? "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
-                    : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                ].join(" ")}
-              >
-                {v === "podkidnoy" ? t("podkidnoy") : t("perevodnoy")}
-              </button>
-            ))}
-          </div>
+        {/* Variant toggle */}
+        <div className="mb-4">
+          <button
+            onClick={() => setVariant(variant === "perevodnoy" ? "podkidnoy" : "perevodnoy")}
+            className={[
+              "flex items-center gap-2 px-4 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
+              variant === "perevodnoy"
+                ? "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
+                : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+            ].join(" ")}
+          >
+            <span className={[
+              "w-4 h-4 rounded-sm border flex items-center justify-center text-[0.6rem] transition-all",
+              variant === "perevodnoy"
+                ? "bg-[var(--accent-orange)] border-[var(--accent-orange)] text-white"
+                : "border-[var(--border-subtle)]",
+            ].join(" ")}>
+              {variant === "perevodnoy" && "✓"}
+            </span>
+            {t("perevodnoy")}
+          </button>
         </div>
+
+        {/* Throw rule — only relevant with 4+ players */}
+        {playerCount >= 4 && (
+          <div className="mb-6">
+            <p className="text-xs text-[var(--text-muted)] mb-2 font-semibold uppercase tracking-wide">
+              {t("throwRule")}
+            </p>
+            <div className="flex gap-2">
+              {(["all", "neighbors"] as ThrowRule[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setThrowRule(r)}
+                  className={[
+                    "flex-1 py-2 rounded-lg font-display font-semibold text-sm border transition-all",
+                    throwRule === r
+                      ? "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
+                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                  ].join(" ")}
+                >
+                  {r === "all" ? t("throwAll") : t("throwNeighbors")}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button
           onClick={startBotGame}
@@ -179,21 +206,6 @@ export default function DurakHomePage() {
             {t("playRatedDesc")}
           </p>
         </Link>
-      </div>
-
-      {/* ── Rules ── */}
-      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-5">
-        <p className="font-display font-bold text-[var(--text-primary)] text-sm mb-3">
-          {t("rulesTitle")}
-        </p>
-        <ul className="flex flex-col gap-2 text-sm text-[var(--text-secondary)] list-disc pl-5">
-          <li>{t("rule1")}</li>
-          <li>{t("rule2")}</li>
-          <li>{t("rule3")}</li>
-          <li>{t("rule4")}</li>
-          <li>{t("rule5")}</li>
-          <li>{t("rule6")}</li>
-        </ul>
       </div>
     </main>
   );

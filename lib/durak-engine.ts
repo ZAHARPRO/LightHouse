@@ -7,9 +7,11 @@ import {
   type TableSlot,
   type Variant,
   type Suit,
+  type ThrowRule,
   canAttack,
   canDefend,
   canTransfer,
+  canThrowIn,
   isFullyDefended,
   maxAttackCards,
   replenishHands,
@@ -44,6 +46,7 @@ type RoomRow = {
   deckSize: number;
   maxPlayers: number;
   timeControl: string;
+  throwRule: string;
   rated: boolean;
   deckJson: string;
   tableJson: string;
@@ -302,6 +305,13 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (state.table.length === 0 && mySeat !== state.attackerIdx) {
         return { ok: false, error: "Wait for attacker" };
       }
+      // Throw-in (not the opening attack): enforce throwRule
+      if (state.table.length > 0 && mySeat !== state.attackerIdx) {
+        const throwRule = (room.throwRule ?? "all") as ThrowRule;
+        if (!canThrowIn(mySeat, state.attackerIdx, state.defenderIdx, room.maxPlayers, state.outPlayers, throwRule)) {
+          return { ok: false, error: "Not allowed to throw" };
+        }
+      }
       if (!canAttack(card, state.table)) return { ok: false, error: "Illegal attack" };
       // Cap total attacks at 6, and never exceed what the defender can still beat:
       // the number of undefended attacks must not surpass the defender's hand size.
@@ -431,6 +441,11 @@ export async function processBotTurns(roomId: string): Promise<void> {
         const undefended = state.table.filter((s) => !s.defense).length;
         if (state.table.length >= 6 || undefended >= maxAttackCards(defHand)) break;
         if (state.table.length === 0 && actingSeat !== state.attackerIdx) break; // must be main attacker
+        // Throw-in: enforce throwRule
+        if (state.table.length > 0 && actingSeat !== state.attackerIdx) {
+          const throwRule = (room.throwRule ?? "all") as ThrowRule;
+          if (!canThrowIn(actingSeat, state.attackerIdx, state.defenderIdx, room.maxPlayers, state.outPlayers, throwRule)) break;
+        }
         const idx = (state.hands[actingSeat] ?? []).findIndex((c) => cardsEqual(c, action.card!));
         if (idx < 0) break;
         state.hands[actingSeat].splice(idx, 1);

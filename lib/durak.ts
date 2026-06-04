@@ -16,6 +16,7 @@ export interface TableSlot {
 }
 
 export type Variant = "podkidnoy" | "perevodnoy";
+export type ThrowRule = "all" | "neighbors";
 
 export interface DurakState {
   deck: Card[];
@@ -233,6 +234,37 @@ export function checkWinCondition(
     return { durak: withCards[0] ?? null, gameOver: true };
   }
   return { durak: null, gameOver: false };
+}
+
+/**
+ * Can this player throw in cards during a bout (not the opening attack)?
+ * "all": any non-defender, non-out player may throw.
+ * "neighbors": only the main attacker and the nearest non-out player on each
+ * side of the defender may throw.
+ */
+export function canThrowIn(
+  throwerIdx: number,
+  attackerIdx: number,
+  defenderIdx: number,
+  playerCount: number,
+  outPlayers: Set<number>,
+  throwRule: ThrowRule,
+): boolean {
+  if (throwerIdx === defenderIdx || outPlayers.has(throwerIdx)) return false;
+  if (throwRule === "all") return true;
+  if (throwerIdx === attackerIdx) return true;
+  // Find the nearest eligible neighbor on each side of the defender
+  let left = (defenderIdx - 1 + playerCount) % playerCount;
+  for (let i = 0; i < playerCount - 1; i++) {
+    if (!outPlayers.has(left) && left !== defenderIdx) break;
+    left = (left - 1 + playerCount) % playerCount;
+  }
+  let right = (defenderIdx + 1) % playerCount;
+  for (let i = 0; i < playerCount - 1; i++) {
+    if (!outPlayers.has(right) && right !== defenderIdx) break;
+    right = (right + 1) % playerCount;
+  }
+  return throwerIdx === left || throwerIdx === right;
 }
 
 /** Whether the defender has successfully beaten every attack on the table. */

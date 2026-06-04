@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const [chess, ms, checkers, battleship, billiards] = await Promise.all([
+    const [chess, ms, checkers, battleship, billiards, durak] = await Promise.all([
       prisma.chessRoom.findMany({
         where: { rated: true },
         orderBy: { createdAt: "desc" },
@@ -88,6 +88,25 @@ export async function GET() {
           guest: { select: { id: true, name: true, image: true, billiardsElo: true } },
         },
       }),
+      prisma.durakRoom.findMany({
+        where: { rated: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true, status: true,
+          winner: true,
+          startedAt: true, endedAt: true, createdAt: true,
+          variant: true, deckSize: true, maxPlayers: true,
+          host: { select: { id: true, name: true, image: true, durakElo: true } },
+          players: {
+            orderBy: { seatIdx: "asc" },
+            select: {
+              userId: true, seatIdx: true, eloDelta: true, eloSnapshot: true,
+              user: { select: { id: true, name: true, image: true, durakElo: true } },
+            },
+          },
+        },
+      }),
     ]);
 
     const result = [
@@ -122,6 +141,31 @@ export async function GET() {
         hostCurrentElo: r.host.billiardsElo,
         guestCurrentElo: r.guest?.billiardsElo ?? null,
       })),
+      ...durak.map(r => ({
+        id: r.id, game: "durak" as const,
+        status: r.status,
+        hostEloSnapshot: r.players[0]?.eloSnapshot ?? null,
+        guestEloSnapshot: null,
+        hostEloDelta: null,
+        guestEloDelta: null,
+        resultReverted: false,
+        hostCurrentElo: r.host.durakElo,
+        guestCurrentElo: null,
+        winner: r.winner,
+        winReason: null,
+        startedAt: r.startedAt ? r.startedAt.toISOString() : null,
+        endedAt: r.endedAt ? r.endedAt.toISOString() : null,
+        createdAt: r.createdAt.toISOString(),
+        host: r.host,
+        guest: null,
+        // extra fields for multi-player
+        durakPlayers: r.players.map(p => ({
+          userId: p.userId, seatIdx: p.seatIdx,
+          eloDelta: p.eloDelta, eloSnapshot: p.eloSnapshot,
+          name: p.user.name, image: p.user.image, currentElo: p.user.durakElo,
+        })),
+        variant: r.variant, deckSize: r.deckSize, maxPlayers: r.maxPlayers,
+      })),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return NextResponse.json(result);
@@ -139,7 +183,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json() as {
       action: "close" | "revert";
-      game: "chess" | "minesweeper" | "checkers" | "battleship" | "billiards";
+      game: "chess" | "minesweeper" | "checkers" | "battleship" | "billiards" | "durak";
       id: string;
     };
 
@@ -183,7 +227,7 @@ export async function POST(req: Request) {
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
         });
-      } else {
+      } else if (body.game === "billiards") {
         const room = await prisma.billiardsRoom.findUnique({ where: { id: body.id } });
         if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
         if (room.status === "FINISHED")
@@ -191,6 +235,15 @@ export async function POST(req: Request) {
         await prisma.billiardsRoom.update({
           where: { id: body.id },
           data: { status: "FINISHED", winner: null, winReason: "cancelled", endedAt: new Date() },
+        });
+      } else if (body.game === "durak") {
+        const room = await prisma.durakRoom.findUnique({ where: { id: body.id } });
+        if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (room.status === "FINISHED")
+          return NextResponse.json({ error: "Already finished" }, { status: 400 });
+        await prisma.durakRoom.update({
+          where: { id: body.id },
+          data: { status: "FINISHED", endedAt: new Date() },
         });
       }
       return NextResponse.json({ ok: true });

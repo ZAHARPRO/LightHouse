@@ -31,6 +31,7 @@ export default function DurakLobby() {
   const [deckSize, setDeckSize] = useState<36 | 52>(36);
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [timeControl, setTimeControl] = useState("none");
+  const [throwRule, setThrowRule] = useState<"all" | "neighbors">("all");
   const [fairPlay, setFairPlay] = useState(true);
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function DurakLobby() {
       const res = await fetch("/api/durak-rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variant, deckSize, maxPlayers, timeControl, rated: false, fairPlay }),
+        body: JSON.stringify({ variant, deckSize, maxPlayers, timeControl, throwRule, rated: false, fairPlay }),
       });
       if (res.ok) {
         const { id } = await res.json();
@@ -118,11 +119,22 @@ export default function DurakLobby() {
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm">{t("createRoom")}</p>
 
         <div>
-          <p className="text-[0.7rem] text-[var(--text-muted)] mb-1.5">{t("variant")}</p>
-          <div className="flex gap-2">
-            <Pill active={variant === "podkidnoy"} onClick={() => setVariant("podkidnoy")}>{t("podkidnoy")}</Pill>
-            <Pill active={variant === "perevodnoy"} onClick={() => setVariant("perevodnoy")}>{t("perevodnoy")}</Pill>
-          </div>
+          <Pill
+            active={variant === "perevodnoy"}
+            onClick={() => setVariant(variant === "perevodnoy" ? "podkidnoy" : "perevodnoy")}
+          >
+            <span className="flex items-center gap-1.5">
+              <span className={[
+                "w-3.5 h-3.5 rounded-sm border flex items-center justify-center text-[0.55rem] transition-all",
+                variant === "perevodnoy"
+                  ? "bg-[var(--accent-orange)] border-[var(--accent-orange)] text-white"
+                  : "border-current opacity-50",
+              ].join(" ")}>
+                {variant === "perevodnoy" && "✓"}
+              </span>
+              {t("perevodnoy")}
+            </span>
+          </Pill>
         </div>
 
         <div>
@@ -141,6 +153,16 @@ export default function DurakLobby() {
             ))}
           </div>
         </div>
+
+        {maxPlayers >= 4 && (
+          <div>
+            <p className="text-[0.7rem] text-[var(--text-muted)] mb-1.5">{t("throwRule")}</p>
+            <div className="flex gap-2">
+              <Pill active={throwRule === "all"} onClick={() => setThrowRule("all")}>{t("throwAll")}</Pill>
+              <Pill active={throwRule === "neighbors"} onClick={() => setThrowRule("neighbors")}>{t("throwNeighbors")}</Pill>
+            </div>
+          </div>
+        )}
 
         <div>
           <p className="text-[0.7rem] text-[var(--text-muted)] mb-1.5">{t("timePerMove")}</p>

@@ -15,6 +15,7 @@ type LeaderEntry = {
   checkersElo: number;
   battleshipElo: number;
   billiardsElo: number;
+  durakElo: number;
   wins: number;
   maxStreak: number;
 };
@@ -33,6 +34,7 @@ const GAMES = [
   { key: "checkers",    label: "⛳ Checkers" },
   { key: "battleship",  label: "⚓ Battleship" },
   { key: "billiards",   label: "🎱 Billiards" },
+  { key: "durak",       label: "🃏 Durak" },
   { key: "puzzles",     label: "🧩 Puzzles" },
 ] as const;
 
@@ -44,6 +46,7 @@ const ELO_FIELDS: Record<string, keyof LeaderEntry> = {
   checkers:    "checkersElo",
   battleship:  "battleshipElo",
   billiards:   "billiardsElo",
+  durak:       "durakElo",
 };
 
 const PLACE_COLOR = ["#ffd700", "#c0c0c0", "#cd7f32"];

@@ -10,12 +10,14 @@ import {
   type Suit,
   type TableSlot,
   type Variant,
+  type ThrowRule,
   createDeck,
   dealCards,
   findFirstAttacker,
   canAttack,
   canDefend,
   canTransfer,
+  canThrowIn,
   isFullyDefended,
   maxAttackCards,
   replenishHands,
@@ -169,6 +171,29 @@ function botName(idx: number): string {
 
 // ── Inner page (reads searchParams) ─────────────────────────────────────────
 
+// Flying card during dealing animation
+function FlyingCard({ from, to }: { from: { x: number; y: number }; to: { x: number; y: number } }) {
+  const [arrived, setArrived] = useState(false);
+  useEffect(() => { const f = requestAnimationFrame(() => setArrived(true)); return () => cancelAnimationFrame(f); }, []);
+  const CARD_W = 52, CARD_H = 74;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: (arrived ? to.x : from.x) - CARD_W / 2,
+        top:  (arrived ? to.y : from.y) - CARD_H / 2,
+        transition: arrived ? "left 0.35s cubic-bezier(.2,1.3,.5,1), top 0.35s cubic-bezier(.2,1.3,.5,1), opacity 0.15s 0.3s" : "none",
+        opacity: arrived ? 0 : 1,
+        zIndex: 9999,
+        pointerEvents: "none",
+        transform: arrived ? "scale(0.7) rotate(8deg)" : "scale(1) rotate(0deg)",
+      }}
+    >
+      <DurakCard faceDown size="sm" />
+    </div>
+  );
+}
+
 function DurakBotGame() {
   const t = useTranslations("durak");
   const router = useRouter();
@@ -178,6 +203,7 @@ function DurakBotGame() {
   const deckSize = (Number(searchParams.get("deck") ?? "36") === 52 ? 52 : 36) as 36 | 52;
   const variant = (searchParams.get("variant") ?? "podkidnoy") as Variant;
   const playerCount = Math.min(6, Math.max(2, Number(searchParams.get("players") ?? "2")));
+  const throwRule = (searchParams.get("throw") === "neighbors" ? "neighbors" : "all") as ThrowRule;
 
   const [game, setGame] = useState<BotGameState>(() =>
     initGame(deckSize, playerCount),
@@ -191,9 +217,22 @@ function DurakBotGame() {
   const [dragCard, setDragCard] = useState<Card | null>(null);
   // Slot highlighted by drag-over
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  // Dealing animation: counts up to playerCount*6 (one step per card dealt)
+  const [gameKey, setGameKey] = useState(0);
+  const [dealStep, setDealStep] = useState(0);
+  const TOTAL_DEAL = playerCount * 6;
 
   // Log ref to auto-scroll
-  const logRef = useRef<HTMLDivElement>(null);
+  const logRef        = useRef<HTMLDivElement>(null);
+  // Refs for flying-card dealing animation
+  const deckRef       = useRef<HTMLDivElement>(null);
+  const playerHandRef = useRef<HTMLDivElement>(null);
+  const botHandRefs   = useRef<(HTMLDivElement | null)[]>([]);
+  const tableRef      = useRef<HTMLDivElement>(null);
+  const flyingIdRef   = useRef(0);
+  const [flyingCards, setFlyingCards] = useState<{ id: number; from: {x:number;y:number}; to: {x:number;y:number} }[]>([]);
+  // Last bot action label (shown briefly near bot hand)
+  const [lastBotAction, setLastBotAction] = useState<{ botIdx: number; text: string } | null>(null);
 
   useEffect(() => {
     if (logRef.current) {
@@ -207,6 +246,40 @@ function DurakBotGame() {
       awardGameBadge("DURAK_WIN").catch(() => {});
     }
   }, [game.phase, game.durak]);
+
+  // Dealing animation — advance one step every 220ms, launching a flying card each step
+  useEffect(() => {
+    setDealStep(0);
+    setFlyingCards([]);
+    let step = 0;
+    const id = setInterval(() => {
+      step++;
+      setDealStep(step);
+
+      // Launch a flying card from the deck to the target player
+      if (deckRef.current) {
+        const deckRect = deckRef.current.getBoundingClientRect();
+        const from = { x: deckRect.left + deckRect.width / 2, y: deckRect.top + deckRect.height / 2 };
+
+        // Which player receives this card?
+        const targetIdx = (step - 1) % playerCount; // 0 = human, 1+ = bots
+        const toEl = targetIdx === PLAYER_IDX
+          ? playerHandRef.current
+          : botHandRefs.current[targetIdx - 1];
+        const toRect = toEl?.getBoundingClientRect();
+        const to = toRect
+          ? { x: toRect.left + toRect.width / 2, y: toRect.top + toRect.height / 2 }
+          : from;
+
+        const fid = ++flyingIdRef.current;
+        setFlyingCards(prev => [...prev, { id: fid, from, to }]);
+        setTimeout(() => setFlyingCards(prev => prev.filter(c => c.id !== fid)), 450);
+      }
+
+      if (step >= TOTAL_DEAL) clearInterval(id);
+    }, 220);
+    return () => clearInterval(id);
+  }, [gameKey, TOTAL_DEAL]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Apply log helper ────────────────────────────────────────────────────────
 
@@ -239,16 +312,29 @@ function DurakBotGame() {
       } else if (phase === "defense" && defenderIdx !== PLAYER_IDX) {
         actingBot = defenderIdx;
       } else if (phase === "throwing") {
-        // In throwing phase, non-defender bots can throw
         for (let p = 1; p < playerCount; p++) {
-          if (!outPlayers.has(p) && p !== defenderIdx) {
+          if (
+            !outPlayers.has(p) &&
+            p !== defenderIdx &&
+            canThrowIn(p, attackerIdx, defenderIdx, playerCount, outPlayers, throwRule)
+          ) {
             actingBot = p;
             break;
           }
         }
       }
 
-      if (actingBot < 0) return;
+      if (actingBot < 0) {
+        // No eligible bot in throwing phase → auto-resolve the bout
+        if (phase === "throwing") {
+          setTimeout(() => setGame(prev => {
+            if (prev.phase !== "throwing") return prev;
+            const next = resolveBout(prev, false, playerCount);
+            return { ...next, animating: false };
+          }), 300);
+        }
+        return;
+      }
 
       // Build ClientBotState
       const opponentCardCounts = Array.from({ length: playerCount - 1 }, (_, i) => {
@@ -275,6 +361,36 @@ function DurakBotGame() {
       setTimeout(() => {
         const botAction = getBotAction(botState, difficulty);
 
+        // Show bot action label near the bot's hand
+        const SUIT_SYM: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
+        const cardStr = botAction.action !== "take" && botAction.action !== "pass" && botAction.card
+          ? ` ${botAction.card.rank}${SUIT_SYM[botAction.card.suit] ?? botAction.card.suit}`
+          : "";
+        const actionLabel: Record<string, string> = {
+          attack: t("botAttacks"), defend: t("botDefends"), throw: t("botThrows"),
+          transfer: t("botTransfers"), take: t("botTakes"), pass: t("botPasses"),
+        };
+        setLastBotAction({ botIdx: actingBot, text: `${actionLabel[botAction.action] ?? botAction.action}${cardStr}` });
+        setTimeout(() => setLastBotAction(null), 1400);
+
+        // Launch flying card animation: bot hand → table
+        if (botAction.action !== "take" && botAction.action !== "pass") {
+          const botEl = botHandRefs.current[actingBot - 1];
+          const tableEl = tableRef.current;
+          if (botEl && tableEl) {
+            const fromRect = botEl.getBoundingClientRect();
+            const toRect   = tableEl.getBoundingClientRect();
+            const from = { x: fromRect.left + fromRect.width / 2, y: fromRect.top + fromRect.height / 2 };
+            const to   = { x: toRect.left  + toRect.width  / 2, y: toRect.top  + toRect.height  / 2 };
+            const fid = ++flyingIdRef.current;
+            setFlyingCards(prev => [...prev, { id: fid, from, to }]);
+            setTimeout(() => setFlyingCards(prev => prev.filter(c => c.id !== fid)), 500);
+          }
+        }
+
+        // Apply game state change, but keep animating=true for 700ms so player can see the card
+        const POST_ACTION_PAUSE = 700;
+
         setGame((prev) => {
           if (prev.phase === "finished") return prev;
 
@@ -294,23 +410,19 @@ function DurakBotGame() {
               newHands[actingBot] = removeFromHand(newHands[actingBot], botAction.card);
               newSlots.push({ attack: botAction.card, defense: null });
               newPhase = "defense";
-              logMsg = `${botName(actingBot)} attacks ${botAction.card.rank}${botAction.card.suit}`;
+              logMsg = `${botName(actingBot)} ${t("botAttacks")} ${botAction.card.rank}${botAction.card.suit}`;
               break;
             }
-
             case "defend": {
               const slot = newSlots[botAction.slotIdx];
               if (!slot || slot.defense) break;
               if (!canDefend(slot.attack, botAction.card, prev.trumpSuit)) break;
               newHands[actingBot] = removeFromHand(newHands[actingBot], botAction.card);
               newSlots[botAction.slotIdx] = { ...slot, defense: botAction.card };
-              logMsg = `${botName(actingBot)} defends with ${botAction.card.rank}${botAction.card.suit}`;
-              // BUG FIX: if all attacks are now defended, switch to "attack" so
-              // the player/bot attacker can throw more or pass.
+              logMsg = `${botName(actingBot)} ${t("botDefends")} ${botAction.card.rank}${botAction.card.suit}`;
               if (newSlots.every((s) => s.defense !== null)) newPhase = "attack";
               break;
             }
-
             case "throw": {
               if (!canAttack(botAction.card, newSlots)) break;
               const defHand = newHands[prev.defenderIdx].length;
@@ -319,10 +431,9 @@ function DurakBotGame() {
               newHands[actingBot] = removeFromHand(newHands[actingBot], botAction.card);
               newSlots.push({ attack: botAction.card, defense: null });
               newPhase = "defense";
-              logMsg = `${botName(actingBot)} throws ${botAction.card.rank}${botAction.card.suit}`;
+              logMsg = `${botName(actingBot)} ${t("botThrows")} ${botAction.card.rank}${botAction.card.suit}`;
               break;
             }
-
             case "transfer": {
               const nextDef = nextActive(prev.defenderIdx, playerCount, prev.outPlayers);
               if (!canTransfer(botAction.card, newSlots, variant, newHands[nextDef].length)) break;
@@ -331,33 +442,35 @@ function DurakBotGame() {
               newAttackerIdx = prev.defenderIdx;
               newDefenderIdx = nextDef;
               newPhase = "defense";
-              logMsg = `${botName(actingBot)} transfers`;
+              logMsg = `${botName(actingBot)} ${t("botTransfers")}`;
               break;
             }
-
             case "take": {
-              logMsg = `${botName(actingBot)} takes cards`;
+              logMsg = `${botName(actingBot)} ${t("botTakes")}`;
               const next = resolveBout({ ...prev, hands: newHands }, true, playerCount);
-              return { ...next, log: [...prev.log.slice(-30), logMsg] };
+              // Keep animating for pause then release
+              setTimeout(() => setGame(g => ({ ...g, animating: false })), POST_ACTION_PAUSE);
+              return { ...next, animating: true, log: [...prev.log.slice(-30), logMsg] };
             }
-
             case "pass": {
-              // If table is fully defended, resolve bout; else just pass (transition to throwing or attack)
               if (newSlots.length === 0) {
-                // Nothing happened — shouldn't normally occur
-                logMsg = `${botName(actingBot)} passes`;
+                logMsg = `${botName(actingBot)} ${t("botPasses")}`;
                 newPhase = "attack";
               } else if (isFullyDefended(newSlots)) {
-                logMsg = `${botName(actingBot)} passes (done)`;
+                logMsg = `${botName(actingBot)} ${t("botPasses")}`;
                 const next = resolveBout({ ...prev, hands: newHands }, false, playerCount);
-                return { ...next, log: [...prev.log.slice(-30), logMsg] };
+                setTimeout(() => setGame(g => ({ ...g, animating: false })), POST_ACTION_PAUSE);
+                return { ...next, animating: true, log: [...prev.log.slice(-30), logMsg] };
               } else {
-                logMsg = `${botName(actingBot)} passes`;
+                logMsg = `${botName(actingBot)} ${t("botPasses")}`;
                 newPhase = "attack";
               }
               break;
             }
           }
+
+          // Schedule end of animating pause
+          setTimeout(() => setGame(g => ({ ...g, animating: false })), POST_ACTION_PAUSE);
 
           return {
             ...prev,
@@ -366,13 +479,13 @@ function DurakBotGame() {
             phase: newPhase,
             attackerIdx: newAttackerIdx,
             defenderIdx: newDefenderIdx,
-            animating: false,
+            animating: true, // stays true until POST_ACTION_PAUSE expires
             log: logMsg ? [...prev.log.slice(-30), logMsg] : prev.log,
           };
         });
       }, delay);
     },
-    [difficulty, variant, playerCount],
+    [difficulty, variant, playerCount, throwRule], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Watch for bot turn triggers
@@ -400,30 +513,28 @@ function DurakBotGame() {
     setTimeout(() => setShakeCardKey(null), 500);
   }
 
-  // Shared defense logic used by both click and drag-drop paths
+  // Apply a card transfer (переводной) — does NOT require a selected slot
+  function applyTransfer(card: Card) {
+    const { defenderIdx } = game;
+    const nextDef = nextActive(defenderIdx, playerCount, game.outPlayers);
+    setGame((prev) => {
+      const newHands = prev.hands.map((h) => [...h]);
+      newHands[PLAYER_IDX] = removeFromHand(newHands[PLAYER_IDX], card);
+      const newSlots = [...prev.tableSlots, { attack: card, defense: null }];
+      return { ...prev, hands: newHands, tableSlots: newSlots, phase: "defense",
+        attackerIdx: prev.defenderIdx, defenderIdx: nextDef,
+        log: [...prev.log.slice(-30), `${t("logYouTransfer")} ${card.rank}${card.suit}`] };
+    });
+    setSelectedSlotIdx(null);
+  }
+
+  // Defend a specific table slot with a card (no transfer logic — handled separately)
   function performDefend(card: Card, slotIdx: number) {
-    const { defenderIdx, tableSlots, trumpSuit, hands } = game;
+    const { tableSlots, trumpSuit } = game;
     const cardKey = `${card.suit}-${card.rank}`;
     const slot = tableSlots[slotIdx];
     if (!slot || slot.defense) { shakeCard(cardKey); setSelectedSlotIdx(null); return; }
     if (!canDefend(slot.attack, card, trumpSuit)) { shakeCard(cardKey); return; }
-
-    // Transfer (переводной)
-    if (variant === "perevodnoy") {
-      const nextDef = nextActive(defenderIdx, playerCount, game.outPlayers);
-      if (canTransfer(card, tableSlots, variant, hands[nextDef]?.length ?? 0)) {
-        setGame((prev) => {
-          const newHands = prev.hands.map((h) => [...h]);
-          newHands[PLAYER_IDX] = removeFromHand(newHands[PLAYER_IDX], card);
-          const newSlots = [...prev.tableSlots, { attack: card, defense: null }];
-          return { ...prev, hands: newHands, tableSlots: newSlots, phase: "defense",
-            attackerIdx: prev.defenderIdx, defenderIdx: nextDef,
-            log: [...prev.log.slice(-30), `You transfer ${card.rank}${card.suit}`] };
-        });
-        setSelectedSlotIdx(null);
-        return;
-      }
-    }
 
     setGame((prev) => {
       const newHands = prev.hands.map((h) => [...h]);
@@ -432,7 +543,7 @@ function DurakBotGame() {
       const allDefended = newSlots.every((s) => s.defense !== null);
       return { ...prev, hands: newHands, tableSlots: newSlots,
         phase: allDefended ? "attack" : "defense",
-        log: [...prev.log.slice(-30), `You defend with ${card.rank}${card.suit}`] };
+        log: [...prev.log.slice(-30), `${t("logYouDefend")} ${card.rank}${card.suit}`] };
     });
     setSelectedSlotIdx(null);
   }
@@ -464,7 +575,7 @@ function DurakBotGame() {
           hands: newHands,
           tableSlots: newSlots,
           phase: "defense",
-          log: [...prev.log.slice(-30), `You attack ${card.rank}${card.suit}`],
+          log: [...prev.log.slice(-30), `${t("logYouAttack")} ${card.rank}${card.suit}`],
         };
       });
       setSelectedSlotIdx(null);
@@ -473,6 +584,15 @@ function DurakBotGame() {
 
     // Defense phase — player is defender
     if (phase === "defense" && defenderIdx === PLAYER_IDX) {
+      // Check переводной transfer FIRST (no slot needed — card rank must match all attacks)
+      if (variant === "perevodnoy") {
+        const nextDef = nextActive(defenderIdx, playerCount, game.outPlayers);
+        if (canTransfer(card, tableSlots, variant, hands[nextDef]?.length ?? 0)) {
+          applyTransfer(card);
+          return;
+        }
+      }
+      // Regular defense requires a selected slot
       if (selectedSlotIdx === null) {
         shakeCard(cardKey);
         return;
@@ -502,7 +622,7 @@ function DurakBotGame() {
           hands: newHands,
           tableSlots: newSlots,
           phase: "defense",
-          log: [...prev.log.slice(-30), `You throw in ${card.rank}${card.suit}`],
+          log: [...prev.log.slice(-30), `${t("logYouThrow")} ${card.rank}${card.suit}`],
         };
       });
       return;
@@ -526,14 +646,14 @@ function DurakBotGame() {
       if (isFullyDefended(tableSlots)) {
         setGame((prev) => {
           const next = resolveBout(prev, false, playerCount);
-          return { ...next, log: [...prev.log.slice(-30), "You pass (done)"] };
+          return { ...next, log: [...prev.log.slice(-30), t("logYouPassDone")] };
         });
       } else {
         // Move to throwing phase for the bot to optionally throw
         setGame((prev) => ({
           ...prev,
           phase: "throwing",
-          log: [...prev.log.slice(-30), "You pass"],
+          log: [...prev.log.slice(-30), t("logYouPass")],
         }));
       }
     }
@@ -547,7 +667,7 @@ function DurakBotGame() {
     if (tableSlots.length === 0) return;
     setGame((prev) => {
       const next = resolveBout(prev, true, playerCount);
-      return { ...next, log: [...prev.log.slice(-30), "You take cards"] };
+      return { ...next, log: [...prev.log.slice(-30), t("logYouTake")] };
     });
     setSelectedSlotIdx(null);
   }
@@ -556,6 +676,7 @@ function DurakBotGame() {
     setGame(initGame(deckSize, playerCount));
     setSelectedSlotIdx(null);
     setShakeCardKey(null);
+    setGameKey(k => k + 1);
   }
 
   // ── Derived state for UI ────────────────────────────────────────────────────
@@ -585,11 +706,31 @@ function DurakBotGame() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const isDealDone = dealStep >= TOTAL_DEAL;
+  // Deal sequence idx for card c of player p: p gets card in round-robin order
+  // Step k → player k % N gets their (k / N)-th card
+  function dealIdx(p: number, c: number) { return c * playerCount + p; }
+
   return (
+    <>
+    <style>{`
+      @keyframes durak-deal {
+        from { transform: translateY(-48px) rotate(-6deg) scale(0.85); opacity: 0; }
+        to   { transform: translateY(0px)  rotate(0deg)  scale(1);    opacity: 1; }
+      }
+      .durak-card-in {
+        animation: durak-deal 0.22s cubic-bezier(0.34,1.3,0.64,1) both;
+      }
+    `}</style>
     <main
       className="flex flex-col"
       style={{ height: "calc(100vh - 64px)", background: "var(--bg-primary)" }}
     >
+      {/* Flying cards during deal animation — rendered as fixed portal elements */}
+      {flyingCards.map(fc => (
+        <FlyingCard key={fc.id} from={fc.from} to={fc.to} />
+      ))}
+
       {/* Game over overlay */}
       {game.phase === "finished" && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -634,12 +775,18 @@ function DurakBotGame() {
           >
             ← {t("backToGames")}
           </Link>
-          <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-            <span className="font-mono">
-              {t("deck")}: {game.deck.length}
+          <div className="flex items-center gap-3 text-xs">
+            <span className={[
+              "font-mono font-bold px-2 py-0.5 rounded-md",
+              game.deck.length === 0   ? "text-[var(--text-muted)] bg-[var(--bg-secondary)]"
+              : game.deck.length < 6   ? "text-red-400 bg-red-500/10"
+              : game.deck.length < 16  ? "text-yellow-400 bg-yellow-500/10"
+              :                          "text-emerald-400 bg-emerald-500/10"
+            ].join(" ")}>
+              🂠 {game.deck.length}
             </span>
-            <span className="font-mono">
-              {t("discard")}: {game.discardCount}
+            <span className="font-mono text-[var(--text-muted)]">
+              ✕ {game.discardCount}
             </span>
             <span
               className="font-bold text-sm"
@@ -647,7 +794,12 @@ function DurakBotGame() {
             >
               {trumpSymbol} {t("trump")}
             </span>
-            {game.animating && (
+            {!isDealDone && (
+              <span className="text-indigo-400 animate-pulse font-semibold">
+                {t("dealing")}
+              </span>
+            )}
+            {game.animating && isDealDone && (
               <span className="text-[var(--accent-orange)] animate-pulse font-semibold">
                 {t("botThinking")}
               </span>
@@ -667,21 +819,34 @@ function DurakBotGame() {
             className="flex flex-col gap-3 p-3 border-r border-[var(--border-subtle)] shrink-0"
             style={{ width: 140 }}
           >
-            {/* Trump card */}
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-[0.65rem] text-[var(--text-muted)] font-semibold uppercase tracking-wide">
-                {t("trump")}
-              </p>
-              {game.deck.length > 0 && game.trumpCard ? (
-                <DurakCard card={game.trumpCard} size="sm" style={{ transform: "rotate(90deg)" }} />
-              ) : (
-                <div className="text-2xl leading-none">{trumpSymbol}</div>
-              )}
-              <span
-                className="text-base font-bold"
-                style={{ color: isRed ? "#dc2626" : "var(--text-primary)" }}
-              >
-                {trumpSymbol}
+            {/* Deck stack with count badge + trump */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="relative" ref={deckRef} style={{ width: 52, height: 74 }}>
+                {game.deck.length > 0 ? (
+                  <>
+                    {/* Trump card peeking sideways under deck */}
+                    {game.trumpCard && (
+                      <div style={{ position: "absolute", left: -16, top: "50%", transform: "translateY(-50%) rotate(90deg)", zIndex: 0, opacity: 0.9 }}>
+                        <DurakCard card={game.trumpCard} size="sm" />
+                      </div>
+                    )}
+                    <DurakCard faceDown size="sm" style={{ position: "relative", zIndex: 1 }} />
+                    {/* Count badge */}
+                    <div className={[
+                      "absolute -top-2 -right-2 min-w-[22px] h-[22px] rounded-full flex items-center justify-center text-[0.65rem] font-extrabold border-2 border-[var(--bg-primary)] z-10",
+                      game.deck.length < 6  ? "bg-red-500 text-white"
+                      : game.deck.length < 16 ? "bg-yellow-400 text-black"
+                      :                         "bg-emerald-500 text-white"
+                    ].join(" ")}>
+                      {game.deck.length}
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-[52px] h-[74px] rounded-lg border border-dashed border-[var(--border-subtle)] flex items-center justify-center opacity-30 text-xl">🂠</div>
+                )}
+              </div>
+              <span className="text-sm font-bold" style={{ color: isRed ? "#dc2626" : "var(--text-primary)" }}>
+                {trumpSymbol} {t("trump")}
               </span>
             </div>
 
@@ -709,19 +874,21 @@ function DurakBotGame() {
               </div>
             </div>
 
-            {/* Card counts */}
-            <div className="flex flex-col gap-1 text-[0.65rem] text-[var(--text-muted)]">
-              <p className="font-semibold">Hand sizes:</p>
-              <p>You: {playerHand.length}</p>
-              {Array.from({ length: playerCount - 1 }, (_, i) => (
-                <p key={i}>Bot {i + 1}: {game.hands[i + 1]?.length ?? 0}</p>
-              ))}
-            </div>
+            {/* Card counts — hidden during deal animation */}
+            {isDealDone && (
+              <div className="flex flex-col gap-1 text-[0.65rem] text-[var(--text-muted)]">
+                <p className="font-semibold">{t("handSizes")}:</p>
+                <p>{t("you")}: {playerHand.length}</p>
+                {Array.from({ length: playerCount - 1 }, (_, i) => (
+                  <p key={i}>Bot {i + 1}: {game.hands[i + 1]?.length ?? 0}</p>
+                ))}
+              </div>
+            )}
 
             {/* Log */}
             <div className="flex flex-col gap-1 flex-1 min-h-0">
               <p className="text-[0.65rem] text-[var(--text-muted)] font-semibold uppercase tracking-wide">
-                Log
+                {t("log")}
               </p>
               <div
                 ref={logRef}
@@ -746,35 +913,60 @@ function DurakBotGame() {
                 const count = botHand.length;
                 const spread = Math.min(22, 180 / Math.max(1, count));
                 return (
-                  <div key={botIdx} className="flex flex-col items-center gap-1">
-                    <p className="text-[0.65rem] font-semibold text-[var(--text-muted)]">
-                      {botName(botIdx)}
-                      {game.attackerIdx === botIdx && <span className="ml-1 text-[var(--accent-orange)]">[A]</span>}
-                      {game.defenderIdx === botIdx && <span className="ml-1 text-blue-400">[D]</span>}
-                      {game.outPlayers.has(botIdx) && <span className="ml-1 text-green-400">✓</span>}
-                    </p>
+                  <div key={botIdx} className="flex flex-col items-center gap-1" ref={el => { botHandRefs.current[idx] = el; }}>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <p className="text-[0.65rem] font-semibold text-[var(--text-muted)]">
+                        {botName(botIdx)}
+                        {game.attackerIdx === botIdx && <span className="ml-1 text-[var(--accent-orange)]">[A]</span>}
+                        {game.defenderIdx === botIdx && <span className="ml-1 text-blue-400">[D]</span>}
+                        {game.outPlayers.has(botIdx) && <span className="ml-1 text-green-400">✓</span>}
+                      </p>
+                      {/* Bot action label — shown after playing a card */}
+                      {lastBotAction?.botIdx === botIdx && (
+                        <span className="text-[0.6rem] font-bold text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded-md animate-pulse">
+                          {lastBotAction.text}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ position: "relative", height: 64, width: Math.max(48, count * 12 + 36) }}>
-                      {botHand.map((_, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            position: "absolute",
-                            left: "50%",
-                            bottom: 0,
-                            transform: `translateX(calc(-50% + ${(i - (count - 1) / 2) * 12}px)) rotate(${(i - (count - 1) / 2) * spread}deg)`,
-                            transformOrigin: "bottom center",
-                          }}
-                        >
-                          <DurakCard faceDown size="sm" />
-                        </div>
-                      ))}
+                      {botHand.map((_, i) => {
+                        const di = dealIdx(botIdx, i);
+                        const visible = dealStep > di;
+                        return (
+                          <div
+                            key={i}
+                            className={visible ? "durak-card-in" : ""}
+                            style={{
+                              position: "absolute",
+                              left: "50%",
+                              bottom: 0,
+                              transform: `translateX(calc(-50% + ${(i - (count - 1) / 2) * 12}px)) rotate(${(i - (count - 1) / 2) * spread}deg)`,
+                              transformOrigin: "bottom center",
+                              opacity: visible ? 1 : 0,
+                              animationDelay: `0ms`,
+                            }}
+                          >
+                            <DurakCard faceDown size="sm" />
+                          </div>
+                        );
+                      })}
                       {count === 0 && (
                         <span className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-[0.6rem]">
                           {game.outPlayers.has(botIdx) ? "✓" : "—"}
                         </span>
                       )}
                     </div>
-                    <span className="text-[0.6rem] text-[var(--text-muted)]">{count} 🂠</span>
+                    {isDealDone ? (
+                      <span className={[
+                        "font-mono font-bold text-xs px-1.5 py-0.5 rounded",
+                        count === 0  ? "text-green-400 bg-green-500/10"
+                        : count <= 3 ? "text-yellow-400 bg-yellow-500/10"
+                        : count >= 10? "text-red-400 bg-red-500/10"
+                        :              "text-[var(--text-muted)]"
+                      ].join(" ")}>🂠 {count}</span>
+                    ) : (
+                      <span className="font-mono text-xs text-[var(--text-muted)] opacity-50">🂠 ?</span>
+                    )}
                   </div>
                 );
               })}
@@ -782,6 +974,7 @@ function DurakBotGame() {
 
             {/* Table area (center) — drop zone for attack/throw */}
             <div
+              ref={tableRef}
               className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-3 min-h-0"
               onDragOver={(e) => {
                 const canDrop = dragCard && !game.animating && game.phase !== "finished" &&
@@ -838,6 +1031,13 @@ function DurakBotGame() {
                           setDragOverSlot(null);
                           try {
                             const c = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                            // Try transfer first, then regular defend
+                            if (variant === "perevodnoy") {
+                              const nextDef = nextActive(game.defenderIdx, playerCount, game.outPlayers);
+                              if (canTransfer(c, game.tableSlots, variant, game.hands[nextDef]?.length ?? 0)) {
+                                applyTransfer(c); setDragCard(null); return;
+                              }
+                            }
                             performDefend(c, idx);
                           } catch { /* ignore */ }
                           setDragCard(null);
@@ -860,48 +1060,48 @@ function DurakBotGame() {
                 </div>
               )}
 
-              {/* Action buttons */}
-              {game.phase !== "finished" && (
-                <div className="flex gap-2 mt-2">
-                  {canPlayerPass && (
-                    <button
-                      onClick={handlePass}
-                      className="px-5 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-sm font-semibold hover:text-[var(--text-primary)] transition-colors"
-                    >
-                      {t("pass")}
-                    </button>
-                  )}
-                  {canPlayerTake && (
-                    <button
-                      onClick={handleTake}
-                      className="px-5 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/25 transition-colors"
-                    >
-                      {t("take")}
-                    </button>
-                  )}
-                  {isPlayerDefender &&
-                    game.phase === "defense" &&
-                    selectedSlotIdx !== null && (
-                      <p className="text-xs text-[var(--accent-orange)] self-center">
-                        {t("defendHint")}
-                      </p>
+              {/* Action buttons + hint */}
+              {game.phase !== "finished" && !game.animating && (
+                <div className="flex flex-col gap-2 mt-2 w-full items-center">
+                  {/* Contextual hint bar */}
+                  {(() => {
+                    if (isPlayerAttacker && game.phase === "attack" && game.tableSlots.length === 0)
+                      return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl text-center">🗡 {t("youAttackHint")}</p>;
+                    if (isPlayerAttacker && game.phase === "attack" && game.tableSlots.length > 0)
+                      return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl text-center">🗡 {t("youAttackMoreHint")}</p>;
+                    if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx === null)
+                      return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl text-center">🛡 {t("defendHint")}</p>;
+                    if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx !== null)
+                      return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl text-center">🛡 {t("defendHint")}</p>;
+                    return null;
+                  })()}
+
+                  <div className="flex gap-2">
+                    {canPlayerPass && (
+                      <button
+                        onClick={handlePass}
+                        className="px-6 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-sm font-semibold hover:text-[var(--text-primary)] transition-colors"
+                      >
+                        {t("pass")}
+                      </button>
                     )}
-                  {isPlayerDefender &&
-                    game.phase === "defense" &&
-                    selectedSlotIdx === null &&
-                    game.tableSlots.some((s) => !s.defense) && (
-                      <p className="text-xs text-[var(--text-muted)] self-center italic">
-                        {t("defendHint")}
-                      </p>
+                    {canPlayerTake && (
+                      <button
+                        onClick={handleTake}
+                        className="px-6 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-500/25 transition-colors"
+                      >
+                        😮 {t("take")}
+                      </button>
                     )}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Player hand area (bottom) */}
-            <div className="shrink-0 flex flex-col items-center gap-2 pb-4 px-4">
+            <div ref={playerHandRef} className="shrink-0 flex flex-col items-center gap-2 pb-4 px-4">
               <p className="text-xs font-semibold text-[var(--text-muted)]">
-                {t("yourHand")} ({playerHand.length})
+                {t("yourHand")} ({isDealDone ? playerHand.length : "?"})
                 {isPlayerAttacker && !game.animating && (
                   <span className="ml-2 text-[var(--accent-orange)] text-[0.65rem]">
                     [{t("youAttack")}]
@@ -918,7 +1118,40 @@ function DurakBotGame() {
                   </span>
                 )}
               </p>
-              {/* Player hand fan */}
+              {/* Player hand — fan for ≤8, scrollable strip for >8 */}
+              {playerHand.length > 8 ? (
+                <div style={{ overflowX: "auto", width: "100%", maxWidth: 680, paddingBottom: 8, paddingTop: 4 }}>
+                  <div style={{ display: "flex", gap: 4, padding: "0 8px", width: "max-content" }}>
+                    {playerHand.map((card, i) => {
+                      const key = `${card.suit}-${card.rank}`;
+                      const isShaking = shakeCardKey === key;
+                      const di = dealIdx(PLAYER_IDX, i);
+                      const cardVisible = dealStep > di;
+                      let isPlayable = false;
+                      if (!game.animating && game.phase !== "finished") {
+                        if (isPlayerAttacker && game.phase === "attack") isPlayable = canAttack(card, game.tableSlots);
+                        else if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx !== null) {
+                          const slot = game.tableSlots[selectedSlotIdx];
+                          if (slot && !slot.defense) isPlayable = canDefend(slot.attack, card, game.trumpSuit);
+                        } else if (isPlayerDefender && game.phase === "defense") {
+                          isPlayable = game.tableSlots.some((s) => !s.defense && canDefend(s.attack, card, game.trumpSuit));
+                        } else if (isPlayerAttacker && game.phase === "throwing") isPlayable = canAttack(card, game.tableSlots);
+                      }
+                      return (
+                        <div key={key} className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : isShaking ? "animate-bounce" : ""}
+                          style={{ opacity: cardVisible ? 1 : 0, flexShrink: 0 }}>
+                          <DurakCard card={card} size="md" onClick={() => handlePlayerCardClick(card)}
+                            dimmed={!isPlayable && isPlayerTurn}
+                            draggable={isPlayerTurn && !game.animating}
+                            onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); if (isPlayerDefender && game.phase === "defense") setSelectedSlotIdx(null); }}
+                            onDragEnd={() => setDragCard(null)}
+                            className={["hover:-translate-y-3", isPlayable && isPlayerTurn ? "ring-2 ring-[var(--accent-orange)]/60" : ""].join(" ")} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
               <div
                 style={{
                   position: "relative",
@@ -959,9 +1192,13 @@ function DurakBotGame() {
                     }
                   }
 
+                  const di = dealIdx(PLAYER_IDX, i);
+                  const cardVisible = dealStep > di;
+
                   return (
                     <div
                       key={key}
+                      className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : isShaking ? "animate-bounce" : ""}
                       style={{
                         position: "absolute",
                         left: "50%",
@@ -970,8 +1207,9 @@ function DurakBotGame() {
                         transformOrigin: "bottom center",
                         transition: isShaking ? "none" : "transform 0.15s ease",
                         zIndex: i,
+                        opacity: cardVisible ? 1 : 0,
+                        pointerEvents: cardVisible ? "auto" : "none",
                       }}
-                      className={isShaking ? "animate-bounce" : ""}
                     >
                       <DurakCard
                         card={card}
@@ -997,16 +1235,18 @@ function DurakBotGame() {
                 {playerHand.length === 0 && game.phase !== "finished" && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-[var(--text-muted)] text-sm">
-                      {game.outPlayers.has(PLAYER_IDX) ? "✓ " + t("done") : "No cards"}
+                      {game.outPlayers.has(PLAYER_IDX) ? "✓ " + t("done") : t("noCards")}
                     </span>
                   </div>
                 )}
               </div>
+              )} {/* end fan/scroll conditional */}
             </div>
           </div>
         </div>
       </div>
     </main>
+    </>
   );
 }
 

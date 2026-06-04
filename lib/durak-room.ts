@@ -37,6 +37,7 @@ export type ClientRoomData = {
   deckSize: number;
   maxPlayers: number;
   timeControl: string;
+  throwRule: string;
   rated: boolean;
   fairPlay: boolean;
   hostId: string;
@@ -79,6 +80,7 @@ type RoomWithSlots = {
   deckSize: number;
   maxPlayers: number;
   timeControl: string;
+  throwRule: string;
   rated: boolean;
   fairPlay: boolean;
   hostId: string;
@@ -183,6 +185,7 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
     deckSize: room.deckSize,
     maxPlayers: room.maxPlayers,
     timeControl: room.timeControl,
+    throwRule: room.throwRule,
     rated: room.rated,
     fairPlay: room.fairPlay,
     hostId: room.hostId,

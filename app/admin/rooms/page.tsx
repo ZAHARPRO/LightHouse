@@ -7,9 +7,11 @@ import {
   ChevronUp, ChevronDown, Minus, AlertTriangle, Loader2, CheckCircle2, Search
 } from "lucide-react";
 
+type DurakPlayer = { userId: string; seatIdx: number; eloDelta: number | null; eloSnapshot: number | null; name: string | null; image: string | null; currentElo: number };
+
 type Room = {
   id: string;
-  game: "chess" | "minesweeper" | "checkers" | "battleship" | "billiards";
+  game: "chess" | "minesweeper" | "checkers" | "battleship" | "billiards" | "durak";
   status: string;
   hostEloSnapshot: number | null;
   guestEloSnapshot: number | null;
@@ -25,6 +27,8 @@ type Room = {
   createdAt: string;
   host:  { id: string; name: string | null; image: string | null };
   guest: { id: string; name: string | null; image: string | null } | null;
+  durakPlayers?: DurakPlayer[];
+  variant?: string;
 };
 
 function fmt(iso: string | null) {
@@ -58,7 +62,7 @@ export default function AdminRoomsPage() {
   const [loading, setLoading]     = useState(true);
   const [apiError, setApiError]   = useState<string | null>(null);
   const [statusF, setStatusF]     = useState<"all" | "active" | "finished">("all");
-  const [gameF,   setGameF]       = useState<"all" | "chess" | "minesweeper" | "checkers" | "battleship" | "billiards">("all");
+  const [gameF,   setGameF]       = useState<"all" | "chess" | "minesweeper" | "checkers" | "battleship" | "billiards" | "durak">("all");
   const [search, setSearch]       = useState("");
   const [busy, setBusy]           = useState<Record<string, boolean>>({});
   const [rowErr, setRowErr]       = useState<Record<string, string>>({});
@@ -179,16 +183,17 @@ export default function AdminRoomsPage() {
         ))}
         <span className="text-[var(--border-default)]">|</span>
         <span className="text-xs text-[var(--text-muted)]">Game:</span>
-        {(["all", "chess", "minesweeper", "checkers", "battleship", "billiards"] as const).map(g => (
+        {(["all", "chess", "minesweeper", "checkers", "battleship", "billiards", "durak"] as const).map(g => (
           <button key={g} onClick={() => setGameF(g)}
             className={["px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors capitalize",
               gameF === g
-                ? g === "chess"     ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
+                ? g === "chess"       ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
                 : g === "minesweeper" ? "bg-red-500/15 border-red-500/40 text-red-400"
-                : g === "checkers"  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                : g === "battleship"? "bg-blue-500/15 border-blue-500/40 text-blue-400"
-                : g === "billiards" ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
-                                    : "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
+                : g === "checkers"    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                : g === "battleship"  ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+                : g === "billiards"   ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                : g === "durak"       ? "bg-orange-500/15 border-orange-500/40 text-orange-400"
+                                      : "bg-[var(--accent-orange)]/15 border-[var(--accent-orange)]/40 text-[var(--accent-orange)]"
                 : "bg-[var(--bg-card)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]",
             ].join(" ")}>{g}</button>
         ))}
@@ -208,11 +213,12 @@ export default function AdminRoomsPage() {
             const isCheckers   = room.game === "checkers";
             const isBattleship = room.game === "battleship";
             const isBilliards  = room.game === "billiards";
+            const isDurak      = room.game === "durak";
             const cancelled = room.winReason === "cancelled";
             const hostWins  = !cancelled && room.hostEloDelta != null && room.hostEloDelta > 0;
             const guestWins = !cancelled && room.guestEloDelta != null && room.guestEloDelta > 0;
             const canClose  = room.status !== "FINISHED";
-            const canRevert = !isBattleship && room.status === "FINISHED" && !room.resultReverted
+            const canRevert = !isBattleship && !isDurak && room.status === "FINISHED" && !room.resultReverted
               && room.hostEloDelta != null && !cancelled;
 
             return (
@@ -226,9 +232,10 @@ export default function AdminRoomsPage() {
                     : isCheckers  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                     : isBattleship? "bg-blue-500/10 border-blue-500/20 text-blue-400"
                     : isBilliards ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                    : isDurak     ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
                                   : "bg-red-500/10 border-red-500/20 text-red-400"].join(" ")}>
-                    {isChess ? <Swords size={11} /> : isCheckers ? <Table2 size={11} /> : isBattleship ? <Anchor size={11} /> : isBilliards ? <Disc size={11} /> : <Bomb size={11} />}
-                    {isChess ? "Chess" : isCheckers ? "Checkers" : isBattleship ? "Battleship" : isBilliards ? "Billiards" : "Minesweeper"}
+                    {isChess ? <Swords size={11} /> : isCheckers ? <Table2 size={11} /> : isBattleship ? <Anchor size={11} /> : isBilliards ? <Disc size={11} /> : isDurak ? "🃏" : <Bomb size={11} />}
+                    {isChess ? "Chess" : isCheckers ? "Checkers" : isBattleship ? "Battleship" : isBilliards ? "Billiards" : isDurak ? `Durak ${room.variant ?? ""}` : "Minesweeper"}
                   </span>
                   {room.status === "WAITING" && <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">Waiting</span>}
                   {room.status === "PLAYING" && <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400 animate-pulse">Playing</span>}
@@ -250,34 +257,58 @@ export default function AdminRoomsPage() {
                 </div>
 
                 {/* Players table */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Host",  player: room.host,  snap: room.hostEloSnapshot,  delta: room.hostEloDelta,  cur: room.hostCurrentElo,  wins: hostWins  },
-                    { label: "Guest", player: room.guest, snap: room.guestEloSnapshot, delta: room.guestEloDelta, cur: room.guestCurrentElo, wins: guestWins },
-                  ].map(({ label, player, snap, delta, cur, wins }) => (
-                    <div key={label} className="bg-[var(--bg-secondary)] rounded-lg px-3 py-2 flex flex-col gap-1">
-                      <p className="text-[0.58rem] font-bold text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
-                      {player ? (
-                        <>
+                {isDurak && room.durakPlayers ? (
+                  <div className="flex flex-wrap gap-2">
+                    {room.durakPlayers.map(p => {
+                      const isDurakLoser = p.userId === room.winner;
+                      return (
+                        <div key={p.userId} className={["bg-[var(--bg-secondary)] rounded-lg px-3 py-2 flex flex-col gap-1 min-w-[120px]", isDurakLoser ? "ring-1 ring-red-500/40" : ""].join(" ")}>
+                          <p className="text-[0.55rem] font-bold text-[var(--text-muted)] uppercase tracking-wider">Seat {p.seatIdx}{isDurakLoser ? " 🃏 DURAK" : ""}</p>
                           <div className="flex items-center gap-1.5">
-                            <Avatar name={player.name} image={player.image} />
-                            <span className="text-sm text-[var(--text-primary)] truncate font-medium">{player.name ?? "?"}</span>
-                            {wins && <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
+                            {p.image
+                              ? <Image src={p.image} alt="" width={18} height={18} className="rounded-full shrink-0" />
+                              : <div className="w-[18px] h-[18px] rounded-full bg-[var(--bg-card)] flex items-center justify-center text-[0.45rem] font-bold text-[var(--text-muted)] shrink-0">{p.name?.[0] ?? "?"}</div>}
+                            <span className="text-xs text-[var(--text-primary)] truncate font-medium">{p.name ?? "?"}</span>
+                            {!isDurakLoser && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] flex-wrap">
-                            <span>ELO: <span className="text-[var(--text-secondary)]">
-                              {snap ?? (cur != null && delta != null ? cur - delta : "?")}
-                            </span></span>
-                            <Delta delta={delta} reverted={room.resultReverted} />
-                            {cur != null && <span>→ <span className="text-[var(--text-secondary)]">{cur}</span></span>}
+                          <div className="flex items-center gap-1.5 text-[0.65rem] text-[var(--text-muted)]">
+                            <span>ELO: {p.eloSnapshot ?? "?"}</span>
+                            <Delta delta={p.eloDelta} reverted={false} />
                           </div>
-                        </>
-                      ) : (
-                        <p className="text-xs text-[var(--text-muted)] py-1">—</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Host",  player: room.host,  snap: room.hostEloSnapshot,  delta: room.hostEloDelta,  cur: room.hostCurrentElo,  wins: hostWins  },
+                      { label: "Guest", player: room.guest, snap: room.guestEloSnapshot, delta: room.guestEloDelta, cur: room.guestCurrentElo, wins: guestWins },
+                    ].map(({ label, player, snap, delta, cur, wins }) => (
+                      <div key={label} className="bg-[var(--bg-secondary)] rounded-lg px-3 py-2 flex flex-col gap-1">
+                        <p className="text-[0.58rem] font-bold text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
+                        {player ? (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Avatar name={player.name} image={player.image} />
+                              <span className="text-sm text-[var(--text-primary)] truncate font-medium">{player.name ?? "?"}</span>
+                              {wins && <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] flex-wrap">
+                              <span>ELO: <span className="text-[var(--text-secondary)]">
+                                {snap ?? (cur != null && delta != null ? cur - delta : "?")}
+                              </span></span>
+                              <Delta delta={delta} reverted={room.resultReverted} />
+                              {cur != null && <span>→ <span className="text-[var(--text-secondary)]">{cur}</span></span>}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-xs text-[var(--text-muted)] py-1">—</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Winner line */}
                 {room.winner && !cancelled && (

@@ -76,6 +76,7 @@ export async function POST(req: Request) {
     deckSize?: number;
     maxPlayers?: number;
     timeControl?: string;
+    throwRule?: string;
     rated?: boolean;
     fairPlay?: boolean;
   };
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
   const deckSize = body.deckSize === 52 ? 52 : 36;
   const maxPlayers = Math.min(6, Math.max(2, body.maxPlayers ?? 4));
   const timeControl = ["15", "30", "60"].includes(String(body.timeControl)) ? String(body.timeControl) : "none";
+  const throwRule = body.throwRule === "neighbors" ? "neighbors" : "all";
   const rated = body.rated === true;
   let fairPlay = body.fairPlay !== false;
 
@@ -107,6 +109,7 @@ export async function POST(req: Request) {
       deckSize,
       maxPlayers,
       timeControl,
+      throwRule,
       rated,
       fairPlay,
       players: {

@@ -1488,8 +1488,114 @@ function BilliardsHistoryPanel({ userId }: { userId: string }) {
 
 // ─────────────────────────────────────────────────────────── main modal + button
 
+// ─────────────────────────────────────────────────────────── durak history
+
+type DurakHistoryPlayer = {
+  userId: string; name: string | null; image: string | null;
+  seatIdx: number; eloDelta: number | null; eloSnapshot: number | null; isDurak: boolean;
+};
+type DurakHistoryGame = {
+  id: string; variant: string; deckSize: number; maxPlayers: number;
+  timeControl: string; durakUserId: string | null;
+  startedAt: string | null; endedAt: string | null;
+  players: DurakHistoryPlayer[];
+};
+
+function DurakHistoryPanel({ userId }: { userId: string }) {
+  const [games, setGames] = useState<DurakHistoryGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
+  function load(p: number) {
+    setLoading(true);
+    fetch(`/api/durak-rooms/history?userId=${userId}&page=${p}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((d: DurakHistoryGame[]) => {
+        setGames(prev => p === 0 ? d : [...prev, ...d]);
+        setHasMore(d.length === 20);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(0); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (page > 0) load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading && page === 0) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[var(--text-muted)]"/></div>;
+  if (!loading && games.length === 0) return (
+    <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-muted)]">
+      <span className="text-3xl">🃏</span><p className="text-sm">No rated Durak matches yet</p>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {games.map(g => {
+          const me = g.players.find(p => p.userId === userId);
+          const iAmDurak = me?.isDurak ?? false;
+          const duration = g.startedAt && g.endedAt
+            ? fmtDuration(g.startedAt, g.endedAt) : null;
+
+          return (
+            <div key={g.id} className="flex flex-col gap-2 px-3 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+              {/* Header row */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={[
+                  "flex items-center gap-1 font-display font-bold text-xs",
+                  iAmDurak ? "text-red-400" : "text-emerald-400"
+                ].join(" ")}>
+                  {iAmDurak ? "😩 Дурак" : "😏 Выжил"}
+                </span>
+                <span className="text-[0.6rem] text-[var(--text-muted)]">
+                  {g.variant === "perevodnoy" ? "Переводной" : "Подкидной"} · {g.deckSize}🂠 · {g.players.length}p
+                  {duration && ` · ${duration}`}
+                </span>
+                {me?.eloDelta != null && (
+                  <span className={`text-xs font-bold ml-auto ${me.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {me.eloDelta >= 0 ? "+" : ""}{me.eloDelta} ELO
+                  </span>
+                )}
+                <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(g.endedAt)}</span>
+              </div>
+              {/* Players list */}
+              <div className="flex flex-wrap gap-1.5">
+                {[...g.players].sort((a, b) => a.seatIdx - b.seatIdx).map(p => (
+                  <div key={p.userId} className={[
+                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[0.65rem]",
+                    p.isDurak
+                      ? "bg-red-500/10 border border-red-500/20 text-red-300"
+                      : p.userId === userId
+                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                      : "bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)]"
+                  ].join(" ")}>
+                    <AvatarImg name={p.name} image={p.image} size={16} />
+                    <span className="font-semibold truncate max-w-[60px]">{p.name ?? "?"}</span>
+                    {p.isDurak && <span className="text-red-400">🃏</span>}
+                    {p.eloDelta != null && (
+                      <span className={p.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        {p.eloDelta >= 0 ? "+" : ""}{p.eloDelta}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {hasMore && (
+        <button onClick={() => setPage(p => p + 1)} disabled={loading}
+          className="mt-3 w-full py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors touch-manipulation">
+          {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<"chess"|"mine"|"battleship"|"checkers"|"billiards">("chess");
+  const [tab, setTab] = useState<"chess"|"mine"|"battleship"|"checkers"|"billiards"|"durak">("chess");
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -1515,10 +1621,10 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
           </button>
         </div>
 
-        <div className="flex border-b border-[var(--border-subtle)] shrink-0">
-          {([["chess","♟️ Chess"],["mine","💣 Mine"],["battleship","⚓ Battleship"],["checkers","🟤 Checkers"],["billiards","🎱 Billiards"]] as const).map(([key,label]) => (
+        <div className="flex border-b border-[var(--border-subtle)] shrink-0 overflow-x-auto">
+          {([["chess","♟️ Chess"],["mine","💣 Mine"],["battleship","⚓ Ship"],["checkers","🟤 Checkers"],["billiards","🎱 Pool"],["durak","🃏 Durak"]] as const).map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)}
-              className={["flex-1 py-3 text-xs sm:text-sm font-display font-semibold border-b-2 transition-colors touch-manipulation",
+              className={["flex-1 min-w-fit py-3 px-2 text-xs sm:text-sm font-display font-semibold border-b-2 transition-colors touch-manipulation whitespace-nowrap",
                 tab === key
                   ? "border-[var(--accent-orange)] text-[var(--text-primary)]"
                   : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -1534,6 +1640,7 @@ function MatchHistoryModal({ userId, onClose }: { userId: string; onClose: () =>
           {tab === "battleship" && <BattleshipHistoryPanel userId={userId} />}
           {tab === "checkers"   && <CheckersHistoryPanel   userId={userId} />}
           {tab === "billiards"  && <BilliardsHistoryPanel  userId={userId} />}
+          {tab === "durak"      && <DurakHistoryPanel      userId={userId} />}
         </div>
       </div>
     </div>,

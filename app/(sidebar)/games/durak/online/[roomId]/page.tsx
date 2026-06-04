@@ -13,6 +13,26 @@ import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
 import type { Card, TableSlot } from "@/lib/durak";
 import { SUIT_SYMBOL, SUIT_IS_RED, cardsEqual } from "@/lib/durak";
 
+function FlyingCard({ from, to }: { from: { x: number; y: number }; to: { x: number; y: number } }) {
+  const [arrived, setArrived] = useState(false);
+  useEffect(() => { const f = requestAnimationFrame(() => setArrived(true)); return () => cancelAnimationFrame(f); }, []);
+  const W = 52, H = 74;
+  return (
+    <div style={{
+      position: "fixed",
+      left: (arrived ? to.x : from.x) - W / 2,
+      top:  (arrived ? to.y : from.y) - H / 2,
+      transition: arrived ? "left 0.35s cubic-bezier(.2,1.3,.5,1), top 0.35s cubic-bezier(.2,1.3,.5,1), opacity 0.15s 0.3s" : "none",
+      opacity: arrived ? 0 : 1,
+      zIndex: 9999,
+      pointerEvents: "none",
+      transform: arrived ? "scale(0.7) rotate(8deg)" : "scale(1) rotate(0deg)",
+    }}>
+      <DurakCard faceDown size="sm" />
+    </div>
+  );
+}
+
 type PlayerData = {
   userId: string;
   name: string | null;
@@ -77,6 +97,9 @@ export default function DurakRoomPage() {
   const [catchWindow, setCatchWindow] = useState<number>(0); // ms remaining
   const [showPeek, setShowPeek] = useState<Card | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Dealing animation — tracks which cards have been "dealt" visually
+  const [dealStep, setDealStep] = useState(999); // start large (no anim until transition)
+  const prevStatusRef = useRef<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
   const lastFetch = useRef(0);
@@ -130,6 +153,67 @@ export default function DurakRoomPage() {
       clearInterval(ping);
     };
   }, [roomId, fetchRoom]);
+
+  // Refs for dealing + card-play animations
+  const onlineDeckRef    = useRef<HTMLDivElement>(null);
+  const onlineMyHandRef  = useRef<HTMLDivElement>(null);
+  const onlineTableRef   = useRef<HTMLDivElement>(null);
+  const onlineOppRef     = useRef<HTMLDivElement>(null);
+  const onlineFlyIdRef   = useRef(0);
+  const [onlineFlyCards, setOnlineFlyCards] = useState<{ id: number; from: {x:number;y:number}; to: {x:number;y:number} }[]>([]);
+  const prevTableLenRef  = useRef(0);
+  const isDealDone       = dealStep >= 999 || (room ? dealStep >= room.players.length * 6 : true);
+
+  // Dealing animation: fires when room transitions WAITING → PLAYING
+  useEffect(() => {
+    if (!room) return;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = room.status;
+    if (prev === "WAITING" && room.status === "PLAYING") {
+      const sortedPlayers = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
+      const total = sortedPlayers.length * 6;
+      setDealStep(0);
+      setOnlineFlyCards([]);
+      let step = 0;
+      const id = setInterval(() => {
+        step++;
+        setDealStep(step);
+        // Launch flying card from deck position
+        if (onlineDeckRef.current) {
+          const deckRect = onlineDeckRef.current.getBoundingClientRect();
+          const from = { x: deckRect.left + deckRect.width / 2, y: deckRect.top + deckRect.height / 2 };
+          // Target: if it's the current user's card, aim at their hand; otherwise generic upward
+          const targetIsMe = (step - 1) % sortedPlayers.length === sortedPlayers.findIndex(p => p.userId === myId);
+          const toEl = targetIsMe ? onlineMyHandRef.current : null;
+          const toRect = toEl?.getBoundingClientRect();
+          const to = toRect
+            ? { x: toRect.left + toRect.width / 2, y: toRect.top + toRect.height / 2 }
+            : { x: from.x + (Math.random() - 0.5) * 200, y: from.y - 150 };
+          const fid = ++onlineFlyIdRef.current;
+          setOnlineFlyCards(prev => [...prev, { id: fid, from, to }]);
+          setTimeout(() => setOnlineFlyCards(prev => prev.filter(c => c.id !== fid)), 450);
+        }
+        if (step >= total) clearInterval(id);
+      }, 220);
+      return () => clearInterval(id);
+    }
+  }, [room?.status, myId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a new card appears on the table (opponent played), fly it from opponent area to table
+  useEffect(() => {
+    if (!room || room.status !== "PLAYING") return;
+    const newLen = room.table.length;
+    if (newLen > prevTableLenRef.current && onlineOppRef.current && onlineTableRef.current) {
+      const fromRect = onlineOppRef.current.getBoundingClientRect();
+      const toRect   = onlineTableRef.current.getBoundingClientRect();
+      const from = { x: fromRect.left + fromRect.width / 2,  y: fromRect.top + fromRect.height / 2 };
+      const to   = { x: toRect.left   + toRect.width   / 2,  y: toRect.top   + toRect.height   / 2 };
+      const fid  = ++onlineFlyIdRef.current;
+      setOnlineFlyCards(prev => [...prev, { id: fid, from, to }]);
+      setTimeout(() => setOnlineFlyCards(prev => prev.filter(c => c.id !== fid)), 500);
+    }
+    prevTableLenRef.current = newLen;
+  }, [room?.table.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pending-cheat catch window countdown
   useEffect(() => {
@@ -390,6 +474,16 @@ export default function DurakRoomPage() {
   const canCatch = room.pendingCheat && catchWindow > 0 && isPlayer;
 
   return (
+    <>
+    <style>{`
+      @keyframes durak-deal {
+        from { transform: translateY(-48px) rotate(-6deg) scale(0.85); opacity: 0; }
+        to   { transform: translateY(0px)  rotate(0deg)  scale(1);    opacity: 1; }
+      }
+      .durak-card-in { animation: durak-deal 0.22s cubic-bezier(0.34,1.3,0.64,1) both; }
+    `}</style>
+    {/* Flying cards during deal animation */}
+    {onlineFlyCards.map(fc => <FlyingCard key={fc.id} from={fc.from} to={fc.to} />)}
     <main className="max-w-5xl mx-auto px-3 py-6">
       <div className="flex items-center justify-between mb-3">
         <Link href="/games/durak/online" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">
@@ -437,8 +531,8 @@ export default function DurakRoomPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
         {/* ── Table area ── */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col">
-          {/* Opponents */}
-          <div className="flex flex-wrap items-start justify-center gap-4 mb-4">
+          {/* Opponents — ref for flying card source */}
+          <div ref={onlineOppRef} className="flex flex-wrap items-start justify-center gap-4 mb-4">
             {others.map((p) => {
               const isAtk = p.seatIdx === room.attackerIdx;
               const isDef = p.seatIdx === room.defenderIdx;
@@ -459,15 +553,31 @@ export default function DurakRoomPage() {
                     <span className="text-xs font-display font-semibold text-[var(--text-primary)] max-w-[80px] truncate">{p.name ?? "?"}</span>
                   </div>
                   <div className="flex -space-x-3">
-                    {Array.from({ length: Math.min(p.cardCount, 8) }).map((_, i) => (
-                      <DurakCard key={i} faceDown size="sm" />
-                    ))}
+                    {Array.from({ length: Math.min(p.cardCount, 8) }).map((_, i) => {
+                      const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
+                      const pos = sortedSeats.findIndex(s => s.userId === p.userId);
+                      const di = i * room.players.length + Math.max(0, pos);
+                      const cardVisible = dealStep > di;
+                      return (
+                        <div key={i} className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
+                          style={{ opacity: cardVisible ? 1 : 0 }}>
+                          <DurakCard faceDown size="sm" />
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center gap-1 text-[0.6rem]">
-                    <span className="text-[var(--text-muted)]">{p.cardCount} 🂠</span>
-                    {isAtk && <span className="text-orange-400 font-bold">{t("attacker")}</span>}
-                    {isDef && <span className="text-red-400 font-bold">{t("defender")}</span>}
-                    {p.isOut && <span className="text-emerald-400 font-bold">{t("done")}</span>}
+                  <div className="flex items-center gap-1 text-xs font-bold">
+                    <span className={[
+                      "px-1.5 py-0.5 rounded font-mono",
+                      !isDealDone         ? "text-[var(--text-muted)] opacity-40"
+                      : p.cardCount === 0   ? "text-green-400 bg-green-500/10"
+                      : p.cardCount <= 3  ? "text-yellow-400 bg-yellow-500/10"
+                      : p.cardCount >= 10 ? "text-red-400 bg-red-500/10"
+                      :                     "text-[var(--text-muted)]"
+                    ].join(" ")}>🂠 {isDealDone ? p.cardCount : "?"}</span>
+                    {isAtk && <span className="text-orange-400">{t("attacker")}</span>}
+                    {isDef && <span className="text-red-400">{t("defender")}</span>}
+                    {p.isOut && <span className="text-emerald-400">{t("done")}</span>}
                   </div>
                 </div>
               );
@@ -477,19 +587,32 @@ export default function DurakRoomPage() {
           {/* Deck + trump + discard */}
           <div className="flex items-center justify-center gap-6 mb-4">
             <div className="flex flex-col items-center gap-1">
-              <div className="relative" style={{ width: 56, height: 80 }}>
+              {/* Deck with count badge */}
+              <div className="relative" ref={onlineDeckRef} style={{ width: 70, height: 100 }}>
                 {room.trumpCard && (
                   <DurakCard
                     card={room.trumpCard}
                     size="md"
-                    style={{ position: "absolute", left: 14, top: 8, transform: "rotate(90deg)" }}
+                    style={{ position: "absolute", left: 16, top: 10, transform: "rotate(90deg)", zIndex: 0 }}
                   />
                 )}
-                {room.deckCount > 0 && <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0 }} />}
+                {room.deckCount > 0 ? (
+                  <>
+                    <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0, zIndex: 1 }} />
+                    {/* Count badge directly on the deck */}
+                    <div className={[
+                      "absolute -top-2 -right-2 min-w-[24px] h-[24px] rounded-full flex items-center justify-center text-xs font-extrabold border-2 border-[var(--bg-elevated)] z-10",
+                      room.deckCount < 6  ? "bg-red-500 text-white"
+                      : room.deckCount < 16 ? "bg-yellow-400 text-black"
+                      :                       "bg-emerald-500 text-white"
+                    ].join(" ")}>
+                      {room.deckCount}
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-[70px] h-[100px] rounded-lg border border-dashed border-[var(--border-subtle)] flex items-center justify-center opacity-30 text-2xl" style={{ zIndex: 1 }}>🂠</div>
+                )}
               </div>
-              <span className="text-[0.65rem] text-[var(--text-muted)]">
-                {t("deck")}: {room.deckCount}
-              </span>
             </div>
 
             <div className="flex flex-col items-center gap-1">
@@ -520,6 +643,7 @@ export default function DurakRoomPage() {
 
           {/* Table slots — drop zone for attack */}
           <div
+            ref={onlineTableRef}
             className="flex-1 min-h-[140px] flex flex-wrap items-center justify-center gap-4 py-4 rounded-xl bg-[var(--bg-secondary)]/40 border border-[var(--border-subtle)] mb-4 transition-colors"
             style={{ borderColor: dragCard && isAttackerSide && room.table.length === 0 ? "var(--accent-orange)" : undefined }}
             onDragOver={(e) => {
@@ -609,10 +733,24 @@ export default function DurakRoomPage() {
 
           {/* Action bar */}
           {isPlayer && !finished && (
+            <div className="flex flex-col gap-2 items-center">
+              {/* Contextual hint */}
+              {(() => {
+                if (isAttackerSide && room.table.length === 0)
+                  return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl w-full text-center">🗡 Выберите карту и атакуйте или перетащите на стол</p>;
+                if (isAttackerSide && room.table.length > 0)
+                  return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl w-full text-center">🗡 Подкиньте ещё карту или нажмите Пас</p>;
+                if (isDefender && !selected)
+                  return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl w-full text-center">🛡 Выберите карту → нажмите на атакующую карту, или перетащите</p>;
+                if (isDefender && selected)
+                  return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl w-full text-center">🛡 Нажмите на атакующую карту для отбоя</p>;
+                return null;
+              })()}
+
             <div className="flex flex-wrap items-center gap-2 justify-center">
               {isAttackerSide && room.table.length === 0 && (
                 <button onClick={() => doAttack()} disabled={!selected || busy} className={actBtn("orange")}>
-                  {t("attack")}
+                  🗡 {t("attack")}
                 </button>
               )}
               {isAttackerSide && room.table.length > 0 && (
@@ -634,9 +772,8 @@ export default function DurakRoomPage() {
                   )}
                   <button onClick={doTake} disabled={busy} className={actBtn("red")}>
                     <Hand size={14} className="inline mr-1" />
-                    {t("take")}
+                    😮 {t("take")}
                   </button>
-                  <span className="text-[0.7rem] text-[var(--text-muted)]">{t("defendHint")}</span>
                 </>
               )}
 
@@ -652,6 +789,7 @@ export default function DurakRoomPage() {
                 </div>
               )}
             </div>
+            </div>
           )}
 
           {err && <p className="text-red-400 text-xs text-center mt-2">{err}</p>}
@@ -661,29 +799,59 @@ export default function DurakRoomPage() {
             <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <span className="text-[0.7rem] text-[var(--text-muted)]">
-                  {t("yourHand")} ({room.myHand.length})
+                  {t("yourHand")} ({isDealDone ? room.myHand.length : "?"})
                 </span>
                 {room.mySeatIdx === room.attackerIdx && <span className="text-[0.65rem] text-orange-400 font-bold">{t("youAttack")}</span>}
                 {isDefender && <span className="text-[0.65rem] text-red-400 font-bold">{t("youDefend")}</span>}
               </div>
-              <div className="flex flex-wrap items-end justify-center gap-2">
-                {room.myHand.map((card, i) => (
-                  <DurakCard
-                    key={`${card.suit}-${card.rank}-${i}`}
-                    card={card}
-                    size="lg"
-                    selected={!!selected && cardsEqual(selected, card)}
-                    onClick={() => onCardClick(card)}
-                    draggable={!finished}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("durak-card", JSON.stringify(card));
-                      setDragCard(card);
-                      setSelected(card);
-                    }}
-                    onDragEnd={() => setDragCard(null)}
-                  />
-                ))}
-              </div>
+              {/* Scrollable hand when many cards, flex-wrap otherwise */}
+              <div ref={onlineMyHandRef}>
+              {room.myHand.length > 8 ? (
+                <div style={{ overflowX: "auto", paddingBottom: 6, paddingTop: 2 }}>
+                  <div style={{ display: "flex", gap: 4, padding: "0 4px", width: "max-content" }}>
+                    {room.myHand.map((card, i) => {
+                      const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
+                      const myPos = sortedSeats.findIndex(p => p.userId === myId);
+                      const di = i * room.players.length + Math.max(0, myPos);
+                      const cardVisible = dealStep > di;
+                      return (
+                        <div key={`${card.suit}-${card.rank}-${i}`}
+                          className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
+                          style={{ opacity: cardVisible ? 1 : 0, flexShrink: 0 }}>
+                          <DurakCard card={card} size="md"
+                            selected={!!selected && cardsEqual(selected, card)}
+                            onClick={() => onCardClick(card)}
+                            draggable={!finished && cardVisible}
+                            onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
+                            onDragEnd={() => setDragCard(null)} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end justify-center gap-2">
+                  {room.myHand.map((card, i) => {
+                    const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
+                    const myPos = sortedSeats.findIndex(p => p.userId === myId);
+                    const di = i * room.players.length + Math.max(0, myPos);
+                    const cardVisible = dealStep > di;
+                    return (
+                      <div key={`${card.suit}-${card.rank}-${i}`}
+                        className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
+                        style={{ opacity: cardVisible ? 1 : 0, transition: "opacity 0.1s" }}>
+                        <DurakCard card={card} size="lg"
+                          selected={!!selected && cardsEqual(selected, card)}
+                          onClick={() => onCardClick(card)}
+                          draggable={!finished && cardVisible}
+                          onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
+                          onDragEnd={() => setDragCard(null)} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              </div> {/* onlineMyHandRef wrapper */}
             </div>
           )}
         </div>
@@ -708,6 +876,7 @@ export default function DurakRoomPage() {
         </div>
       </div>
     </main>
+    </>
   );
 }
 

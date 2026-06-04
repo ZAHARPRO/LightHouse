@@ -21,6 +21,7 @@ export async function GET(req: Request) {
       OR: [{ hostId: userId }, { guestId: userId }],
       status: "FINISHED",
       guestId: { not: null },
+      rated: true,
     },
     orderBy: { endedAt: "desc" },
     skip: page * PER_PAGE,

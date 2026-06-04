@@ -352,6 +352,7 @@ export default function BilliardsOnlineRoom() {
   const [hoverCuePos, setHoverCuePos] = useState<{ x: number; y: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
+  const [replayFinalBalls, setReplayFinalBalls] = useState<Ball[] | null>(null);
   const [animBalls, setAnimBalls] = useState<Ball[] | null>(null);
   const [viewingOpponentResult, setViewingOpponentResult] = useState(false);
   const [showFinished, setShowFinished] = useState(false);
@@ -428,6 +429,21 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
     shotQueueRef.current.push({ frames, sound, angle, power, byOpponent });
     processQueue();
   }, [processQueue]);
+
+  // Central handler for all replay navigation — cancels running animation and clears stale state
+  const handleSetReplayIdx = useCallback((i: number | null) => {
+    cancelAnimationFrame(rafRef.current);
+    ++animIdRef.current;
+    shotQueueRef.current = [];
+    animatingRef.current = false;
+    setReplayFinalBalls(null);
+    if (i === null) {
+      lastAnimatedCountRef.current = shotsRef.current.length;
+      if (roomRef.current?.ballsJson) confirmedStateRef.current = deserializeState(roomRef.current.ballsJson);
+    }
+    setAnimBalls(null);
+    setReplayIdx(i);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -584,6 +600,9 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
         animFrameIdxRef.current = i;
       }
       if (i >= frames.length) {
+        // Keep the final frame as a static snapshot instead of snapping back to pre-shot state
+        const lastFrame = frames[frames.length - 1];
+        if (lastFrame) setReplayFinalBalls(lastFrame);
         setAnimBalls(null); animShotRef.current = null; animatingRef.current = false;
         return; // do NOT call processQueue — replay mode must not drain the live animation queue
       }
@@ -597,14 +616,16 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
 
   const displayState = useMemo<BilliardsState>(() => {
     if (replayIdx !== null && shots.length > 0) {
+      // Show state BEFORE shot replayIdx so the canvas is stable before animation starts
       let s = initialState();
-      for (let i = 0; i <= replayIdx && i < shots.length; i++) s = simulateShot(s, shots[i].shot).newState;
+      for (let i = 0; i < replayIdx; i++) s = simulateShot(s, shots[i].shot).newState;
       return s;
     }
     if (room?.ballsJson) return deserializeState(room.ballsJson);
     return initialState();
   }, [replayIdx, room?.ballsJson, shots]);
-  const ballsToDraw = animBalls ?? displayState.balls;
+  // Priority: live animation > post-replay snapshot > pre-shot static state
+  const ballsToDraw = animBalls ?? replayFinalBalls ?? displayState.balls;
 
   // Main table canvas — DPR-scaled for sharp rendering
   useEffect(() => {
@@ -984,27 +1005,49 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
               className="px-5 py-2 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 no-underline">
               Back to Lobby
             </Link>
-            <button onClick={() => { setAnimBalls(null); cancelAnimationFrame(rafRef.current); setReplayIdx(0); }}
+            <button onClick={() => handleSetReplayIdx(0)}
               className="px-5 py-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-semibold text-sm hover:text-[var(--text-primary)]">
-              Replay
+              {replayIdx !== null ? "Restart" : "Replay"}
             </button>
           </div>
         </div>
-        {replayIdx !== null && (
-          <div className="mt-6 flex flex-col items-center gap-3">
+        {replayIdx !== null && shots.length > 0 && (
+          <div className="mt-4 flex flex-col items-center gap-3 w-full">
             <canvas ref={canvasRef} style={{ width: (TABLE_W + 2 * CANVAS_PAD) * scale, height: (TABLE_H + 2 * CANVAS_PAD) * scale }} />
-            <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
-              cancelAnimationFrame(rafRef.current);
-              ++animIdRef.current; // invalidate any running tick (live or replay)
-              shotQueueRef.current = []; // discard queued live animations
-              animatingRef.current = false;
-              if (i === null) {
-                // Exiting replay — resync so future opponent shots animate from correct baseline
-                lastAnimatedCountRef.current = shots.length;
-                if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
-              }
-              setAnimBalls(null); setReplayIdx(i);
-            }} />
+
+            {/* Shot info + navigation */}
+            <div className="w-full max-w-md flex flex-col gap-2 px-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+                  {shots[replayIdx]?.by === "host" ? room.hostName : room.guestName}
+                  {(shots[replayIdx]?.pocketed.filter(id => id !== 0).length ?? 0) > 0 && (
+                    <span className="text-green-400">+{shots[replayIdx].pocketed.filter(id => id !== 0).length}</span>
+                  )}
+                  {shots[replayIdx]?.foul && <span className="text-red-400">FOUL</span>}
+                  {shots[replayIdx]?.winner && <span className="text-yellow-400">🏆</span>}
+                </span>
+                <span className="font-mono text-[var(--text-muted)]">{replayIdx + 1} / {shots.length}</span>
+              </div>
+
+              <input
+                type="range" min={0} max={shots.length - 1} value={replayIdx}
+                onChange={e => handleSetReplayIdx(+e.target.value)}
+                className="w-full accent-orange-500 cursor-pointer"
+              />
+
+              <div className="flex items-center justify-center gap-1">
+                <button onClick={() => handleSetReplayIdx(0)} disabled={replayIdx === 0}
+                  className="px-2.5 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 font-mono text-sm leading-none">«</button>
+                <button onClick={() => handleSetReplayIdx(Math.max(0, replayIdx - 1))} disabled={replayIdx === 0}
+                  className="p-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+                  <ChevronLeft size={15} /></button>
+                <button onClick={() => handleSetReplayIdx(Math.min(shots.length - 1, replayIdx + 1))} disabled={replayIdx === shots.length - 1}
+                  className="p-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30">
+                  <ChevronRight size={15} /></button>
+                <button onClick={() => handleSetReplayIdx(shots.length - 1)} disabled={replayIdx === shots.length - 1}
+                  className="px-2.5 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 font-mono text-sm leading-none">»</button>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -1145,29 +1188,10 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
             <div className="flex items-center justify-between mb-2 shrink-0">
               <span className="text-xs font-display font-semibold text-[var(--text-secondary)]">Shot History</span>
               {replayIdx !== null && (
-                <button onClick={() => {
-                  cancelAnimationFrame(rafRef.current);
-                  ++animIdRef.current;
-                  shotQueueRef.current = [];
-                  animatingRef.current = false;
-                  lastAnimatedCountRef.current = shots.length;
-                  if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
-                  setAnimBalls(null); setReplayIdx(null);
-                }} className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">Live »</button>
+                <button onClick={() => handleSetReplayIdx(null)} className="text-[0.65rem] text-[var(--accent-orange)] font-display font-semibold hover:opacity-70">Live »</button>
               )}
             </div>
-            <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={(i) => {
-              cancelAnimationFrame(rafRef.current);
-              ++animIdRef.current; // invalidate any running tick (live or replay)
-              shotQueueRef.current = []; // discard queued live animations
-              animatingRef.current = false;
-              if (i === null) {
-                // Exiting replay — resync so future opponent shots animate from correct baseline
-                lastAnimatedCountRef.current = shots.length;
-                if (room.ballsJson) confirmedStateRef.current = deserializeState(room.ballsJson);
-              }
-              setAnimBalls(null); setReplayIdx(i);
-            }} />
+            <ReplayShotPanel shots={shots} replayIdx={replayIdx} hostName={room.hostName} guestName={room.guestName} onReplay={handleSetReplayIdx} />
           </div>
 
           {isPlayer && (

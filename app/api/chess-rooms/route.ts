@@ -3,10 +3,26 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 const TTL = 60_000;
+const WAITING_MAX_AGE_MS = 30 * 60_000;
+const PLAYING_STALE_MS   = 10 * 60_000;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rated = searchParams.get("rated") === "true";
+
+  const waitingDeadline = new Date(Date.now() - WAITING_MAX_AGE_MS);
+  const waitingStale    = new Date(Date.now() - 5 * 60_000);
+  const stalePlaying    = new Date(Date.now() - PLAYING_STALE_MS);
+  await Promise.all([
+    prisma.chessRoom.updateMany({
+      where: { status: "WAITING", OR: [{ createdAt: { lt: waitingDeadline } }, { updatedAt: { lt: waitingStale } }] },
+      data: { status: "FINISHED" },
+    }),
+    prisma.chessRoom.updateMany({
+      where: { status: "PLAYING", updatedAt: { lt: stalePlaying } },
+      data: { status: "FINISHED" },
+    }),
+  ]).catch(() => {});
 
   const [waiting, playing] = await Promise.all([
     prisma.chessRoom.findMany({

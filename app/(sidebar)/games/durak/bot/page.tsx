@@ -931,7 +931,7 @@ function DurakBotGame() {
                     <div style={{ position: "relative", height: 64, width: Math.max(48, count * 12 + 36) }}>
                       {botHand.map((_, i) => {
                         const di = dealIdx(botIdx, i);
-                        const visible = dealStep > di;
+                        const visible = isDealDone || dealStep > di;
                         return (
                           <div
                             key={i}
@@ -1057,25 +1057,36 @@ function DurakBotGame() {
                       </div>
                     );
                   })}
+                  {/* Transfer affordance — dashed slot shown when drag card can transfer */}
+                  {(() => {
+                    if (!isPlayerDefender || !dragCard || game.animating || variant !== "perevodnoy") return null;
+                    const nextDef = nextActive(game.defenderIdx, playerCount, game.outPlayers);
+                    if (!canTransfer(dragCard, game.tableSlots, variant, game.hands[nextDef]?.length ?? 99)) return null;
+                    return (
+                      <div
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-400/70 text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                        style={{ width: 70, height: 116, flexShrink: 0 }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          try {
+                            const c = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                            applyTransfer(c);
+                          } catch { /* ignore */ }
+                          setDragCard(null);
+                        }}
+                      >
+                        <span className="text-xl leading-none">⇒</span>
+                        <span className="text-[0.6rem] font-bold">{t("transfer")}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
-              {/* Action buttons + hint */}
+              {/* Action buttons */}
               {game.phase !== "finished" && !game.animating && (
                 <div className="flex flex-col gap-2 mt-2 w-full items-center">
-                  {/* Contextual hint bar */}
-                  {(() => {
-                    if (isPlayerAttacker && game.phase === "attack" && game.tableSlots.length === 0)
-                      return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl text-center">🗡 {t("youAttackHint")}</p>;
-                    if (isPlayerAttacker && game.phase === "attack" && game.tableSlots.length > 0)
-                      return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl text-center">🗡 {t("youAttackMoreHint")}</p>;
-                    if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx === null)
-                      return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl text-center">🛡 {t("defendHint")}</p>;
-                    if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx !== null)
-                      return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl text-center">🛡 {t("defendHint")}</p>;
-                    return null;
-                  })()}
-
                   <div className="flex gap-2">
                     {canPlayerPass && (
                       <button
@@ -1126,26 +1137,15 @@ function DurakBotGame() {
                       const key = `${card.suit}-${card.rank}`;
                       const isShaking = shakeCardKey === key;
                       const di = dealIdx(PLAYER_IDX, i);
-                      const cardVisible = dealStep > di;
-                      let isPlayable = false;
-                      if (!game.animating && game.phase !== "finished") {
-                        if (isPlayerAttacker && game.phase === "attack") isPlayable = canAttack(card, game.tableSlots);
-                        else if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx !== null) {
-                          const slot = game.tableSlots[selectedSlotIdx];
-                          if (slot && !slot.defense) isPlayable = canDefend(slot.attack, card, game.trumpSuit);
-                        } else if (isPlayerDefender && game.phase === "defense") {
-                          isPlayable = game.tableSlots.some((s) => !s.defense && canDefend(s.attack, card, game.trumpSuit));
-                        } else if (isPlayerAttacker && game.phase === "throwing") isPlayable = canAttack(card, game.tableSlots);
-                      }
+                      const cardVisible = isDealDone || dealStep > di;
                       return (
                         <div key={key} className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : isShaking ? "animate-bounce" : ""}
                           style={{ opacity: cardVisible ? 1 : 0, flexShrink: 0 }}>
                           <DurakCard card={card} size="md" onClick={() => handlePlayerCardClick(card)}
-                            dimmed={!isPlayable && isPlayerTurn}
                             draggable={isPlayerTurn && !game.animating}
                             onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); if (isPlayerDefender && game.phase === "defense") setSelectedSlotIdx(null); }}
                             onDragEnd={() => setDragCard(null)}
-                            className={["hover:-translate-y-3", isPlayable && isPlayerTurn ? "ring-2 ring-[var(--accent-orange)]/60" : ""].join(" ")} />
+                            className="hover:-translate-y-3" />
                         </div>
                       );
                     })}
@@ -1168,32 +1168,8 @@ function DurakBotGame() {
                   const key = `${card.suit}-${card.rank}`;
                   const isShaking = shakeCardKey === key;
 
-                  // Determine if card is playable
-                  let isPlayable = false;
-                  if (!game.animating && game.phase !== "finished") {
-                    if (isPlayerAttacker && game.phase === "attack") {
-                      isPlayable = canAttack(card, game.tableSlots);
-                    } else if (isPlayerDefender && game.phase === "defense" && selectedSlotIdx !== null) {
-                      const slot = game.tableSlots[selectedSlotIdx];
-                      if (slot && !slot.defense) {
-                        isPlayable = canDefend(slot.attack, card, game.trumpSuit);
-                        if (!isPlayable && variant === "perevodnoy") {
-                          const nextDef = nextActive(game.defenderIdx, playerCount, game.outPlayers);
-                          isPlayable = canTransfer(card, game.tableSlots, variant, game.hands[nextDef]?.length ?? 0);
-                        }
-                      }
-                    } else if (isPlayerDefender && game.phase === "defense") {
-                      // card is playable if it can defend any undefended slot
-                      isPlayable = game.tableSlots.some(
-                        (s) => !s.defense && canDefend(s.attack, card, game.trumpSuit)
-                      );
-                    } else if (isPlayerAttacker && game.phase === "throwing") {
-                      isPlayable = canAttack(card, game.tableSlots);
-                    }
-                  }
-
                   const di = dealIdx(PLAYER_IDX, i);
-                  const cardVisible = dealStep > di;
+                  const cardVisible = isDealDone || dealStep > di;
 
                   return (
                     <div
@@ -1215,19 +1191,14 @@ function DurakBotGame() {
                         card={card}
                         size="lg"
                         onClick={() => handlePlayerCardClick(card)}
-                        dimmed={!isPlayable && isPlayerTurn}
                         draggable={isPlayerTurn && !game.animating}
                         onDragStart={(e) => {
                           e.dataTransfer.setData("durak-card", JSON.stringify(card));
                           setDragCard(card);
-                          // If defending and no slot selected yet, highlight all valid slots
                           if (isPlayerDefender && game.phase === "defense") setSelectedSlotIdx(null);
                         }}
                         onDragEnd={() => setDragCard(null)}
-                        className={[
-                          "hover:-translate-y-4",
-                          isPlayable && isPlayerTurn ? "ring-2 ring-[var(--accent-orange)]/60" : "",
-                        ].join(" ")}
+                        className="hover:-translate-y-4"
                       />
                     </div>
                   );

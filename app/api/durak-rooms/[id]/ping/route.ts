@@ -16,19 +16,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const room = await prisma.durakRoom.findUnique({ where: { id }, include: roomInclude });
   if (!room) return NextResponse.json({ ok: true });
 
-  // Waiting room: touch updatedAt so the stale-cleanup in GET knows it's alive.
+  // Waiting rooms: nothing to do, cleanup uses createdAt (not updatedAt) now.
   if (room.status === "WAITING") {
-    const isHost = room.hostId === session.user.id;
-    if (isHost) {
-      // Touch the room so updatedAt reflects last ping
-      await prisma.durakRoom.update({ where: { id }, data: { lastMoveAt: new Date() } }).catch(() => {});
-    }
     return NextResponse.json({ ok: true });
   }
 
-  if (room.status === "PLAYING" && room.timeControl !== "none") {
-    const changed = await resolveTimeouts(room);
-    if (changed) broadcast(id, { type: "update" });
+  if (room.status === "PLAYING") {
+    // Always touch updatedAt so lobby knows someone is still watching
+    await prisma.durakRoom.update({ where: { id }, data: { lastMoveAt: room.lastMoveAt } }).catch(() => {});
+    if (room.timeControl !== "none") {
+      const changed = await resolveTimeouts(room);
+      if (changed) broadcast(id, { type: "update" });
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -3,18 +3,37 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 const TTL = 60_000;
-const WAITING_STALE_MS = 5 * 60_000; // close empty waiting rooms after 5 min
+// Waiting rooms expire after 30 min from creation regardless of pings (pings refresh updatedAt,
+// so using createdAt is the only reliable way to enforce max lifetime).
+const WAITING_MAX_AGE_MS = 30 * 60_000;
+const PLAYING_STALE_MS = 10 * 60_000;  // close playing rooms after 10 min without any player ping
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rated = searchParams.get("rated") === "true";
 
-  // Silently close waiting rooms that haven't been pinged/updated for 5+ min
-  const staleAt = new Date(Date.now() - WAITING_STALE_MS);
-  await prisma.durakRoom.updateMany({
-    where: { status: "WAITING", updatedAt: { lt: staleAt } },
-    data: { status: "FINISHED" },
-  }).catch(() => {});
+  // Close old/abandoned waiting rooms and abandoned playing rooms.
+  // Use createdAt for max age (pings refresh updatedAt so it can't be trusted for WAITING).
+  // Also close if updatedAt is stale — catches rooms where the host left without cancelling.
+  const waitingDeadline = new Date(Date.now() - WAITING_MAX_AGE_MS);
+  const waitingStale = new Date(Date.now() - 5 * 60_000);
+  const stalePlaying = new Date(Date.now() - PLAYING_STALE_MS);
+  await Promise.all([
+    prisma.durakRoom.updateMany({
+      where: {
+        status: "WAITING",
+        OR: [
+          { createdAt: { lt: waitingDeadline } },
+          { updatedAt: { lt: waitingStale } },
+        ],
+      },
+      data: { status: "FINISHED" },
+    }),
+    prisma.durakRoom.updateMany({
+      where: { status: "PLAYING", updatedAt: { lt: stalePlaying } },
+      data: { status: "FINISHED" },
+    }),
+  ]).catch(() => {});
 
   const select = {
     id: true,

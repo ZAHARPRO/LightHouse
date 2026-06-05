@@ -11,7 +11,7 @@ import DurakCard from "@/components/DurakCard";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
 import type { Card, TableSlot } from "@/lib/durak";
-import { SUIT_SYMBOL, SUIT_IS_RED, cardsEqual, canAttack, canDefend, canTransfer } from "@/lib/durak";
+import { SUIT_SYMBOL, SUIT_IS_RED, cardsEqual, canTransfer } from "@/lib/durak";
 import type { MoveRecord } from "@/lib/durak-engine";
 
 function MoveTimer({ lastMoveAt, timeLimitSec, isMyTurn }: { lastMoveAt: string | null; timeLimitSec: number; isMyTurn: boolean }) {
@@ -140,7 +140,6 @@ export default function DurakRoomPage() {
   const [showPeek, setShowPeek] = useState<Card | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [shakeCardKey, setShakeCardKey] = useState<string | null>(null);
   const [previewMove, setPreviewMove] = useState<{ action: string; card?: { suit: string; rank: string }; name: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const roomUrl = typeof window !== "undefined" ? `${window.location.origin}/games/durak/online/${roomId}` : "";
@@ -610,9 +609,10 @@ export default function DurakRoomPage() {
     if (!c) return;
     if (await post("move", { action: "throw", card: c })) setSelected(null);
   }
-  async function doTransfer() {
-    if (!selected) return;
-    if (await post("move", { action: "transfer", card: selected })) setSelected(null);
+  async function doTransfer(card?: Card) {
+    const c = card ?? selected;
+    if (!c) return;
+    if (await post("move", { action: "transfer", card: c })) setSelected(null);
   }
   async function doDefend(slotIdx: number, card?: Card) {
     const c = card ?? selected;
@@ -628,25 +628,14 @@ export default function DurakRoomPage() {
 
   const canCatch = room.pendingCheat && catchWindow > 0 && isPlayer;
 
-  function shakeCard(key: string) {
-    setShakeCardKey(key);
-    setTimeout(() => setShakeCardKey(null), 500);
-  }
-
-  const trumpSuitStr = (room.trumpSuit ?? "S") as "S" | "H" | "D" | "C";
-
-  function cardIsPlayable(card: Card): boolean {
-    if (!room || !isPlayer || finished) return false;
-    if (isAttackerSide && room.phase === "attack") return canAttack(card, room.table);
-    if (isDefender && room.phase === "defense") {
-      if (room.variant === "perevodnoy") {
-        const nextDef = room.players.find(p => p.seatIdx !== room.defenderIdx && p.seatIdx !== room.attackerIdx && !p.isOut);
-        if (nextDef && canTransfer(card, room.table, "perevodnoy", nextDef.cardCount)) return true;
-      }
-      return room.table.some(s => !s.defense && canDefend(s.attack, card, trumpSuitStr));
-    }
-    return false;
-  }
+  const isMainAttacker = room.mySeatIdx === room.attackerIdx;
+  // Next defender = next active player in seat order after current defender (same as engine's nextActive)
+  const activeSorted = room.players.filter(p => !p.isOut).sort((a, b) => a.seatIdx - b.seatIdx);
+  const defPosInActive = activeSorted.findIndex(p => p.seatIdx === room.defenderIdx);
+  const nextDefPlayer = activeSorted[(defPosInActive + 1) % Math.max(1, activeSorted.length)];
+  const activeCard = selected ?? dragCard;
+  const canDoTransfer = isDefender && !finished && !!activeCard && room.variant === "perevodnoy" &&
+    canTransfer(activeCard, room.table, "perevodnoy", nextDefPlayer?.cardCount ?? 99);
 
   const moves: MoveRecord[] = (() => { try { return JSON.parse(room.movesJson ?? "[]"); } catch { return []; } })();
 
@@ -757,7 +746,7 @@ export default function DurakRoomPage() {
                       <div className="flex -space-x-3">
                         {Array.from({ length: Math.min(p.cardCount, 5) }).map((_, i) => {
                           const di = i * room.players.length + Math.max(0, pos);
-                          const cardVisible = dealStep > di;
+                          const cardVisible = isDealDone || dealStep > di;
                           return (
                             <div key={i} className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""} style={{ opacity: cardVisible ? 1 : 0 }}>
                               <DurakCard faceDown size="xs" />
@@ -898,6 +887,27 @@ export default function DurakRoomPage() {
                 );
               })
             )}
+            {/* Transfer affordance — appears to the right when defender can transfer */}
+            {canDoTransfer && (
+              <button
+                onClick={() => doTransfer()}
+                disabled={busy}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const c = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                    await doTransfer(c);
+                  } catch { /* ignore */ }
+                  setDragCard(null);
+                }}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-400/70 text-blue-400 hover:bg-blue-500/10 hover:border-blue-400 transition-colors disabled:opacity-40"
+                style={{ width: 70, height: 116, flexShrink: 0 }}
+              >
+                <span className="text-xl leading-none">⇒</span>
+                <span className="text-[0.6rem] font-bold">{t("transfer")}</span>
+              </button>
+            )}
           </div>
           </div>{/* end flex row: deck + table */}
 
@@ -927,55 +937,15 @@ export default function DurakRoomPage() {
           {/* Action bar */}
           {isPlayer && !finished && (
             <div className="flex flex-col gap-2 items-center">
-              {/* Contextual hint */}
-              {(() => {
-                if (isAttackerSide && room.table.length === 0)
-                  return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl w-full text-center">🗡 {t("youAttackHint")}</p>;
-                if (isAttackerSide && room.table.length > 0)
-                  return <p className="text-sm font-bold text-[var(--accent-orange)] bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 px-4 py-2 rounded-xl w-full text-center">🗡 {t("youAttackMoreHint")}</p>;
-                if (isDefender && !selected)
-                  return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl w-full text-center">🛡 {t("youDefendPickSlot")}</p>;
-                if (isDefender && selected)
-                  return <p className="text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl w-full text-center">🛡 {t("youDefendPickCard")}</p>;
-                return null;
-              })()}
 
             <div className="flex flex-wrap items-center gap-2 justify-center">
-              {isAttackerSide && room.table.length === 0 && (
-                <button onClick={() => doAttack()} disabled={!selected || busy} className={actBtn("orange")}>
-                  🗡 {t("attack")}
-                </button>
-              )}
-              {isAttackerSide && room.table.length > 0 && (
-                <button onClick={() => doThrow()} disabled={!selected || busy} className={actBtn("orange")}>
-                  {t("throwIn")}
-                </button>
-              )}
               {isDefender && (
-                <>
-                  {room.variant === "perevodnoy" && (
-                    <button onClick={doTransfer} disabled={!selected || busy} className={actBtn("indigo")}>
-                      {t("transfer")}
-                    </button>
-                  )}
-                  <button onClick={doTake} disabled={busy} className={actBtn("red")}>
-                    <Hand size={14} className="inline mr-1" />
-                    😮 {t("take")}
-                  </button>
-                </>
+                <button onClick={doTake} disabled={busy} className={actBtn("red")}>
+                  <Hand size={14} className="inline mr-1" />
+                  😮 {t("take")}
+                </button>
               )}
 
-              {/* Resign */}
-              {isPlayer && !finished && (
-                <button
-                  onClick={() => { if (confirm("Concede the game?")) post("move", { action: "resign" }); }}
-                  disabled={busy}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-red-500/40 hover:text-red-400 text-xs font-display font-semibold transition-colors disabled:opacity-40"
-                  title="Resign"
-                >
-                  🏳 Resign
-                </button>
-              )}
 
               {/* Cheat buttons (unfair only) */}
               {!room.fairPlay && (
@@ -1019,21 +989,18 @@ export default function DurakRoomPage() {
                     const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
                     const myPos = sortedSeats.findIndex(p => p.userId === myId);
                     const di = i * room.players.length + Math.max(0, myPos);
-                    const cardVisible = dealStep > di;
-                    const playable = cardIsPlayable(card);
-                    const isShaking = shakeCardKey === `${card.suit}-${card.rank}`;
+                    const cardVisible = isDealDone || dealStep > di;
                     return (
                       <div key={key}
-                        className={[cardVisible && dealStep <= di + 1 ? "durak-card-in" : "", isShaking ? "animate-bounce" : ""].join(" ")}
+                        className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
                         style={{ opacity: cardVisible ? 1 : 0, flexShrink: 0, transition: "transform 0.15s ease" }}>
                         <DurakCard card={card} size="md"
                           selected={!!selected && cardsEqual(selected, card)}
-                          dimmed={!playable && isPlayer && !finished}
-                          onClick={() => { if (!playable && isPlayer && !finished) shakeCard(`${card.suit}-${card.rank}`); onCardClick(card); }}
+                          onClick={() => onCardClick(card)}
                           draggable={!finished && cardVisible}
                           onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
                           onDragEnd={() => setDragCard(null)}
-                          className={["hover:-translate-y-3 transition-transform", playable && isPlayer ? "ring-2 ring-[var(--accent-orange)]/60" : ""].join(" ")} />
+                          className="hover:-translate-y-3 transition-transform" />
                       </div>
                     );
                   })}
@@ -1045,6 +1012,17 @@ export default function DurakRoomPage() {
 
         {/* ── Sidebar ── */}
         <div className="flex flex-col gap-2">
+                        {isPlayer && !finished && (
+                <button
+                  onClick={() => { if (confirm("Concede the game?")) post("move", { action: "resign" }); }}
+                  disabled={busy}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-red-500/40 hover:text-red-400 text-xs font-display font-semibold transition-colors disabled:opacity-40"
+                  title="Resign"
+                >
+                  🏳 Resign
+                </button>
+              )}
+
 
         {/* Info panel */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl p-2.5 text-[0.65rem] text-[var(--text-secondary)] flex flex-col gap-1">

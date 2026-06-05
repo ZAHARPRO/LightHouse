@@ -4,12 +4,13 @@ import { useState } from "react";
 import type { Card } from "@/lib/durak";
 import { SUIT_SYMBOL, SUIT_IS_RED } from "@/lib/durak";
 
-type Size = "sm" | "md" | "lg";
+type Size = "xs" | "sm" | "md" | "lg";
 
 const DIMS: Record<Size, { w: number; h: number; rank: string; suit: string; corner: string }> = {
-  sm: { w: 52, h: 74,  rank: "text-sm",    suit: "text-xl",   corner: "text-[0.65rem]" },
-  md: { w: 70, h: 100, rank: "text-lg",    suit: "text-3xl",  corner: "text-[0.75rem]" },
-  lg: { w: 90, h: 130, rank: "text-2xl",   suit: "text-4xl",  corner: "text-sm" },
+  xs: { w: 32, h: 46,  rank: "text-[0.55rem]", suit: "text-sm",    corner: "text-[0.45rem]" },
+  sm: { w: 52, h: 74,  rank: "text-sm",        suit: "text-xl",    corner: "text-[0.65rem]" },
+  md: { w: 70, h: 100, rank: "text-lg",        suit: "text-3xl",   corner: "text-[0.75rem]" },
+  lg: { w: 90, h: 130, rank: "text-2xl",       suit: "text-4xl",   corner: "text-sm" },
 };
 
 interface DurakCardProps {

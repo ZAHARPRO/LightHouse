@@ -829,7 +829,12 @@
     "daysInRow": "днів поспіль",
     "startWatching": "Починайте дивитись!",
     "points": "Очки",
-    "level": "Рівень {level}"
+    "level": "Рівень {level}",
+    "activeGames": "Активні ігри",
+    "activeGamesEmpty": "Зараз немає активних ігор.",
+    "returnToGame": "Повернутись",
+    "expiresIn": "Програш через {time}",
+    "vs": "проти"
   },
   "common": {
     "cancel": "Скасувати",
@@ -988,6 +993,8 @@
     "openFullPage": "Відкрити сторінку кімнати"
   },
   "durak": {
+    "returnToGame": "Повернутися до гри",
+    "cancelRoom": "Скасувати кімнату",
     "selectCardToAttack": "Виберіть карту для атаки",
     "addCardOrPass": "Додайте карту або пасуйте",
     "throwRule": "Хто може підкидати",
@@ -1041,8 +1048,8 @@
     "startGame": "Почати гру",
     "spectating": "Спостереження",
     "roomNotFound": "Кімнату не знайдено.",
-    "attacker": "АТК",
-    "defender": "ЗАХ",
+    "attacker": "Атакує",
+    "defender": "Захищається",
     "done": "вийшов",
     "you": "Ти",
     "log": "Лог",

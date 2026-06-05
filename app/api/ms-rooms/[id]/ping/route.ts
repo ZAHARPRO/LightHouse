@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { forfeitMinesweeper } from "@/lib/forfeit";
 
-const DISCONNECT_MS    = 30_000;
+const DISCONNECT_MS    = 5 * 60_000;
 const LOBBY_ABANDON_MS = 5 * 60 * 1000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {

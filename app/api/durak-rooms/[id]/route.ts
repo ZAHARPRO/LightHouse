@@ -34,6 +34,37 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json(sanitizeRoom(room, userId));
 }
 
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const room = await prisma.durakRoom.findUnique({ where: { id } });
+  if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (room.hostId !== session.user.id) return NextResponse.json({ error: "Not host" }, { status: 403 });
+  if (room.status !== "WAITING") return NextResponse.json({ error: "Game already started" }, { status: 400 });
+
+  const body = (await req.json()) as {
+    variant?: string;
+    deckSize?: number;
+    maxPlayers?: number;
+    timeControl?: string;
+    throwRule?: string;
+    fairPlay?: boolean;
+  };
+
+  const data: Record<string, unknown> = {};
+  if (body.variant !== undefined)     data.variant     = body.variant === "perevodnoy" ? "perevodnoy" : "podkidnoy";
+  if (body.deckSize !== undefined)    data.deckSize    = body.deckSize === 52 ? 52 : 36;
+  if (body.maxPlayers !== undefined)  data.maxPlayers  = Math.min(6, Math.max(2, body.maxPlayers));
+  if (body.timeControl !== undefined) data.timeControl = ["15","30","60"].includes(body.timeControl) ? body.timeControl : "none";
+  if (body.throwRule !== undefined)   data.throwRule   = body.throwRule === "neighbors" ? "neighbors" : "all";
+  if (body.fairPlay !== undefined)    data.fairPlay    = body.fairPlay !== false;
+
+  await prisma.durakRoom.update({ where: { id }, data });
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();

@@ -4,10 +4,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { X, MessageCircle, Radio, Film, FileText, Swords } from "lucide-react";
+import { X, MessageCircle, Radio, Film, FileText, Swords, Gamepad2 } from "lucide-react";
 import { BADGE_DEFS } from "@/lib/badges";
 import UserAvatar from "./UserAvatar";
 import type { NotifEvent, MatchGame } from "@/lib/notifications-sse";
+import type { ActiveGame } from "@/app/api/active-games/route";
 
 /* ─── Types ─── */
 
@@ -21,11 +22,12 @@ type ContentToast =
   | { kind: "video"; id: string; title: string; authorName: string | null; authorImage: string | null; authorTier: string; createdAt: string };
 
 type AnyToast =
-  | { _key: string; _tag: "badge";   data: BadgeToast }
-  | { _key: string; _tag: "dm";      data: DMToast }
-  | { _key: string; _tag: "stream";  data: StreamToast }
-  | { _key: string; _tag: "content"; data: ContentToast }
-  | { _key: string; _tag: "match";   data: MatchToast };
+  | { _key: string; _tag: "badge";       data: BadgeToast }
+  | { _key: string; _tag: "dm";          data: DMToast }
+  | { _key: string; _tag: "stream";      data: StreamToast }
+  | { _key: string; _tag: "content";     data: ContentToast }
+  | { _key: string; _tag: "match";       data: MatchToast }
+  | { _key: string; _tag: "active_game"; data: ActiveGame };
 
 const GAME_META: Record<MatchGame, { icon: string; label: string; color: string }> = {
   chess:       { icon: "♟️", label: "Chess",       color: "#f59e0b" },
@@ -57,9 +59,19 @@ function gameRoomUrl(game: MatchGame, roomId: string): string {
   return `/games/${game}/online/${roomId}`;
 }
 
+function fmtTimeLeft(ms: number): string {
+  if (ms <= 0) return "0s";
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+}
+
 /* ─── Constants ─── */
 
-const BADGE_SEEN_KEY   = "lh_badge_seen_at";
+const BADGE_SEEN_KEY         = "lh_badge_seen_at";
+const ACTIVE_GAME_SESSION_KEY = "lh_active_game_notified";
 const DM_SEEN_KEY      = "lh_dm_seen_at";
 const CONTENT_SEEN_KEY = "lh_content_seen_at";
 const AUTO_DISMISS_MS  = 7000;
@@ -318,6 +330,61 @@ function ContentToastItem({ data, onDone }: { data: ContentToast; onDone: () => 
   );
 }
 
+function ActiveGameToastItem({ data, onDone }: { data: ActiveGame; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number>(() =>
+    data.expiresAt !== null ? Math.max(0, data.expiresAt - Date.now()) : 5 * 60_000,
+  );
+  const dismiss = () => { setLeaving(true); setTimeout(onDone, 320); };
+  useAutoDismiss(dismiss);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const left = data.expiresAt !== null ? Math.max(0, data.expiresAt - Date.now()) : 0;
+      setTimeLeft(left);
+      if (left <= 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [data.expiresAt]);
+
+  const urgent = timeLeft < 60_000;
+  const color  = urgent ? "#ef4444" : "#f97316";
+
+  return (
+    <ToastShell color={color} leaving={leaving} onClose={dismiss}>
+      <Link
+        href={data.url}
+        onClick={dismiss}
+        className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3 no-underline"
+      >
+        <div
+          className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-[1.5rem] relative"
+          style={{ background: `${color}18`, border: `1.5px solid ${color}40` }}
+        >
+          {data.icon}
+          <div
+            className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 border-[var(--bg-card)]"
+            style={{ background: color }}
+          >
+            <Gamepad2 size={8} className="text-white" />
+          </div>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-display font-bold uppercase tracking-[0.06em] mb-[0.1rem]" style={{ color }}>
+            Active game!
+          </p>
+          <p className="font-display font-extrabold text-[0.875rem] text-[var(--text-primary)] truncate">
+            {data.label}{data.opponentName ? ` · vs ${data.opponentName}` : ""}
+          </p>
+          <p className="text-[0.75rem] truncate" style={{ color: urgent ? "#f87171" : "var(--text-muted)" }}>
+            {timeLeft > 0 ? `Forfeits in ${fmtTimeLeft(timeLeft)}` : "Forfeit imminent"} · tap to return
+          </p>
+        </div>
+      </Link>
+    </ToastShell>
+  );
+}
+
 /* ─── Main Hub ─── */
 
 export default function NotificationHub() {
@@ -336,6 +403,19 @@ export default function NotificationHub() {
       return [...prev, toast];
     });
   }, []);
+
+  /* ── Active games check (once per session) ── */
+  const checkActiveGames = useCallback(() => {
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(ACTIVE_GAME_SESSION_KEY)) return;
+    fetch("/api/active-games")
+      .then(r => r.json())
+      .then((games: ActiveGame[]) => {
+        if (!Array.isArray(games) || games.length === 0) return;
+        if (typeof sessionStorage !== "undefined") sessionStorage.setItem(ACTIVE_GAME_SESSION_KEY, "1");
+        games.forEach(g => addToast({ _key: `active-${g.game}-${g.roomId}`, _tag: "active_game", data: g }));
+      })
+      .catch(() => {});
+  }, [addToast]);
 
   /* ── Badge check ── */
   const checkBadges = useCallback(() => {
@@ -455,9 +535,10 @@ export default function NotificationHub() {
     const t = setTimeout(() => {
       checkBadges();
       checkDMs();
+      checkActiveGames();
     }, 1000);
     return () => clearTimeout(t);
-  }, [status, checkBadges, checkDMs]);
+  }, [status, checkBadges, checkDMs, checkActiveGames]);
 
   /* ── Fallback DM poll ── */
   useEffect(() => {
@@ -501,6 +582,9 @@ export default function NotificationHub() {
           )}
           {toast._tag === "match" && (
             <MatchResultToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
+          )}
+          {toast._tag === "active_game" && (
+            <ActiveGameToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
           )}
         </div>
       ))}

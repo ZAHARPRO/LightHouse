@@ -97,9 +97,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }),
   ]);
 
-  // Process initial bot turns if the first attacker is a bot
-  await processBotTurns(id);
-
+  // Broadcast immediately so clients see the PLAYING state (dealing animation fires)
   broadcast(id, { type: "update" });
+  // Bots act in background with per-turn delays — fire-and-forget
+  void processBotTurns(id);
   return NextResponse.json({ ok: true });
 }

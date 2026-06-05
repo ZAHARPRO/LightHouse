@@ -16,12 +16,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const room = await prisma.durakRoom.findUnique({ where: { id }, include: roomInclude });
   if (!room) return NextResponse.json({ ok: true });
 
-  // Close abandoned waiting rooms (host gone a long time).
+  // Waiting room: touch updatedAt so the stale-cleanup in GET knows it's alive.
   if (room.status === "WAITING") {
-    const age = Date.now() - new Date(room.createdAt).getTime();
-    if (age > WAITING_ABANDON_MS && room.players.length < 2) {
-      await prisma.durakRoom.update({ where: { id, status: "WAITING" }, data: { status: "FINISHED" } }).catch(() => {});
-      return NextResponse.json({ lobbyClosed: true });
+    const isHost = room.hostId === session.user.id;
+    if (isHost) {
+      // Touch the room so updatedAt reflects last ping
+      await prisma.durakRoom.update({ where: { id }, data: { lastMoveAt: new Date() } }).catch(() => {});
     }
     return NextResponse.json({ ok: true });
   }

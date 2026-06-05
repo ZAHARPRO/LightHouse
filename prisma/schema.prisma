@@ -1027,6 +1027,7 @@ model DurakRoom {
   // Bot slots: [{seatIdx, difficulty, handJson, isOut}]
   botsJson       String @default("[]") @db.Text
   chatJson       String @default("[]") @db.Text
+  movesJson      String @default("[]") @db.Text
   spectatorsJson String @default("[]") @db.Text
 
   startedAt  DateTime?

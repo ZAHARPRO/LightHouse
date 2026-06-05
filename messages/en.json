@@ -837,7 +837,12 @@
     "daysInRow": "days in a row",
     "startWatching": "Start watching!",
     "points": "Points",
-    "level": "Level {level}"
+    "level": "Level {level}",
+    "activeGames": "Active Games",
+    "activeGamesEmpty": "No active games right now.",
+    "returnToGame": "Return",
+    "expiresIn": "Forfeits in {time}",
+    "vs": "vs"
   },
   "common": {
     "cancel": "Cancel",
@@ -988,6 +993,8 @@
     "openFullPage": "Open full room page"
   },
   "durak": {
+    "cancelRoom": "Cancel room",
+   "returnToGame": "Return to game",
     "selectCardToAttack": "Select a card to attack",
     "addCardOrPass": "Add a card or pass",
     "throwRule": "Who can throw in",

@@ -3,10 +3,18 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 const TTL = 60_000;
+const WAITING_STALE_MS = 5 * 60_000; // close empty waiting rooms after 5 min
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rated = searchParams.get("rated") === "true";
+
+  // Silently close waiting rooms that haven't been pinged/updated for 5+ min
+  const staleAt = new Date(Date.now() - WAITING_STALE_MS);
+  await prisma.durakRoom.updateMany({
+    where: { status: "WAITING", updatedAt: { lt: staleAt } },
+    data: { status: "FINISHED" },
+  }).catch(() => {});
 
   const select = {
     id: true,
@@ -58,7 +66,7 @@ export async function GET(req: Request) {
       fairPlay: r.fairPlay,
       createdAt: r.createdAt,
       host: r.host,
-      players: r.players.map((p) => ({ name: p.user.name, image: p.user.image })),
+      players: r.players.map((p) => ({ userId: p.userId, name: p.user.name, image: p.user.image })),
       playerCount: r.players.length,
       spectatorCount: spectators.filter((s) => now - s.at < TTL).length,
     };

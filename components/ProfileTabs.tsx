@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck, BarChart2, Eye, ThumbsUp, MessageSquare, Users, Video, Flame, Star, Settings2 } from "lucide-react";
+import { Play, FileText, Award, Plus, Upload, Zap, ShieldCheck, BarChart2, Eye, ThumbsUp, MessageSquare, Users, Video, Flame, Star, Settings2, Gamepad2 } from "lucide-react";
+import type { ActiveGame } from "@/app/api/active-games/route";
 import VideoManager from "./VideoManager";
 import PostManager from "./PostManager";
 import BadgeShowcaseEditor from "./BadgeShowcaseEditor";
@@ -41,7 +42,7 @@ type Stats = {
   postCount: number;
 };
 
-type TabId = "videos" | "community" | "badges" | "stats";
+type TabId = "videos" | "community" | "badges" | "stats" | "active_games";
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -61,10 +62,11 @@ export default function ProfileTabs({
   const t = useTranslations("profileTabs");
 
   const TABS = [
-    { id: "videos"    as TabId, label: t("videos"),    icon: Play },
-    { id: "community" as TabId, label: t("community"), icon: FileText },
-    { id: "badges"    as TabId, label: t("badges"),    icon: Award },
-    { id: "stats"     as TabId, label: t("stats"),     icon: BarChart2 },
+    { id: "videos"       as TabId, label: t("videos"),      icon: Play },
+    { id: "community"    as TabId, label: t("community"),   icon: FileText },
+    { id: "badges"       as TabId, label: t("badges"),      icon: Award },
+    { id: "stats"        as TabId, label: t("stats"),       icon: BarChart2 },
+    { id: "active_games" as TabId, label: t("activeGames"), icon: Gamepad2 },
   ];
 
   const [tab, setTab] = useState<TabId>(() => {
@@ -73,12 +75,24 @@ export default function ProfileTabs({
     return (TABS.some(t => t.id === p) ? p : "videos") as TabId;
   });
   const [showcaseOpen, setShowcaseOpen] = useState(false);
+  const [activeGames, setActiveGames] = useState<ActiveGame[] | null>(null);
+  const [activeGamesLoading, setActiveGamesLoading] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get("tab");
     if (p && TABS.some(t => t.id === p)) setTab(p as TabId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (tab !== "active_games" || activeGames !== null) return;
+    setActiveGamesLoading(true);
+    fetch("/api/active-games")
+      .then(r => r.json())
+      .then((data: ActiveGame[]) => setActiveGames(data))
+      .catch(() => setActiveGames([]))
+      .finally(() => setActiveGamesLoading(false));
+  }, [tab, activeGames]);
 
   return (
     <div>
@@ -102,7 +116,7 @@ export default function ProfileTabs({
                 ].join(" ")}
               >
                 <Icon size={13} /> {label}
-                {id !== "stats" && (
+                {id !== "stats" && id !== "active_games" && (
                   <span className="ml-0.5 text-xs opacity-70">
                     ({id === "videos" ? videos.length : id === "community" ? posts.length : rewards.length})
                   </span>
@@ -261,6 +275,74 @@ export default function ProfileTabs({
           </div>
         </div>
       )}
+      {/* Active Games tab */}
+      {tab === "active_games" && (
+        <div>
+          {activeGamesLoading && (
+            <div className="flex justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[var(--accent-orange)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {!activeGamesLoading && activeGames !== null && activeGames.length === 0 && (
+            <div className="card p-12 text-center">
+              <Gamepad2 size={32} className="mx-auto mb-4 text-[var(--text-muted)]" />
+              <p className="text-[var(--text-secondary)]">{t("activeGamesEmpty")}</p>
+            </div>
+          )}
+          {!activeGamesLoading && activeGames && activeGames.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {activeGames.map(g => (
+                <ActiveGameCard key={`${g.game}-${g.roomId}`} game={g} returnLabel={t("returnToGame")} expiresLabel={t("expiresIn")} vsLabel={t("vs")} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActiveGameCard({ game, returnLabel, expiresLabel, vsLabel }: { game: ActiveGame; returnLabel: string; expiresLabel: string; vsLabel: string }) {
+  const [timeLeft, setTimeLeft] = useState<number>(() =>
+    game.expiresAt !== null ? Math.max(0, game.expiresAt - Date.now()) : 5 * 60_000,
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const left = game.expiresAt !== null ? Math.max(0, game.expiresAt - Date.now()) : 0;
+      setTimeLeft(left);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [game.expiresAt]);
+
+  function fmt(ms: number) {
+    if (ms <= 0) return "0s";
+    const s = Math.ceil(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+  }
+
+  const urgent = timeLeft < 60_000;
+
+  return (
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 flex items-center gap-4">
+      <span className="text-[1.75rem] shrink-0">{game.icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-display font-bold text-[var(--text-primary)] text-sm">
+          {game.label}{game.opponentName ? ` · ${vsLabel} ${game.opponentName}` : ""}
+        </p>
+        <p className="text-[0.75rem]" style={{ color: urgent ? "#f87171" : "var(--text-muted)" }}>
+          {expiresLabel.replace("{time}", fmt(timeLeft))}
+        </p>
+      </div>
+      <Link
+        href={game.url}
+        className="shrink-0 px-4 py-1.5 rounded-lg bg-[var(--accent-orange)] text-white text-sm font-display font-bold hover:opacity-90 transition-opacity no-underline"
+      >
+        {returnLabel}
+      </Link>
     </div>
   );
 }

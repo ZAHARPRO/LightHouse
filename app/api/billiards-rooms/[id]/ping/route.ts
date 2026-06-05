@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateEloDelta } from "@/lib/elo";
 import { awardBilliardsEloBadges } from "@/lib/awardBadge";
 
-const DISCONNECT_MS_UNTIMED = 30_000;
+const DISCONNECT_MS_UNTIMED = 5 * 60_000;
 const DISCONNECT_MS_TIMED   = 5 * 60 * 1000;
 const LOBBY_ABANDON_MS      = 5 * 60 * 1000;
 

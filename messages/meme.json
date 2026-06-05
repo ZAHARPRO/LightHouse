@@ -829,7 +829,12 @@
     "daysInRow": "днів поспіль",
     "startWatching": "починай дивитись!",
     "points": "очочки",
-    "level": "рівень {level}"
+    "level": "рівень {level}",
+    "activeGames": "Active Games rn",
+    "activeGamesEmpty": "no active games bruh",
+    "returnToGame": "Run it back",
+    "expiresIn": "L incoming in {time}",
+    "vs": "vs"
   },
   "common": {
     "cancel": "скасувати",
@@ -988,6 +993,8 @@
     "openFullPage": "Open full room page"
   },
   "durak": {
+    "returnToGame": "Повенутися до гри",
+    "cancelRoom": "Скасувати кімнату",
     "selectCardToAttack": "Виберіть карту для атаки",
     "addCardOrPass": "Додайте карту або пасуйте",
     "throwRule": "who can pile on",

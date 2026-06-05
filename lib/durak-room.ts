@@ -59,6 +59,8 @@ export type ClientRoomData = {
   chat: ChatMsg[];
   spectatorCount: number;
   botsJson: string;
+  movesJson: string;
+  lastMoveAt: string | null; // ISO timestamp — client uses it for live countdown
 };
 
 type SlotWithUser = {
@@ -94,8 +96,10 @@ type RoomWithSlots = {
   phase: string;
   pendingCheatJson: string | null;
   winner: string | null;
+  lastMoveAt: Date | null;
   botsJson: string;
   chatJson: string;
+  movesJson: string;
   spectatorsJson: string;
   players: SlotWithUser[];
 };
@@ -207,6 +211,8 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
     chat: parseJSON<ChatMsg[]>(room.chatJson, []),
     spectatorCount,
     botsJson: room.botsJson,
+    movesJson: room.movesJson,
+    lastMoveAt: room.lastMoveAt ? room.lastMoveAt.toISOString() : null,
   };
 }
 

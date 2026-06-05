@@ -14,9 +14,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const result = await applyMove(id, session.user.id, body);
   if (!result.ok) return NextResponse.json({ error: result.error ?? "Illegal move" }, { status: 400 });
 
-  // Process any consecutive bot turns immediately after the human move
-  await processBotTurns(id);
-
+  // Broadcast the human's move immediately, then bots act in background
   broadcast(id, { type: "update" });
+  void processBotTurns(id);
   return NextResponse.json({ ok: true });
 }

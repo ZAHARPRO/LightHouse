@@ -22,6 +22,9 @@ import {
 import { finalizeRatedDurak, roomInclude } from "@/lib/durak-room";
 import { awardBadge } from "@/lib/awardBadge";
 import { getBotAction, type BotDifficulty, type ClientBotState } from "@/lib/durak-bot";
+import { broadcast } from "@/lib/durak-sse";
+
+const BOT_TURN_DELAY_MS = 750; // ms between consecutive bot turns
 
 type SlotRow = {
   id: string;
@@ -58,6 +61,7 @@ type RoomRow = {
   lastMoveAt: Date | null;
   winner: string | null;
   botsJson: string;
+  movesJson: string;
   players: SlotRow[];
 };
 
@@ -200,7 +204,7 @@ function withEmptySeatsOut(room: RoomRow, state: Mutable): Set<number> {
 }
 
 /** Persist the mutated state back to the room + slots. */
-async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null): Promise<void> {
+async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null, move?: MoveRecord): Promise<void> {
   const ops: Array<Promise<unknown>> = [];
   // Real player slots
   for (const slot of room.players) {
@@ -222,6 +226,16 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
   }));
 
   const finished = state.phase === "finished";
+
+  let newMovesJson = room.movesJson ?? "[]";
+  if (move) {
+    try {
+      const arr = JSON.parse(newMovesJson) as MoveRecord[];
+      arr.push(move);
+      newMovesJson = JSON.stringify(arr);
+    } catch { newMovesJson = JSON.stringify([move]); }
+  }
+
   ops.push(
     prisma.durakRoom.update({
       where: { id: room.id },
@@ -234,6 +248,7 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
         phase: state.phase,
         lastMoveAt: new Date(),
         botsJson: JSON.stringify(updatedBots),
+        movesJson: newMovesJson,
         ...(finished ? { status: "FINISHED", winner: winnerUserId, endedAt: new Date(), pendingCheatJson: null } : {}),
       },
     }),
@@ -259,7 +274,17 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
   }
 }
 
-export type MoveAction = "attack" | "defend" | "throw" | "transfer" | "take" | "pass";
+export type MoveRecord = {
+  seq: number;
+  action: string;
+  seatIdx: number;
+  name: string | null;
+  card?: Card;
+  slotIdx?: number;
+  at: number;
+};
+
+export type MoveAction = "attack" | "defend" | "throw" | "transfer" | "take" | "pass" | "resign";
 
 export interface MoveInput {
   action: MoveAction;
@@ -375,11 +400,28 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       break;
     }
 
+    case "resign": {
+      // Player concedes — they become the Durak immediately.
+      state.phase = "finished";
+      winnerUserId = userId;
+      break;
+    }
+
     default:
       return { ok: false, error: "Unknown action" };
   }
 
-  await persist(room, state, winnerUserId);
+  const existingMoves = (() => { try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; } })();
+  const moveRecord: MoveRecord = {
+    seq: existingMoves + 1,
+    action: input.action,
+    seatIdx: mySeat,
+    name: mySlot ? null : null, // name resolved client-side
+    card: input.card,
+    slotIdx: input.attackSlotIdx,
+    at: Date.now(),
+  };
+  await persist(room, state, winnerUserId, moveRecord);
   return { ok: true };
 }
 
@@ -403,7 +445,10 @@ export async function processBotTurns(roomId: string): Promise<void> {
     if (state.phase === "finished") return;
 
     // Which seat needs to act?
-    const actingSeat = state.phase === "defense" ? state.defenderIdx : state.attackerIdx;
+    // When in defense phase but all cards are already beaten, the ATTACKER
+    // needs to act next (pass or throw more) — not the defender.
+    const allDefended = state.phase === "defense" && state.table.length > 0 && state.table.every(s => s.defense !== null);
+    const actingSeat = (state.phase === "defense" && !allDefended) ? state.defenderIdx : state.attackerIdx;
     const actingBot = bots.find((b) => b.seatIdx === actingSeat);
     if (!actingBot) return; // human's turn
 
@@ -416,13 +461,16 @@ export async function processBotTurns(roomId: string): Promise<void> {
       .filter((s) => s !== actingSeat)
       .map((s) => state.hands[s]?.length ?? 0);
 
+    // When all cards are defended, tell the bot it's "attack" phase (so it passes or throws)
+    const effectivePhase = allDefended ? "attack" : state.phase as ClientBotState["phase"];
+
     const botState: ClientBotState = {
       hand: state.hands[actingSeat] ?? [],
       tableSlots: state.table,
       deckCount: state.deck.length,
       trumpSuit,
       opponentCardCounts,
-      phase: state.phase as ClientBotState["phase"],
+      phase: effectivePhase,
       attackerIdx: state.attackerIdx,
       defenderIdx: state.defenderIdx,
       myIdx: actingSeat,
@@ -491,8 +539,20 @@ export async function processBotTurns(roomId: string): Promise<void> {
       }
     }
 
-    await persist(room, state, winnerUserId);
+    const existingLen = (() => { try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; } })();
+    const botMoveRecord: MoveRecord = {
+      seq: existingLen + 1,
+      action: action.action,
+      seatIdx: actingSeat,
+      name: null,
+      card: "card" in action ? action.card : undefined,
+      slotIdx: "slotIdx" in action ? action.slotIdx : undefined,
+      at: Date.now(),
+    };
+    await persist(room, state, winnerUserId, botMoveRecord);
+    broadcast(roomId, { type: "update" }); // push update after each bot move
     if ((state.phase as string) === "finished") return;
+    await new Promise<void>((r) => setTimeout(r, BOT_TURN_DELAY_MS));
   }
 }
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Spade, XCircle, ShieldOff, Loader2, AlertTriangle, Crown } from "lucide-react";
+import { Spade, XCircle, ShieldOff, Loader2, AlertTriangle, Crown, RotateCcw } from "lucide-react";
 
 type RoomData = {
   id: string;
@@ -182,8 +182,8 @@ export default function DurakAdminClient({ rooms, cheaters }: { rooms: RoomData[
                 ))}
               </div>
 
-              {r.status !== "FINISHED" && (
-                <div>
+              <div className="flex gap-2 flex-wrap">
+                {r.status !== "FINISHED" && (
                   <button
                     onClick={() => act("close", "close" + r.id, { roomId: r.id })}
                     disabled={busy["close" + r.id]}
@@ -192,8 +192,18 @@ export default function DurakAdminClient({ rooms, cheaters }: { rooms: RoomData[
                     {busy["close" + r.id] ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
                     Force Close
                   </button>
-                </div>
-              )}
+                )}
+                {r.rated && r.players.some((p) => p.eloDelta != null) && (
+                  <button
+                    onClick={() => act("revert-elo", "revert" + r.id, { roomId: r.id })}
+                    disabled={busy["revert" + r.id]}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50"
+                  >
+                    {busy["revert" + r.id] ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                    Revert ELO
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

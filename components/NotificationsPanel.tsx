@@ -203,6 +203,10 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
     () => parseInt(localStorage.getItem("lh_notif_activity_seen") ?? "0", 10)
   );
 
+  // Capture seen-at values frozen at panel-open time so badges stay visible while
+  // the panel is open, even after auto-marking as seen below.
+  const siteNewsSeenAtOpen = useRef(siteNewsSeenAt);
+
   function markSeen(key: string, setter: (n: number) => void) {
     const now = Date.now();
     setter(now);
@@ -214,7 +218,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
     if (commitsLoading || postsLoading || videosLoading || dmsLoading || siteNewsLoading || activityLoading) return;
 
     const unread =
-      siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAt).length +
+      siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAtOpen.current).length +
       commits.filter(c => new Date(c.date).getTime() > devNewsSeenAt).length +
       (posts.filter(p => new Date(p.createdAt).getTime() > contentSeenAt).length +
        videos.filter(v => new Date(v.createdAt).getTime() > contentSeenAt).length) +
@@ -286,6 +290,12 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-mark site news as seen when the panel opens so that on the next session
+  // only genuinely new posts (published after this moment) appear as unread.
+  useEffect(() => {
+    if (!siteNewsLoading) markSeen("lh_notif_sitenews_seen", setSiteNewsSeenAt);
+  }, [siteNewsLoading]);
+
   function handleMouseLeave(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     if (
@@ -338,7 +348,7 @@ const NotificationsPanel = forwardRef<HTMLDivElement, Props>(function Notificati
         <Section
           icon={<Megaphone size={14} />}
           label="Site News"
-          badge={siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAt).length}
+          badge={siteNews.filter(n => new Date(n.createdAt).getTime() > siteNewsSeenAtOpen.current).length}
           onOpen={() => markSeen("lh_notif_sitenews_seen", setSiteNewsSeenAt)}
         >
           {siteNewsLoading && (

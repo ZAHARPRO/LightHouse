@@ -715,6 +715,11 @@ export async function resolveTimeouts(room: RoomRow): Promise<boolean> {
       const attackerSlot = room.players.find((p) => p.seatIdx === state.attackerIdx);
       state.phase = "finished";
       winnerUserId = attackerSlot?.userId ?? null;
+      // Ensure remaining active non-durak players get finishPosition in persist
+      for (const slot of room.players) {
+        if (slot.seatIdx !== state.attackerIdx && !state.outPlayers.has(slot.seatIdx))
+          state.outPlayers.add(slot.seatIdx);
+      }
     } else {
       winnerUserId = resolveBout(room, state, false);
     }
@@ -725,6 +730,11 @@ export async function resolveTimeouts(room: RoomRow): Promise<boolean> {
       const attackerSlot = room.players.find((p) => p.seatIdx === state.attackerIdx);
       state.phase = "finished";
       winnerUserId = attackerSlot?.userId ?? null;
+      // Ensure remaining active non-durak players get finishPosition in persist
+      for (const slot of room.players) {
+        if (slot.seatIdx !== state.attackerIdx && !state.outPlayers.has(slot.seatIdx))
+          state.outPlayers.add(slot.seatIdx);
+      }
     } else {
       state.attackerIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
       state.defenderIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);

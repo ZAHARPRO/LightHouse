@@ -1490,6 +1490,373 @@ function BilliardsHistoryPanel({ userId }: { userId: string }) {
 
 // ─────────────────────────────────────────────────────────── durak history
 
+// ── Durak replay types ────────────────────────────────────────────────────
+
+type DurakReplayMove = {
+  seq: number; action: string; seatIdx: number; at: number;
+  card?: { suit: string; rank: string };
+  slotIdx?: number;
+};
+type DurakReplayFrame = {
+  move: DurakReplayMove;
+  table: { attack: { suit: string; rank: string }; defense: { suit: string; rank: string } | null }[];
+  attackerSeat: number;
+  defenderSeat: number;
+  boutEnd: "taken" | "defended" | null;
+};
+type DurakReplayData = {
+  id: string; variant: string; deckSize: number;
+  trumpSuit: string; trumpCard: { suit: string; rank: string } | null;
+  durakUserId: string | null; startedAt: string | null; endedAt: string | null;
+  rated: boolean;
+  players: { userId: string; seatIdx: number; name: string | null; image: string | null; eloDelta: number | null; finishPosition: number | null; isDurak: boolean }[];
+  moves: DurakReplayMove[];
+};
+
+// ── Frame builder ─────────────────────────────────────────────────────────
+
+function buildDurakFrames(moves: DurakReplayMove[], playerCount: number): DurakReplayFrame[] {
+  const pc = Math.max(playerCount, 2);
+  const frames: DurakReplayFrame[] = [];
+  let table: DurakReplayFrame["table"] = [];
+  let attackerSeat = 0;
+  let defenderSeat = 1 % pc;
+
+  for (let i = 0; i < moves.length; i++) {
+    const m = moves[i];
+    let boutEnd: DurakReplayFrame["boutEnd"] = null;
+
+    if (m.action === "attack") {
+      if (table.length > 0) table = []; // clear previous pass-resolved bout
+      attackerSeat = m.seatIdx;
+      if (defenderSeat === attackerSeat) defenderSeat = (attackerSeat + 1) % pc;
+      if (m.card) table = [...table, { attack: m.card, defense: null }];
+
+    } else if (m.action === "defend") {
+      defenderSeat = m.seatIdx;
+      if (m.card && m.slotIdx != null)
+        table = table.map((s, j) => j === m.slotIdx ? { ...s, defense: m.card! } : s);
+
+    } else if (m.action === "throw") {
+      if (m.card) table = [...table, { attack: m.card, defense: null }];
+
+    } else if (m.action === "transfer") {
+      if (m.card) table = [...table, { attack: m.card, defense: null }];
+      const na = defenderSeat;
+      let nd = (defenderSeat + 1) % pc;
+      if (nd === na) nd = (nd + 1) % pc;
+      attackerSeat = na;
+      defenderSeat = nd;
+
+    } else if (m.action === "take") {
+      boutEnd = "taken";
+    } else if (m.action === "pass") {
+      const next = moves[i + 1];
+      if (!next || next.action === "attack") boutEnd = "defended";
+    } else if (m.action === "resign") {
+      boutEnd = "taken";
+    }
+
+    frames.push({ move: m, table: table.map(s => ({ ...s })), attackerSeat, defenderSeat, boutEnd });
+
+    if (m.action === "take" || m.action === "resign") table = [];
+  }
+  return frames;
+}
+
+// ── Suit helpers (inlined to avoid re-importing) ──────────────────────────
+
+const D_SYM: Record<string, string>  = { S: "♠", H: "♥", D: "♦", C: "♣" };
+const D_RED: Record<string, boolean> = { S: false, H: true, D: true, C: false };
+
+function DurakMiniCard({ card, size = "xs" }: { card: { suit: string; rank: string }; size?: "xs" | "sm" }) {
+  const w = size === "sm" ? 52 : 36;
+  const h = size === "sm" ? 74 : 52;
+  const fs = size === "sm" ? "0.65rem" : "0.48rem";
+  const cf = size === "sm" ? 20 : 13;
+  const color = D_RED[card.suit] ? "#dc2626" : "#1a1a2e";
+  const sym   = D_SYM[card.suit] ?? "?";
+  return (
+    <div className="relative rounded-md shrink-0 select-none" style={{
+      width: w, height: h,
+      background: "linear-gradient(160deg,#fffef8 0%,#f5e8cc 100%)",
+      border: "1.5px solid #c8b89a",
+      boxShadow: "0 2px 5px rgba(0,0,0,0.28)",
+    }}>
+      <div className="absolute top-0.5 left-1 leading-none" style={{ color }}>
+        <div style={{ fontSize: fs, fontWeight: 700, lineHeight: 1 }}>{card.rank}</div>
+        <div style={{ fontSize: fs, lineHeight: 1 }}>{sym}</div>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center" style={{ color }}>
+        <span style={{ fontSize: cf, lineHeight: 1 }}>{sym}</span>
+      </div>
+      <div className="absolute bottom-0.5 right-1 leading-none rotate-180" style={{ color }}>
+        <div style={{ fontSize: fs, fontWeight: 700, lineHeight: 1 }}>{card.rank}</div>
+        <div style={{ fontSize: fs, lineHeight: 1 }}>{sym}</div>
+      </div>
+    </div>
+  );
+}
+
+function describeDurakMove(m: DurakReplayMove, players: DurakReplayData["players"]): string {
+  const p = players.find(x => x.seatIdx === m.seatIdx);
+  const name = p?.name ?? `S${m.seatIdx + 1}`;
+  const c = m.card ? `${m.card.rank}${D_SYM[m.card.suit] ?? ""}` : "";
+  switch (m.action) {
+    case "attack":   return `${name} attacks with ${c}`;
+    case "defend":   return `${name} defends with ${c}`;
+    case "throw":    return `${name} throws ${c}`;
+    case "transfer": return `${name} transfers ${c}`;
+    case "take":     return `${name} takes the cards`;
+    case "pass":     return `${name} passes`;
+    case "resign":   return `${name} resigns`;
+    default:         return `${name}: ${m.action}`;
+  }
+}
+
+// ── DurakReplayModal ──────────────────────────────────────────────────────
+
+function DurakReplayModal({ game, onClose }: { game: DurakHistoryGame; onClose: () => void }) {
+  const [data, setData]         = useState<DurakReplayData | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [frames, setFrames]     = useState<DurakReplayFrame[]>([]);
+  const [idx, setIdx]           = useState(0);
+  const [autoplay, setAutoplay] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/durak-rooms/${game.id}/replay`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: DurakReplayData | null) => {
+        if (!d) return;
+        setData(d);
+        setFrames(buildDurakFrames(d.moves, d.players.length));
+        setIdx(0);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [game.id]);
+
+  const total = frames.length;
+
+  const go = useCallback((n: number) => {
+    setAutoplay(false);
+    setIdx(Math.max(0, Math.min(total - 1, n)));
+  }, [total]);
+
+  useEffect(() => {
+    if (!autoplay || total === 0) return;
+    const t = setInterval(() => {
+      setIdx(i => { if (i >= total - 1) { setAutoplay(false); return i; } return i + 1; });
+    }, 750);
+    return () => clearInterval(t);
+  }, [autoplay, total]);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  go(idx - 1);
+      if (e.key === "ArrowRight") go(idx + 1);
+      if (e.key === " ")          { e.preventDefault(); setAutoplay(a => !a); }
+      if (e.key === "Escape")     onClose();
+    };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [idx, go, onClose]);
+
+  useEffect(() => {
+    logRef.current?.querySelector("[data-active='true']")?.scrollIntoView({ block: "nearest" });
+  }, [idx]);
+
+  const frame = frames[idx] ?? null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[960] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.82)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl bg-[var(--bg-card)] border border-[var(--border-subtle)] overflow-hidden shadow-2xl">
+
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🃏</span>
+            <span className="font-display font-bold text-[var(--text-primary)] text-sm">
+              Replay · {game.variant === "perevodnoy" ? "Переводной" : "Подкидной"} · {game.deckSize}🂠 · {game.players.length}p
+            </span>
+          </div>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {loading && (
+          <div className="flex-1 flex items-center justify-center py-16">
+            <Loader2 size={28} className="animate-spin text-[var(--accent-orange)]" />
+          </div>
+        )}
+
+        {!loading && !data && (
+          <p className="text-center py-14 text-sm text-[var(--text-muted)]">Failed to load replay.</p>
+        )}
+
+        {!loading && data && (
+          <>
+            {/* ── Players + Trump ── */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)] overflow-x-auto shrink-0">
+              {[...data.players].sort((a, b) => a.seatIdx - b.seatIdx).map(p => {
+                const isAtk = frame?.attackerSeat === p.seatIdx;
+                const isDef = frame?.defenderSeat === p.seatIdx;
+                return (
+                  <div key={p.userId} className={[
+                    "flex items-center gap-1.5 px-2 py-1 rounded-xl border text-xs shrink-0 font-display font-semibold transition-colors",
+                    isAtk ? "bg-orange-500/15 border-orange-500/40 text-orange-300" :
+                    isDef ? "bg-blue-500/15 border-blue-500/40 text-blue-300" :
+                    p.isDurak ? "bg-red-500/10 border-red-500/20 text-red-300" :
+                    "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)]",
+                  ].join(" ")}>
+                    {p.image
+                      ? <img src={p.image} alt="" className="w-4 h-4 rounded-full object-cover" />
+                      : <div className="w-4 h-4 rounded-full bg-[var(--bg-elevated)] flex items-center justify-center text-[0.5rem] font-bold">{p.name?.[0] ?? "?"}</div>
+                    }
+                    <span className="max-w-[56px] truncate">{p.name ?? `S${p.seatIdx + 1}`}</span>
+                    {isAtk && <span title="Attacker">⚔️</span>}
+                    {isDef && <span title="Defender">🛡️</span>}
+                    {p.isDurak && <span>🃏</span>}
+                    {p.eloDelta != null && (
+                      <span className={p.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        {p.eloDelta >= 0 ? "+" : ""}{p.eloDelta}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Trump */}
+              <div className="ml-auto shrink-0 flex items-center gap-1.5 pl-3 border-l border-[var(--border-subtle)]">
+                <span className="text-[0.65rem] text-[var(--text-muted)]">Trump</span>
+                {data.trumpCard && <DurakMiniCard card={data.trumpCard} size="xs" />}
+                <span className={`text-base leading-none ${D_RED[data.trumpSuit] ? "text-red-400" : "text-[var(--text-primary)]"}`}>
+                  {D_SYM[data.trumpSuit] ?? "?"}
+                </span>
+              </div>
+            </div>
+
+            {/* ── Table + description ── */}
+            <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 flex flex-col gap-3">
+
+              {/* Table area */}
+              <div className="flex flex-wrap gap-2 justify-center items-end min-h-[100px] bg-[var(--bg-secondary)] rounded-xl p-3 border border-[var(--border-subtle)]">
+                {(!frame || frame.table.length === 0) && (
+                  <p className="text-xs text-[var(--text-muted)] self-center my-auto">Table is empty</p>
+                )}
+                {frame?.table.map((slot, si) => (
+                  <div key={si} className="flex flex-col items-center gap-1">
+                    <DurakMiniCard card={slot.attack} size="xs" />
+                    {slot.defense
+                      ? <DurakMiniCard card={slot.defense} size="xs" />
+                      : <div style={{ width: 36, height: 52 }} className="rounded-md border-2 border-dashed border-[var(--border-subtle)] opacity-35" />
+                    }
+                  </div>
+                ))}
+              </div>
+
+              {/* Move pill */}
+              {frame && (
+                <div className="text-center">
+                  <span className={[
+                    "inline-block px-3 py-1 rounded-full border text-xs font-display font-semibold",
+                    frame.boutEnd === "taken"    ? "bg-red-500/10 border-red-500/30 text-red-300" :
+                    frame.boutEnd === "defended" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" :
+                    "bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]",
+                  ].join(" ")}>
+                    {describeDurakMove(frame.move, data.players)}
+                    {frame.boutEnd === "taken"    && " · took cards"}
+                    {frame.boutEnd === "defended" && " · defended!"}
+                  </span>
+                </div>
+              )}
+
+              {/* Move log */}
+              <div ref={logRef} className="max-h-[150px] overflow-y-auto rounded-xl border border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
+                {frames.map((f, fi) => {
+                  const p   = data.players.find(x => x.seatIdx === f.move.seatIdx);
+                  const active = fi === idx;
+                  const cardStr = f.move.card ? `${f.move.card.rank}${D_SYM[f.move.card.suit] ?? ""}` : "";
+                  const actionColor =
+                    f.move.action === "attack"   ? "bg-orange-500/15 text-orange-300" :
+                    f.move.action === "defend"   ? "bg-blue-500/15 text-blue-300" :
+                    f.move.action === "take"     ? "bg-red-500/15 text-red-300" :
+                    f.move.action === "throw"    ? "bg-purple-500/15 text-purple-300" :
+                    f.move.action === "transfer" ? "bg-yellow-500/15 text-yellow-300" :
+                    "bg-[var(--bg-elevated)] text-[var(--text-muted)]";
+                  return (
+                    <button
+                      key={fi}
+                      data-active={active}
+                      onClick={() => go(fi)}
+                      className={[
+                        "w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors touch-manipulation",
+                        active ? "bg-[var(--accent-orange)]/10 text-[var(--text-primary)]"
+                               : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]",
+                      ].join(" ")}
+                    >
+                      <span className="font-mono text-[0.58rem] w-5 text-right shrink-0 opacity-50">{fi + 1}</span>
+                      <span className="font-display font-semibold shrink-0 truncate max-w-[64px]">{p?.name ?? `S${f.move.seatIdx + 1}`}</span>
+                      <span className={`text-[0.62rem] px-1.5 py-0.5 rounded font-bold shrink-0 ${actionColor}`}>{f.move.action}</span>
+                      {cardStr && (
+                        <span className={`font-bold shrink-0 ${f.move.card && D_RED[f.move.card.suit] ? "text-red-400" : "text-[var(--text-primary)]"}`}>
+                          {cardStr}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Controls ── */}
+            <div className="px-4 pt-2 pb-3 border-t border-[var(--border-subtle)] shrink-0">
+              <input
+                type="range" min={0} max={Math.max(0, total - 1)} value={idx}
+                onChange={e => go(+e.target.value)}
+                className="w-full mb-2 accent-[#f97316]"
+              />
+              <div className="flex items-center justify-center gap-1.5">
+                <button onClick={() => go(0)} disabled={idx === 0}
+                  className="w-8 h-8 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center justify-center transition-colors">
+                  <ChevronsLeft size={14} />
+                </button>
+                <button onClick={() => go(idx - 1)} disabled={idx === 0}
+                  className="w-8 h-8 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center justify-center transition-colors">
+                  <ChevronLeft size={14} />
+                </button>
+                <button onClick={() => setAutoplay(a => !a)}
+                  className="w-10 h-8 rounded-lg bg-[var(--accent-orange)]/15 border border-[var(--accent-orange)]/40 text-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/25 flex items-center justify-center transition-colors">
+                  {autoplay ? <Pause size={14} /> : <Play size={14} />}
+                </button>
+                <button onClick={() => go(idx + 1)} disabled={idx >= total - 1}
+                  className="w-8 h-8 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center justify-center transition-colors">
+                  <ChevronRight size={14} />
+                </button>
+                <button onClick={() => go(total - 1)} disabled={idx >= total - 1}
+                  className="w-8 h-8 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center justify-center transition-colors">
+                  <ChevronsRight size={14} />
+                </button>
+                <span className="text-xs text-[var(--text-muted)] ml-2 font-mono tabular-nums">
+                  {total > 0 ? `${idx + 1} / ${total}` : "—"}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 type DurakHistoryPlayer = {
   userId: string; name: string | null; image: string | null;
   seatIdx: number; eloDelta: number | null; eloSnapshot: number | null; isDurak: boolean;
@@ -1506,6 +1873,7 @@ function DurakHistoryPanel({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [view, setView] = useState<DurakHistoryGame | null>(null);
 
   function load(p: number) {
     setLoading(true);
@@ -1558,27 +1926,36 @@ function DurakHistoryPanel({ userId }: { userId: string }) {
                 )}
                 <span className="text-[0.55rem] text-[var(--text-muted)]">{fmtAgo(g.endedAt)}</span>
               </div>
-              {/* Players list */}
-              <div className="flex flex-wrap gap-1.5">
-                {[...g.players].sort((a, b) => a.seatIdx - b.seatIdx).map(p => (
-                  <div key={p.userId} className={[
-                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[0.65rem]",
-                    p.isDurak
-                      ? "bg-red-500/10 border border-red-500/20 text-red-300"
-                      : p.userId === userId
-                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                      : "bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)]"
-                  ].join(" ")}>
-                    <AvatarImg name={p.name} image={p.image} size={16} />
-                    <span className="font-semibold truncate max-w-[60px]">{p.name ?? "?"}</span>
-                    {p.isDurak && <span className="text-red-400">🃏</span>}
-                    {p.eloDelta != null && (
-                      <span className={p.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}>
-                        {p.eloDelta >= 0 ? "+" : ""}{p.eloDelta}
-                      </span>
-                    )}
-                  </div>
-                ))}
+              {/* Players list + Replay button */}
+              <div className="flex items-end gap-2">
+                <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                  {[...g.players].sort((a, b) => a.seatIdx - b.seatIdx).map(p => (
+                    <div key={p.userId} className={[
+                      "flex items-center gap-1 px-2 py-1 rounded-lg text-[0.65rem]",
+                      p.isDurak
+                        ? "bg-red-500/10 border border-red-500/20 text-red-300"
+                        : p.userId === userId
+                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                        : "bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)]"
+                    ].join(" ")}>
+                      <AvatarImg name={p.name} image={p.image} size={16} />
+                      <span className="font-semibold truncate max-w-[60px]">{p.name ?? "?"}</span>
+                      {p.isDurak && <span className="text-red-400">🃏</span>}
+                      {p.eloDelta != null && (
+                        <span className={p.eloDelta >= 0 ? "text-emerald-400" : "text-red-400"}>
+                          {p.eloDelta >= 0 ? "+" : ""}{p.eloDelta}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setView(g)}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[0.65rem] font-display font-bold bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent-orange)] hover:border-[var(--accent-orange)]/40 transition-colors touch-manipulation"
+                >
+                  <Play size={10} />
+                  Replay
+                </button>
               </div>
             </div>
           );
@@ -1590,6 +1967,7 @@ function DurakHistoryPanel({ userId }: { userId: string }) {
           {loading ? <Loader2 size={14} className="animate-spin mx-auto"/> : "Load more"}
         </button>
       )}
+      {view && <DurakReplayModal game={view} onClose={() => setView(null)} />}
     </>
   );
 }

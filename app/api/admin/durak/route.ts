@@ -23,6 +23,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "revert-elo" && roomId) {
+    const room = await prisma.durakRoom.findUnique({
+      where: { id: roomId },
+      include: { players: { include: { user: { select: { durakElo: true } } } } },
+    });
+    if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const updates: Promise<unknown>[] = [];
+    for (const slot of room.players) {
+      if (slot.eloDelta != null) {
+        updates.push(
+          prisma.user.update({
+            where: { id: slot.userId },
+            data: { durakElo: Math.max(100, slot.user.durakElo - slot.eloDelta) },
+          }),
+        );
+        updates.push(prisma.durakPlayerSlot.update({ where: { id: slot.id }, data: { eloDelta: null } }));
+      }
+    }
+    await Promise.all(updates);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "unban" && userId) {
     await prisma.user.update({
       where: { id: userId },

@@ -856,6 +856,20 @@ export default function DurakRoomPage() {
               <div className="relative" ref={onlineDeckRef} style={{ width: 70, height: 100 }}>
                 {room.deckCount > 0 ? (
                   <>
+                    {/* Trump card peeking sideways from under the deck — disappears when deck empties */}
+                    {room.trumpCard && (
+                      <DurakCard
+                        card={room.trumpCard}
+                        size="sm"
+                        style={{
+                          position: "absolute",
+                          left: -28,
+                          top: 14,
+                          transform: "rotate(90deg)",
+                          zIndex: 0,
+                        }}
+                      />
+                    )}
                     <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0, zIndex: 1 }} />
                     <div className={[
                       "absolute -top-2 -right-2 min-w-[22px] h-[22px] rounded-full flex items-center justify-center text-[0.65rem] font-extrabold border-2 border-[var(--bg-elevated)] z-10",

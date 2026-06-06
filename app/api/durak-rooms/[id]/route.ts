@@ -56,7 +56,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const data: Record<string, unknown> = {};
   if (body.variant !== undefined)     data.variant     = body.variant === "perevodnoy" ? "perevodnoy" : "podkidnoy";
   if (body.deckSize !== undefined)    data.deckSize    = body.deckSize === 52 ? 52 : 36;
-  if (body.maxPlayers !== undefined)  data.maxPlayers  = Math.min(6, Math.max(2, body.maxPlayers));
+  if (body.maxPlayers !== undefined) {
+    const newMax = Math.min(6, Math.max(2, body.maxPlayers));
+    data.maxPlayers = newMax;
+    // Remove bots whose seat index no longer exists after the player-count change.
+    try {
+      const bots = JSON.parse(room.botsJson ?? "[]") as { seatIdx: number }[];
+      data.botsJson = JSON.stringify(bots.filter((b) => b.seatIdx < newMax));
+    } catch {}
+  }
   if (body.timeControl !== undefined) data.timeControl = ["15","30","60"].includes(body.timeControl) ? body.timeControl : "none";
   if (body.throwRule !== undefined)   data.throwRule   = body.throwRule === "neighbors" ? "neighbors" : "all";
   if (body.fairPlay !== undefined)    data.fairPlay    = body.fairPlay !== false;

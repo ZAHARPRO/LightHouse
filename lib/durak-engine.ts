@@ -544,9 +544,7 @@ export async function processBotTurns(roomId: string): Promise<void> {
       // Normal attack/defense phases.
       // When in defense phase but all cards are already beaten, the ATTACKER
       // needs to act next (pass or throw more) — not the defender.
-      const allDefended = state.phase === "defense" && state.table.length > 0 && !needsDefense;
-      actingSeat = (state.phase === "defense" && needsDefense) ? state.defenderIdx : state.attackerIdx;
-      void allDefended; // used for clarity only
+      actingSeat = needsDefense ? state.defenderIdx : state.attackerIdx;
     }
 
     const actingBot = bots.find((b) => b.seatIdx === actingSeat);
@@ -561,12 +559,15 @@ export async function processBotTurns(roomId: string): Promise<void> {
       .filter((s) => s !== actingSeat)
       .map((s) => state.hands[s]?.length ?? 0);
 
-    // When all cards are defended (or in throwing phase), tell the bot it's "attack" phase
-    // so it decides whether to throw more or pass.
+    // Map the real phase to what the bot decision function expects.
+    // - undefended cards exist → "defense" (defender must beat them)
+    // - all cards defended (any phase) → "attack" (attacker/thrower decides to throw more or pass)
     const allDefendedNow = state.table.length > 0 && !needsDefense;
-    const effectivePhase = (allDefendedNow || state.phase === "throwing")
-      ? "attack"
-      : state.phase as ClientBotState["phase"];
+    const effectivePhase: ClientBotState["phase"] = needsDefense
+      ? "defense"
+      : allDefendedNow || state.phase === "throwing"
+        ? "attack"
+        : state.phase as ClientBotState["phase"];
 
     const botState: ClientBotState = {
       hand: state.hands[actingSeat] ?? [],
@@ -604,7 +605,8 @@ export async function processBotTurns(roomId: string): Promise<void> {
         if (idx < 0) break;
         state.hands[actingSeat].splice(idx, 1);
         state.table.push({ attack: action.card, defense: null });
-        state.phase = "defense";
+        // Stay in "throwing" phase if we're already there (same as applyMove).
+        state.phase = state.phase === "throwing" ? "throwing" : "defense";
         break;
       }
       case "defend": {
@@ -636,10 +638,27 @@ export async function processBotTurns(roomId: string): Promise<void> {
       }
       case "pass": {
         if (state.table.length === 0) { state.phase = "attack"; break; }
-        if (isFullyDefended(state.table)) {
+        if (!isFullyDefended(state.table)) { state.phase = "attack"; break; }
+
+        if (state.phase === "throwing") {
+          // Already in throwing phase — bot pass resolves the bout.
           winnerUserId = resolveBout(room, state, false);
+        } else if (actingSeat === state.attackerIdx) {
+          // Main attacker passing — enter throwing phase if eligible throwers exist.
+          const botFirstBout2 = isFirstBout(room.movesJson);
+          const botBoutMax2 = botFirstBout2 ? 5 : 6;
+          const defHand2 = state.hands[state.defenderIdx]?.length ?? 0;
+          const hasRoom2 =
+            state.table.length < botBoutMax2 &&
+            state.table.length < maxAttackCards(defHand2);
+          const eligible2 = getEligibleThrowerSeats(room, state);
+          if (hasRoom2 && eligible2.length > 0) {
+            state.phase = "throwing";
+          } else {
+            winnerUserId = resolveBout(room, state, false);
+          }
         } else {
-          state.phase = "attack";
+          winnerUserId = resolveBout(room, state, false);
         }
         break;
       }

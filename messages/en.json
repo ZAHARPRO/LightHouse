@@ -883,7 +883,8 @@
     "liveGames": "Live Games",
     "winToGain": "Win to gain ELO · Lose to drop ELO",
     "mutedFor": "🔇 Muted {secs}s",
-    "myHistory": "My History"
+    "myHistory": "My History",
+    "inQueue": "{count} in queue"
   },
   "youtubePlayer": {
     "play": "Play",
@@ -1002,6 +1003,7 @@
     "openFullPage": "Open full room page"
   },
   "durak": {
+    "myHistory": "My History",
     "cancelRoom": "Cancel room",
     "returnToGame": "Return to game",
     "selectCardToAttack": "Select a card to attack",

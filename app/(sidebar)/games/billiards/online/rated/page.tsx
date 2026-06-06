@@ -46,11 +46,13 @@ export default function RatedBilliardsLobby() {
 
   const [timeControl, setTimeControl] = useState("pm180");
   const [playing, setPlaying] = useState<RoomItem[]>([]);
+  const [waitingRooms, setWaitingRooms] = useState<{ timeControl: string }[]>([]);
+  const queueCount = waitingRooms.filter(r => r.timeControl === timeControl).length;
 
   useEffect(() => {
     const fetch_ = async () => {
       const res = await fetch("/api/billiards-rooms?rated=true");
-      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); }
+      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); setWaitingRooms(d.waiting ?? []); }
     };
     fetch_();
     const id = setInterval(fetch_, 4000);
@@ -105,6 +107,7 @@ export default function RatedBilliardsLobby() {
         disabled={!session?.user?.id}
         accentColor="yellow"
         searchingLabel={TC_LABELS[timeControl]}
+        queueCount={queueCount}
       >
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Time Control</p>
         <div className="flex gap-2 mb-5">

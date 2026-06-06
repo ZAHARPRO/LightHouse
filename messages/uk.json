@@ -875,7 +875,8 @@
     "liveGames": "Активні ігри",
     "winToGain": "Перемога = +ELO · Поразка = −ELO",
     "mutedFor": "🔇 Мут {secs}с",
-    "myHistory": "Моя історія"
+    "myHistory": "Моя історія",
+    "inQueue": "{count} в черзі"
   },
   "youtubePlayer": {
     "play": "Відтворити",
@@ -1002,6 +1003,7 @@
     "openFullPage": "Відкрити сторінку кімнати"
   },
   "durak": {
+        "myHistory": "My History",
     "returnToGame": "Повернутися до гри",
     "cancelRoom": "Скасувати кімнату",
     "selectCardToAttack": "Виберіть карту для атаки",

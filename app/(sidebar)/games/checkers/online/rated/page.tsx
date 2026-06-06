@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
@@ -33,6 +33,19 @@ export default function CheckersRatedPage() {
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [timeControl, setTimeControl] = useState("600");
+  const [waitingRooms, setWaitingRooms] = useState<{ timeControl: string }[]>([]);
+
+  useEffect(() => {
+    const fetch_ = async () => {
+      const res = await fetch("/api/checkers-rooms?rated=true");
+      if (res.ok) { const d = await res.json(); setWaitingRooms(d.waiting ?? []); }
+    };
+    fetch_();
+    const id = setInterval(fetch_, 4000);
+    return () => clearInterval(id);
+  }, []);
+
+  const queueCount = waitingRooms.filter(r => r.timeControl === timeControl).length;
 
   const queue = useMatchmakingQueue({
     gameKey: "checkers",
@@ -83,6 +96,7 @@ export default function CheckersRatedPage() {
         disabled={!session?.user?.id}
         accentColor="orange"
         searchingLabel={TC_LABELS[timeControl]}
+        queueCount={queueCount}
       >
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Time Control</p>
         <div className="flex gap-2 mb-5">

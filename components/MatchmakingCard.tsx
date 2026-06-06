@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Search, Star, X } from "lucide-react";
+import { Search, Star, Users, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 // Explicit Tailwind class maps — dynamic strings are purged by the compiler
@@ -49,6 +49,8 @@ type Props = {
   accentColor?: string;
   /** Short label shown next to the elapsed timer during search, e.g. "⏱ 10 min" */
   searchingLabel?: string;
+  /** Players currently in queue with the same settings */
+  queueCount?: number;
   /** Settings UI rendered inside the card when not searching */
   children?: React.ReactNode;
 };
@@ -68,10 +70,18 @@ export default function MatchmakingCard({
   disabled = false,
   accentColor = "yellow",
   searchingLabel,
+  queueCount,
   children,
 }: Props) {
   const t = useTranslations("matchmaking");
   const ac = ACCENT[accentColor] ?? ACCENT.yellow;
+
+  const queueBadge = queueCount !== undefined && (
+    <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-xs mt-3">
+      <Users size={11} />
+      <span>{t("inQueue", { count: queueCount })}</span>
+    </div>
+  );
 
   if (searching) {
     return (
@@ -96,6 +106,8 @@ export default function MatchmakingCard({
         >
           <X size={14} /> {t("cancel")}
         </button>
+
+        {queueBadge}
       </div>
     );
   }
@@ -118,6 +130,8 @@ export default function MatchmakingCard({
         <Star size={15} />
         {t("findMatch")}
       </button>
+
+      {queueBadge}
     </div>
   );
 }

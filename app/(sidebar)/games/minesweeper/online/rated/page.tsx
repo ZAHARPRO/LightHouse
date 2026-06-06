@@ -46,11 +46,13 @@ export default function RatedMinesweeperLobby() {
 
   const [difficulty, setDifficulty] = useState("medium");
   const [playing, setPlaying] = useState<RoomItem[]>([]);
+  const [waitingRooms, setWaitingRooms] = useState<{ difficulty: string }[]>([]);
+  const queueCount = waitingRooms.filter(r => r.difficulty === difficulty).length;
 
   useEffect(() => {
     const fetch_ = async () => {
       const res = await fetch("/api/ms-rooms?rated=true");
-      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); }
+      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); setWaitingRooms(d.waiting ?? []); }
     };
     fetch_();
     const id = setInterval(fetch_, 4000);
@@ -105,6 +107,7 @@ export default function RatedMinesweeperLobby() {
         disabled={!session?.user?.id}
         accentColor="pink"
         searchingLabel={DIFF_LABEL[difficulty]}
+        queueCount={queueCount}
       >
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Difficulty</p>
         <div className="flex gap-2 mb-5">

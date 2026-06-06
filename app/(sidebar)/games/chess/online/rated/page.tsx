@@ -49,16 +49,19 @@ export default function RatedChessLobby() {
 
   const [timeControl, setTimeControl] = useState("600");
   const [playing, setPlaying] = useState<RoomItem[]>([]);
+  const [waitingRooms, setWaitingRooms] = useState<{ timeControl: string }[]>([]);
 
   useEffect(() => {
     const fetch_ = async () => {
       const res = await fetch("/api/chess-rooms?rated=true");
-      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); }
+      if (res.ok) { const d = await res.json(); setPlaying(d.playing ?? []); setWaitingRooms(d.waiting ?? []); }
     };
     fetch_();
     const id = setInterval(fetch_, 4000);
     return () => clearInterval(id);
   }, []);
+
+  const queueCount = waitingRooms.filter(r => r.timeControl === timeControl).length;
 
   const queue = useMatchmakingQueue({
     gameKey: "chess",
@@ -108,6 +111,7 @@ export default function RatedChessLobby() {
         disabled={!session?.user?.id}
         accentColor="pink"
         searchingLabel={TC_LABELS[timeControl]}
+        queueCount={queueCount}
       >
         <p className="text-[var(--text-secondary)] font-display font-semibold text-sm mb-3">Time Control</p>
         <div className="flex gap-2 mb-5">

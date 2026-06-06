@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { Star, Users } from "lucide-react";
+import { Star } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import MatchmakingCard from "@/components/MatchmakingCard";
 import { useMatchmakingQueue } from "@/lib/useMatchmakingQueue";
+import MatchHistoryButton from "@/components/MatchHistory";
 
 type RoomItem = {
   id: string;
@@ -133,7 +134,7 @@ export default function DurakRatedQueue() {
         <h1 className="text-3xl font-display font-extrabold text-[var(--text-primary)]">{t("ratedTitle")}</h1>
       </div>
       <p className="text-[var(--text-muted)] text-sm mb-8">{t("ratedSubtitle")}</p>
-
+      {session?.user?.id && <div className="mb-6"><MatchHistoryButton userId={session.user.id} label={t("myHistory")} /></div>}
       <MatchmakingCard
         searching={queue.searching}
         elapsed={queue.elapsed}
@@ -143,6 +144,7 @@ export default function DurakRatedQueue() {
         disabled={!myId}
         accentColor="yellow"
         searchingLabel={searchingLabel}
+        queueCount={queueCount}
       >
         {/* Fixed time control badge */}
         <div className="flex items-center justify-between mb-5">
@@ -190,15 +192,6 @@ export default function DurakRatedQueue() {
           </button>
         </div>
       </MatchmakingCard>
-
-      {/* Queue info */}
-      <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs">
-        <Users size={12} />
-        <span>
-          {t("inQueue")}: <span className="text-[var(--text-secondary)] font-semibold">{queueCount}</span>
-          {" "}·{" "}{variant === "perevodnoy" ? t("perevodnoy") : t("podkidnoy")} · {deckSize} · {maxPlayers}P
-        </span>
-      </div>
 
       {/* Active same-queue rooms (visible while host is waiting) */}
       {queue.searching && sameQueue.length > 0 && (

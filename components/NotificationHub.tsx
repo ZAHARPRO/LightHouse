@@ -21,13 +21,18 @@ type ContentToast =
   | { kind: "post";  id: string; title: string; authorName: string | null; authorImage: string | null; authorTier: string; createdAt: string }
   | { kind: "video"; id: string; title: string; authorName: string | null; authorImage: string | null; authorTier: string; createdAt: string };
 
+type NewsToast = { id: string; title: string; createdAt: string };
+type PopupToast = { id: string; text: string; emoji: string; color: string };
+
 type AnyToast =
   | { _key: string; _tag: "badge";       data: BadgeToast }
   | { _key: string; _tag: "dm";          data: DMToast }
   | { _key: string; _tag: "stream";      data: StreamToast }
   | { _key: string; _tag: "content";     data: ContentToast }
   | { _key: string; _tag: "match";       data: MatchToast }
-  | { _key: string; _tag: "active_game"; data: ActiveGame };
+  | { _key: string; _tag: "active_game"; data: ActiveGame }
+  | { _key: string; _tag: "news";        data: NewsToast }
+  | { _key: string; _tag: "popup";       data: PopupToast };
 
 const GAME_META: Record<MatchGame, { icon: string; label: string; color: string }> = {
   chess:       { icon: "♟️", label: "Chess",       color: "#f59e0b" },
@@ -70,13 +75,17 @@ function fmtTimeLeft(ms: number): string {
 
 /* ─── Constants ─── */
 
-const BADGE_SEEN_KEY         = "lh_badge_seen_at";
+const BADGE_SEEN_KEY          = "lh_badge_seen_at";
 const ACTIVE_GAME_SESSION_KEY = "lh_active_game_notified";
-const DM_SEEN_KEY      = "lh_dm_seen_at";
-const CONTENT_SEEN_KEY = "lh_content_seen_at";
-const AUTO_DISMISS_MS  = 7000;
-const DM_FALLBACK_MS   = 30_000;
-const CONTENT_POLL_MS  = 5 * 60_000;
+const DM_SEEN_KEY             = "lh_dm_seen_at";
+const CONTENT_SEEN_KEY        = "lh_content_seen_at";
+const NEWS_SEEN_KEY           = "lh_news_seen_at";
+const AUTO_DISMISS_MS         = 7000;
+const DM_FALLBACK_MS          = 30_000;
+const CONTENT_POLL_MS         = 5 * 60_000;
+// Random interval for pop-up messages: 10–25 minutes
+const POPUP_MIN_MS            = 10 * 60_000;
+const POPUP_RANGE_MS          = 15 * 60_000;
 
 const BADGE_META = Object.fromEntries(
   Object.entries(BADGE_DEFS).map(([type, d]) => [type, { icon: d.icon, color: d.color, label: d.label }])
@@ -385,6 +394,68 @@ function ActiveGameToastItem({ data, onDone }: { data: ActiveGame; onDone: () =>
   );
 }
 
+function NewsToastItem({ data, onDone }: { data: NewsToast; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const dismiss = () => { setLeaving(true); setTimeout(onDone, 320); };
+  useAutoDismiss(dismiss);
+
+  return (
+    <ToastShell color="#f97316" leaving={leaving} onClose={dismiss}>
+      <Link
+        href={`/news/${data.id}`}
+        onClick={dismiss}
+        className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3 no-underline"
+      >
+        <div
+          className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-[1.4rem]"
+          style={{ background: "#f9731618", border: "1.5px solid #f9731640" }}
+        >
+          📰
+        </div>
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-display font-bold uppercase tracking-[0.06em] text-[var(--accent-orange)] mb-[0.1rem]">
+            Site announcement
+          </p>
+          <p className="font-display font-extrabold text-[0.875rem] text-[var(--text-primary)] truncate">
+            {data.title}
+          </p>
+          <p className="text-[0.7rem] text-[var(--text-muted)]">Tap to read →</p>
+        </div>
+      </Link>
+    </ToastShell>
+  );
+}
+
+function PopupToastItem({ data, onDone }: { data: PopupToast; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const dismiss = () => { setLeaving(true); setTimeout(onDone, 320); };
+  useAutoDismiss(dismiss);
+
+  return (
+    <ToastShell color={data.color} leaving={leaving} onClose={dismiss}>
+      <div className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3">
+        <div
+          className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-[1.5rem]"
+          style={{ background: `${data.color}18`, border: `1.5px solid ${data.color}40` }}
+        >
+          {data.emoji}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className="text-[0.6875rem] font-display font-bold uppercase tracking-[0.06em] mb-[0.1rem]"
+            style={{ color: data.color }}
+          >
+            From LightHouse
+          </p>
+          <p className="font-display font-semibold text-[0.875rem] text-[var(--text-primary)] leading-snug">
+            {data.text}
+          </p>
+        </div>
+      </div>
+    </ToastShell>
+  );
+}
+
 /* ─── Main Hub ─── */
 
 export default function NotificationHub() {
@@ -554,6 +625,57 @@ export default function NotificationHub() {
     return () => clearInterval(t);
   }, [status, checkContent]);
 
+  /* ── News announcements check ── */
+  const checkNews = useCallback(() => {
+    const seenAt = localStorage.getItem(NEWS_SEEN_KEY) ?? "0";
+    fetch(`/api/notifications/news?since=${seenAt}`)
+      .then(r => r.json())
+      .then((posts: { id: string; title: string; createdAt: string }[]) => {
+        if (!Array.isArray(posts) || posts.length === 0) return;
+        const latest = posts.reduce((m, x) =>
+          new Date(x.createdAt) > new Date(m.createdAt) ? x : m
+        );
+        localStorage.setItem(NEWS_SEEN_KEY, String(new Date(latest.createdAt).getTime()));
+        posts.forEach(p => addToast({
+          _key: `news-${p.id}`,
+          _tag: "news",
+          data: { id: p.id, title: p.title, createdAt: p.createdAt },
+        }));
+      })
+      .catch(() => {});
+  }, [addToast]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    // Check once on mount (with delay so it doesn't fire immediately on login)
+    const t = setTimeout(checkNews, 3000);
+    return () => clearTimeout(t);
+  }, [status, checkNews]);
+
+  /* ── Random pop-up messages ── */
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    function scheduleNext() {
+      const delay = POPUP_MIN_MS + Math.random() * POPUP_RANGE_MS;
+      timeoutId = setTimeout(() => {
+        fetch("/api/notifications/random-message")
+          .then(r => r.json())
+          .then((msg: { id: string; text: string; emoji: string; color: string } | null) => {
+            if (msg?.id) {
+              addToast({ _key: `popup-${msg.id}-${Date.now()}`, _tag: "popup", data: msg });
+            }
+          })
+          .catch(() => {})
+          .finally(scheduleNext);
+      }, delay);
+    }
+
+    scheduleNext();
+    return () => clearTimeout(timeoutId);
+  }, [status, addToast]);
+
   /* ── Re-check on focus ── */
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -585,6 +707,12 @@ export default function NotificationHub() {
           )}
           {toast._tag === "active_game" && (
             <ActiveGameToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
+          )}
+          {toast._tag === "news" && (
+            <NewsToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
+          )}
+          {toast._tag === "popup" && (
+            <PopupToastItem data={toast.data} onDone={() => removeToast(toast._key)} />
           )}
         </div>
       ))}

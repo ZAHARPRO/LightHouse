@@ -140,8 +140,9 @@ function getEligibleThrowerSeats(room: RoomRow, state: Mutable): number[] {
     (s) =>
       s !== state.defenderIdx &&
       s !== state.attackerIdx && // main attacker already passed
-      !state.outPlayers.has(s) &&
-      (state.hands[s]?.length ?? 0) > 0,
+      !state.outPlayers.has(s),
+    // No hand-size check — throwing phase starts for all eligible seats regardless
+    // of whether they have throwable cards, to avoid leaking hand info to opponents.
   );
 }
 

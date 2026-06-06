@@ -876,6 +876,15 @@
     "banned": "BANNED",
     "muted": "Muted until {date}"
   },
+  "matchmaking": {
+    "findMatch": "Find Match",
+    "searching": "Searching for opponent…",
+    "cancel": "Cancel",
+    "liveGames": "Live Games",
+    "winToGain": "Win to gain ELO · Lose to drop ELO",
+    "mutedFor": "🔇 Muted {secs}s",
+    "myHistory": "My History"
+  },
   "youtubePlayer": {
     "play": "Play",
     "pause": "Pause",
@@ -1036,7 +1045,19 @@
     "watch": "Watch",
     "join": "Join",
     "ratedTitle": "Rated Durak",
-    "ratedSubtitle": "Climb the leaderboard — the Durak loses ELO",
+    "ratedSubtitle": "Climb the leaderboard — the Durak loses ELO. 30 sec per move, fair play only.",
+    "findMatch": "Find Match",
+    "searchingOpponent": "Searching for opponent…",
+    "cancelSearch": "Cancel search",
+    "inQueue": "In queue",
+    "yourRoom": "your room",
+    "sec": "sec",
+    "matchFound": "Match Found!",
+    "confirmMatchDesc": "All players must confirm to start the game.",
+    "acceptMatch": "Accept",
+    "declineMatch": "Decline",
+    "waitingForOthers": "Waiting for others…",
+    "youAccepted": "You accepted",
     "waitingRoom": "Waiting room",
     "rated": "Rated",
     "host": "Host",
@@ -1123,6 +1144,11 @@
     "badgeDurakNotDurakDesc": "Survived a 4+ player Durak game",
     "throwingPhaseBanner": "Others can throw — or press Pass to end the round",
     "defenderTook": "TOOK",
-    "leaveRoom": "Leave"
+    "leaveRoom": "Leave",
+    "handSettings": "Hand Settings",
+    "autoSortHand": "Auto-sort (trumps first)",
+    "handLayout": "Layout",
+    "layoutLeft": "Left",
+    "layoutRight": "Right"
   }
 }

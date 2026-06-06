@@ -34,6 +34,42 @@
 - ELO / rating updates happen server-side in a server action or API route handler — never in client code.
 - **Every new game must include a badge set** in `lib/badges.ts` and `lib/awardBadge.ts`. Minimum required badges: `{GAME}_WIN` (beat the bot), `{GAME}_ONLINE_WIN` (win online), `{GAME}_SILVER/GOLD/PLATINUM/DIAMOND` (ELO milestones at 700/1300/2200/3400). Add the corresponding `RewardType` enum values to `prisma/schema.prisma`. Call `awardGameBadge("{GAME}_WIN")` from the bot game page on player victory, and `awardBadge()` from the engine/API on online wins and ELO thresholds.
 
+## Rated matchmaking
+- **Never copy-paste matchmaking logic.** Use the shared hook and component:
+  - `lib/useMatchmakingQueue.ts` — manages searching state, elapsed timer, mute countdown, localStorage persistence, and auto-restart after ejection (`?returning=1`).
+  - `components/MatchmakingCard.tsx` — renders idle settings card + searching animation + cancel button.
+- Every rated queue page (`/online/rated/page.tsx`) must follow this pattern:
+  ```tsx
+  const queue = useMatchmakingQueue({
+    gameKey: "chess",           // unique per game — used for localStorage key
+    muteStatusApi: null,        // set to "/api/{game}-rooms/mute-status" if the game has a mute system
+    returning: searchParams.get("returning") === "1",
+    startSearch: async () => { /* returns roomId to poll, or null if navigated immediately */ },
+    cancelSearch: async (roomId) => { /* DELETE the room or matchmake endpoint */ },
+    checkMatch: async (roomId) => { /* return route string when matched, null to keep polling */ },
+    onNavigate: (route) => router.push(route),
+  });
+
+  return <MatchmakingCard {...queue} accentColor="pink" searchingLabel="⏱ 10 min">{/* settings */}</MatchmakingCard>;
+  ```
+- `accentColor` must be one of: `"yellow"` `"orange"` `"pink"` `"blue"` `"green"`. Do not add new Tailwind color variants — extend the `ACCENT` map in `MatchmakingCard.tsx` if needed.
+- Settings buttons inside `<MatchmakingCard>` must be `disabled={queue.searching}` so the user cannot change settings mid-search.
+- For **matchmake-endpoint games** (chess, checkers, battleship, billiards, minesweeper):
+  - `startSearch` POSTs to `/api/{game}-rooms/matchmake`, redirects immediately if `matched: true`, otherwise returns `roomId`.
+  - `checkMatch` GETs `/api/{game}-rooms/{roomId}` and returns the route when `room.guestId` is set.
+  - `cancelSearch` DELETEs `/api/{game}-rooms/matchmake`.
+- For **Durak** (multi-player lobby system):
+  - `startSearch` GETs the rooms list, joins a matching room (and navigates) or creates a new one and returns its `id`.
+  - `checkMatch` GETs `/api/durak-rooms/{roomId}` and returns the route when `status !== "WAITING" || confirmingAt !== null`.
+  - `cancelSearch` DELETEs `/api/durak-rooms/{roomId}`.
+- **Rated confirmation modal** (Durak-style, for games where all players must confirm before starting):
+  - When the room fills → server sets `confirmingAt` on the room (still WAITING).
+  - Room page shows a confirmation modal (20s countdown, Accept/Decline) instead of the normal lobby.
+  - Decline → player gets `durakQueueMutedUntil` + 20s mute, slot is deleted; accepting player is redirected back to rated queue with `?returning=1`.
+  - The hook's `muteStatusApi` + mute check prevents muted players from immediately rejoining.
+  - "Start Game" host button must be hidden for rated rooms: `{isHost && !room.rated && <button>Start</button>}`.
+- Common i18n strings for matchmaking UI live in the `"matchmaking"` namespace (`messages/en.json` etc.): `findMatch`, `searching`, `cancel`, `liveGames`, `winToGain`, `mutedFor`, `myHistory`.
+
 ## Authentication
 - Server components / server actions: `const session = await auth()` from `@/auth`.
 - Client components: `const { data: session } = useSession()` from `next-auth/react`.

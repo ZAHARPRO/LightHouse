@@ -868,6 +868,15 @@
     "banned": "ЗАБЛОКОВАНО",
     "muted": "Приглушено до {date}"
   },
+  "matchmaking": {
+    "findMatch": "Знайти матч",
+    "searching": "Шукаємо суперника…",
+    "cancel": "Скасувати",
+    "liveGames": "Активні ігри",
+    "winToGain": "Перемога = +ELO · Поразка = −ELO",
+    "mutedFor": "🔇 Мут {secs}с",
+    "myHistory": "Моя історія"
+  },
   "youtubePlayer": {
     "play": "Відтворити",
     "pause": "Пауза",
@@ -1036,7 +1045,19 @@
     "watch": "Дивитись",
     "join": "Увійти",
     "ratedTitle": "Рейтинговий Дурак",
-    "ratedSubtitle": "Підіймайся в таблиці — Дурень втрачає ELO",
+    "ratedSubtitle": "Підіймайся в таблиці — Дурень втрачає ELO. 30 сек на хід, тільки чесна гра.",
+    "findMatch": "Знайти матч",
+    "searchingOpponent": "Пошук суперника…",
+    "cancelSearch": "Скасувати пошук",
+    "inQueue": "В черзі",
+    "yourRoom": "ваша кімната",
+    "sec": "сек",
+    "matchFound": "Матч знайдено!",
+    "confirmMatchDesc": "Всі гравці повинні підтвердити, щоб почати гру.",
+    "acceptMatch": "Прийняти",
+    "declineMatch": "Відхилити",
+    "waitingForOthers": "Очікуємо інших…",
+    "youAccepted": "Ви прийняли",
     "waitingRoom": "Очікування",
     "rated": "Рейтинг",
     "host": "Господар",
@@ -1123,6 +1144,11 @@
     "badgeDurakNotDurakDesc": "Вижив у грі на 4+ гравців у Дурака",
     "throwingPhaseBanner": "Інші можуть підкинути — або натисніть Пас, щоб завершити хід",
     "defenderTook": "ВЗЯВ",
-    "leaveRoom": "Вийти"
+    "leaveRoom": "Вийти",
+    "handSettings": "Налаштування руки",
+    "autoSortHand": "Авто-сортування (козирі першими)",
+    "handLayout": "Розташування",
+    "layoutLeft": "Ліво",
+    "layoutRight": "Право"
   }
 }

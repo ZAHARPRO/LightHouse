@@ -876,6 +876,15 @@
     "unsaving": "Unsaving…",
     "signInToSave": "Sign in to save videos"
   },
+  "matchmaking": {
+    "findMatch": "Знайти жертву",
+    "searching": "Шукаємо когось хто програє…",
+    "cancel": "Злиняти",
+    "liveGames": "Хтось вже страждає",
+    "winToGain": "Виграв = ELO вгору · Програв = ELO в підлогу",
+    "mutedFor": "🔇 Тихо {secs}с",
+    "myHistory": "Моя ганьба"
+  },
   "youtubePlayer": {
     "play": "Play",
     "pause": "Pause",
@@ -1036,7 +1045,19 @@
     "watch": "Spectate",
     "join": "Hop in",
     "ratedTitle": "Ranked Durak",
-    "ratedSubtitle": "climb da ladder — Durak loses ELO",
+    "ratedSubtitle": "climb da ladder — Durak loses ELO. 30s на хід, no funny business.",
+    "findMatch": "Знайти бій",
+    "searchingOpponent": "Шукаємо жертву…",
+    "cancelSearch": "Злиняти з черги",
+    "inQueue": "В черзі",
+    "yourRoom": "твоя кімната",
+    "sec": "сек",
+    "matchFound": "Знайшли жертву!",
+    "confirmMatchDesc": "Всі мають підтвердити або програють ще до початку.",
+    "acceptMatch": "Погодитись",
+    "declineMatch": "Злиняти",
+    "waitingForOthers": "Чекаємо інших невдах…",
+    "youAccepted": "Ти підтвердив",
     "waitingRoom": "waitin room",
     "rated": "Ranked",
     "host": "Boss",
@@ -1123,6 +1144,11 @@
     "badgeDurakNotDurakDesc": "4+ player game and someone else got cooked",
     "throwingPhaseBanner": "Кидай карти або жми Пас, пес",
     "defenderTook": "ВЗЯВ",
-    "leaveRoom": "Слиняти"
+    "leaveRoom": "Слиняти",
+    "handSettings": "Налаш. руки",
+    "autoSortHand": "Козирі вперед 🃏",
+    "handLayout": "Розташування",
+    "layoutLeft": "Ліво",
+    "layoutRight": "Право"
   }
 }

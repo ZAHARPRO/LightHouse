@@ -16,8 +16,28 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const room = await prisma.durakRoom.findUnique({ where: { id }, include: roomInclude });
   if (!room) return NextResponse.json({ ok: true });
 
-  // Waiting rooms: nothing to do, cleanup uses createdAt (not updatedAt) now.
   if (room.status === "WAITING") {
+    // Confirmation timeout: mute non-confirmed players after 20 s
+    if (room.confirmingAt && Date.now() - room.confirmingAt.getTime() > 20_000) {
+      const confirmed: number[] = (() => { try { return JSON.parse(room.confirmedSeats || "[]"); } catch { return []; } })();
+      const nonConfirmed = room.players.filter((p) => !confirmed.includes(p.seatIdx));
+      if (nonConfirmed.length > 0) {
+        const newHostId =
+          room.players.find((p) => confirmed.includes(p.seatIdx) && p.userId === room.hostId)?.userId ??
+          room.players.find((p) => confirmed.includes(p.seatIdx))?.userId ??
+          room.hostId;
+        await prisma.$transaction([
+          ...nonConfirmed.map((p) =>
+            prisma.user.update({ where: { id: p.userId }, data: { durakQueueMutedUntil: new Date(Date.now() + 20_000) } })
+          ),
+          ...nonConfirmed.map((p) =>
+            prisma.durakPlayerSlot.delete({ where: { id: p.id } })
+          ),
+          prisma.durakRoom.update({ where: { id }, data: { confirmingAt: null, confirmedSeats: "[]", hostId: newHostId } }),
+        ]);
+        broadcast(id, { type: "update" });
+      }
+    }
     return NextResponse.json({ ok: true });
   }
 

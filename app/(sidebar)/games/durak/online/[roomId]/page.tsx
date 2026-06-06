@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play, Bot, Plus, Trash2, Copy } from "lucide-react";
+import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play, Bot, Plus, Trash2, Copy, Settings } from "lucide-react";
 import DurakCard from "@/components/DurakCard";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
@@ -118,6 +118,8 @@ type RoomData = {
   botsJson: string;
   movesJson: string;
   lastMoveAt: string | null;
+  confirmingAt: string | null;
+  confirmedSeats: string;
 };
 
 const API = "/api/durak-rooms";
@@ -142,6 +144,22 @@ export default function DurakRoomPage() {
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [previewMove, setPreviewMove] = useState<{ action: string; card?: { suit: string; rank: string }; name: string } | null>(null);
+  const [confirmCountdown, setConfirmCountdown] = useState(20);
+  const [confirming, setConfirming] = useState(false); // busy state for accept/decline button
+  const wasPlayerRef = useRef(false); // detect ejection from confirming room
+
+  // Hand UI state (persisted in localStorage)
+  const [handAutoSort, setHandAutoSort] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("durak_hand_autosort") === "1" : false
+  );
+  const [handOrientation, setHandOrientation] = useState<"left" | "right">(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("durak_hand_orientation") as "left" | "right") || "left" : "left"
+  );
+  const [showHandSettings, setShowHandSettings] = useState(false);
+  // Local drag-to-reorder state
+  const [localHandOrder, setLocalHandOrder] = useState<Card[]>([]);
+  const [insertBeforeIdx, setInsertBeforeIdx] = useState<number | null>(null);
+
   const logRef = useRef<HTMLDivElement>(null);
   const roomUrl = typeof window !== "undefined" ? `${window.location.origin}/games/durak/online/${roomId}` : "";
   function handleCopy() {
@@ -271,6 +289,27 @@ export default function DurakRoomPage() {
     prevTableLenRef.current = newLen;
   }, [room?.table.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Confirmation countdown: tick down from 20 s based on server confirmingAt
+  useEffect(() => {
+    if (!room?.confirmingAt) { setConfirmCountdown(20); return; }
+    const end = new Date(room.confirmingAt).getTime() + 20_000;
+    const update = () => setConfirmCountdown(Math.max(0, Math.ceil((end - Date.now()) / 1000)));
+    update();
+    const id = setInterval(update, 250);
+    return () => clearInterval(id);
+  }, [room?.confirmingAt]);
+
+  // Track ejection from rated confirming room — when we had a slot and now we don't
+  useEffect(() => {
+    if (!room) return;
+    const isNowPlayer = room.myRole === "player";
+    if (isNowPlayer) { wasPlayerRef.current = true; return; }
+    if (wasPlayerRef.current && room.status === "WAITING" && !room.confirmingAt) {
+      // We were ejected (declined or timed out): send back to rated search with flag to restore elapsed
+      router.push("/games/durak/online/rated?returning=1");
+    }
+  }, [room?.myRole, room?.status, room?.confirmingAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Pending-cheat catch window countdown
   useEffect(() => {
     if (!room?.pendingCheat && catchWindow === 0) return;
@@ -345,6 +384,49 @@ export default function DurakRoomPage() {
     else playSound("dk_win");
   }, [room?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync local hand order when server hand changes (keep user reorder, add new cards, remove played)
+  const myHandKey = room?.myHand ? [...room.myHand].map(c => `${c.suit}${c.rank}`).sort().join(",") : "";
+  useEffect(() => {
+    if (!room?.myHand) return;
+    setLocalHandOrder(prev => {
+      const curr = room.myHand;
+      const stillHere = prev.filter(c => curr.some(x => cardsEqual(x, c)));
+      const added = curr.filter(c => !prev.some(x => cardsEqual(x, c)));
+      return [...stillHere, ...added];
+    });
+  }, [myHandKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Computed display hand: respects local reorder and auto-sort toggle
+  const displayHand = useMemo(() => {
+    if (!room?.myHand) return [];
+    const curr = room.myHand;
+    const stillHere = localHandOrder.filter(c => curr.some(x => cardsEqual(x, c)));
+    const added = curr.filter(c => !localHandOrder.some(x => cardsEqual(x, c)));
+    const merged = [...stillHere, ...added];
+    if (handAutoSort && room.trumpSuit) {
+      const trumps = merged.filter(c => c.suit === room.trumpSuit);
+      const others = merged.filter(c => c.suit !== room.trumpSuit);
+      return [...trumps, ...others];
+    }
+    return merged;
+  }, [room?.myHand, localHandOrder, handAutoSort, room?.trumpSuit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function reorderHand(droppedCard: Card, insertBefore: number) {
+    if (handAutoSort) return; // auto-sort overrides manual order
+    setLocalHandOrder(prev => {
+      const curr = room?.myHand ?? [];
+      const stillHere = prev.filter(c => curr.some(x => cardsEqual(x, c)));
+      const added = curr.filter(c => !prev.some(x => cardsEqual(x, c)));
+      const merged = [...stillHere, ...added];
+      const fromIdx = merged.findIndex(c => cardsEqual(c, droppedCard));
+      if (fromIdx < 0) return prev;
+      const without = merged.filter((_, i) => i !== fromIdx);
+      const insertAt = Math.max(0, Math.min(insertBefore > fromIdx ? insertBefore - 1 : insertBefore, without.length));
+      without.splice(insertAt, 0, droppedCard);
+      return without;
+    });
+  }
+
   async function post(path: string, body?: object): Promise<boolean> {
     setBusy(true);
     setErr(null);
@@ -407,6 +489,105 @@ export default function DurakRoomPage() {
         body: JSON.stringify(data),
       });
       await fetchRoom();
+    }
+
+    // ── Rated match confirmation modal ──────────────────────────────────
+    const confirmedList: number[] = (() => { try { return JSON.parse(room.confirmedSeats || "[]"); } catch { return []; } })();
+    const iHaveConfirmed = me ? confirmedList.includes(me.seatIdx) : false;
+
+    async function handleConfirm(accept: boolean) {
+      setConfirming(true);
+      try {
+        await fetch(`${API}/${roomId}/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accept }),
+        });
+        fetchRoom();
+      } finally {
+        setConfirming(false);
+      }
+    }
+
+    if (room.rated && room.confirmingAt) {
+      const pct = confirmCountdown / 20;
+      const ringColor = pct > 0.5 ? "#22c55e" : pct > 0.25 ? "#f59e0b" : "#ef4444";
+      return (
+        <main className="flex flex-col items-center justify-center min-h-[60vh] px-4 py-12">
+          <div className="w-full max-w-sm bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col items-center gap-5 shadow-2xl">
+            {/* Ring timer */}
+            <div className="relative flex items-center justify-center">
+              <svg viewBox="0 0 80 80" className="w-20 h-20 -rotate-90">
+                <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border-subtle)" strokeWidth="5" />
+                <circle cx="40" cy="40" r="34" fill="none" stroke={ringColor} strokeWidth="5"
+                  strokeDasharray={`${2 * Math.PI * 34}`}
+                  strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct)}`}
+                  style={{ transition: "stroke-dashoffset 0.25s linear, stroke 0.25s" }} />
+              </svg>
+              <span className="absolute font-mono font-extrabold text-xl tabular-nums" style={{ color: ringColor }}>
+                {confirmCountdown}
+              </span>
+            </div>
+
+            <div className="text-center">
+              <h2 className="text-xl font-display font-extrabold text-[var(--text-primary)]">{t("matchFound")}</h2>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{t("confirmMatchDesc")}</p>
+            </div>
+
+            {/* Player list with checkmarks */}
+            <div className="w-full flex flex-col gap-2">
+              {room.players.map((p) => {
+                const accepted = confirmedList.includes(p.seatIdx);
+                return (
+                  <div key={p.seatIdx} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+                    {p.image ? (
+                      <Image src={p.image} alt="" width={28} height={28} className="rounded-full shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs shrink-0">
+                        {p.name?.[0] ?? "?"}
+                      </div>
+                    )}
+                    <span className="font-display font-semibold text-[var(--text-primary)] text-sm flex-1 truncate">{p.name ?? "?"}</span>
+                    {accepted ? (
+                      <Check size={16} className="text-emerald-400 shrink-0" />
+                    ) : (
+                      <Loader2 size={16} className="text-[var(--text-muted)] animate-spin shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Action buttons / status */}
+            {isPlayer && !iHaveConfirmed && (
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => handleConfirm(false)}
+                  disabled={confirming}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-display font-bold text-sm hover:border-red-500/40 hover:text-red-400 transition-colors disabled:opacity-50"
+                >
+                  <X size={15} /> {t("declineMatch")}
+                </button>
+                <button
+                  onClick={() => handleConfirm(true)}
+                  disabled={confirming}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white font-display font-bold text-sm hover:bg-emerald-400 transition-colors disabled:opacity-50"
+                >
+                  <Check size={15} /> {t("acceptMatch")}
+                </button>
+              </div>
+            )}
+            {isPlayer && iHaveConfirmed && (
+              <p className="text-emerald-400 text-sm font-semibold flex items-center gap-1.5">
+                <Check size={15} /> {t("youAccepted")} · {t("waitingForOthers")}
+              </p>
+            )}
+            {!isPlayer && (
+              <p className="text-[var(--text-muted)] text-sm">{t("spectating")}</p>
+            )}
+          </div>
+        </main>
+      );
     }
 
     const TC_OPTIONS = [
@@ -628,7 +809,7 @@ export default function DurakRoomPage() {
               {me?.isReady ? t("cancelReady") : t("imReady")}
             </button>
           )}
-          {isHost && (
+          {isHost && !room.rated && (
             <button
               onClick={() => post("start")}
               disabled={busy || totalOccupied < 2}
@@ -697,8 +878,7 @@ export default function DurakRoomPage() {
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
   // Show "took" badge on the player who just took cards (clears on next attack move)
   const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING") ? lastMove.seatIdx : null;
-  // Throwing phase: all cards on table are defended and phase is "throwing"
-  const isThrowingPhase = room.phase === "throwing" && room.table.every((s) => s.defense !== null);
+  // Not exposing isThrowingPhase in UI — doing so would leak which players have throwable cards
 
   return (
     <>
@@ -761,7 +941,7 @@ export default function DurakRoomPage() {
         {/* ── Table area ── */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-2 flex flex-col">
           {/* Opponents — single scrollable row */}
-          <div ref={onlineOppRef} className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 [scrollbar-width:none]">
+          <div ref={onlineOppRef} className="flex items-center justify-center gap-2 mb-3 overflow-x-auto pb-1 [scrollbar-width:none]">
             {others.map((p) => {
               const isAtk = p.seatIdx === room.attackerIdx;
               const isDef = p.seatIdx === room.defenderIdx;
@@ -830,7 +1010,7 @@ export default function DurakRoomPage() {
                           (room.phase === "throwing" &&
                             p.seatIdx !== room.attackerIdx &&
                             p.seatIdx !== room.defenderIdx &&
-                            !p.isOut && p.cardCount > 0))
+                            !p.isOut)) // no cardCount check — avoids leaking hand info
                       ) && (
                         <MoveTimer lastMoveAt={room.lastMoveAt} timeLimitSec={Number(room.timeControl)} isMyTurn={false} />
                       )}
@@ -840,13 +1020,6 @@ export default function DurakRoomPage() {
               );
             })}
           </div>
-
-          {/* Throwing phase banner */}
-          {isThrowingPhase && !finished && (
-            <div className="mb-2 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-center">
-              <span className="text-orange-400 text-xs font-display font-bold">⚡ {t("throwingPhaseBanner")}</span>
-            </div>
-          )}
 
           {/* Deck + Table in one row */}
           <div className="flex gap-3 mb-3">
@@ -1055,45 +1228,159 @@ export default function DurakRoomPage() {
           {/* My hand */}
           {isPlayer && (
             <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-              <div className="flex items-center justify-center gap-2 mb-2">
+              {/* Hand header row */}
+              <div className="flex items-center justify-center gap-2 mb-1">
                 <span className="text-[0.7rem] text-[var(--text-muted)]">
                   {t("yourHand")} ({isDealDone ? room.myHand.length : "?"})
                 </span>
                 {room.mySeatIdx === room.attackerIdx && <span className="text-[0.65rem] text-orange-400 font-bold">[{t("youAttack")}]</span>}
                 {isDefender && <span className="text-[0.65rem] text-red-400 font-bold">[{t("youDefend")}]</span>}
                 {room.timeControl !== "none" && (isAttackerSide || isDefender) && !finished && (
-                  <MoveTimer
-                    lastMoveAt={room.lastMoveAt}
-                    timeLimitSec={Number(room.timeControl)}
-                    isMyTurn
-                  />
+                  <MoveTimer lastMoveAt={room.lastMoveAt} timeLimitSec={Number(room.timeControl)} isMyTurn />
                 )}
+                {/* Settings gear */}
+                <button
+                  onClick={() => setShowHandSettings(v => !v)}
+                  title={t("handSettings")}
+                  className={`p-1 rounded-md transition-colors ${showHandSettings ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
+                >
+                  <Settings size={13} />
+                </button>
               </div>
-              {/* Scrollable hand — pt-4 gives room for hover translate-y */}
-              <div ref={onlineMyHandRef} className="overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch", paddingTop: 16 }}>
-                <div style={{ display: "flex", gap: 5, padding: "0 2px", width: "max-content" }}>
-                  {room.myHand.map((card, i) => {
-                    const key = `${card.suit}-${card.rank}-${i}`;
-                    const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
-                    const myPos = sortedSeats.findIndex(p => p.userId === myId);
-                    const di = i * room.players.length + Math.max(0, myPos);
-                    const cardVisible = isDealDone || dealStep > di;
-                    return (
-                      <div key={key}
-                        className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
-                        style={{ opacity: cardVisible ? 1 : 0, flexShrink: 0, transition: "transform 0.15s ease" }}>
-                        <DurakCard card={card} size="md"
-                          selected={!!selected && cardsEqual(selected, card)}
-                          onClick={() => onCardClick(card)}
-                          draggable={!finished && cardVisible}
-                          onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
-                          onDragEnd={() => setDragCard(null)}
-                          className="hover:-translate-y-3 transition-transform" />
-                      </div>
-                    );
-                  })}
+
+              {/* Hand settings panel */}
+              {showHandSettings && (
+                <div className="mb-2 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex flex-wrap items-center gap-4">
+                  {/* Auto-sort toggle */}
+                  <label className="flex items-center gap-2 text-[0.7rem] text-[var(--text-secondary)] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={handAutoSort}
+                      onChange={e => {
+                        setHandAutoSort(e.target.checked);
+                        localStorage.setItem("durak_hand_autosort", e.target.checked ? "1" : "0");
+                      }}
+                      className="accent-[var(--accent-orange)] w-3.5 h-3.5 cursor-pointer"
+                    />
+                    {t("autoSortHand")}
+                  </label>
+                  {/* Orientation */}
+                  <div className="flex items-center gap-1.5 text-[0.7rem]">
+                    <span className="text-[var(--text-muted)]">{t("handLayout")}:</span>
+                    {(["left", "right"] as const).map(side => (
+                      <button
+                        key={side}
+                        onClick={() => {
+                          setHandOrientation(side);
+                          localStorage.setItem("durak_hand_orientation", side);
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                          handOrientation === side
+                            ? "bg-[var(--accent-orange)]/20 text-[var(--accent-orange)]"
+                            : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                        }`}
+                      >
+                        {side === "left" ? `← ${t("layoutLeft")}` : `${t("layoutRight")} →`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Fan hand — adaptive density, selected card pops up, drag-to-reorder */}
+              {(() => {
+                const count = displayHand.length;
+                const fanSpread = Math.min(10, 90 / Math.max(1, count));
+                const fanStep   = Math.min(26, 300 / Math.max(1, count));
+                // "right" orientation: mirror angles/offsets by negating the sign
+                const orientSign = handOrientation === "right" ? -1 : 1;
+                const sortedSeats = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
+                const myPos = sortedSeats.findIndex(p => p.userId === myId);
+
+                return (
+                  <div
+                    ref={onlineMyHandRef}
+                    style={{ position: "relative", height: 140, width: "100%", marginTop: 8 }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertBeforeIdx(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragCard(null); // always clear — prevents stuck semi-transparent card
+                      if (insertBeforeIdx === null) return;
+                      try {
+                        const card = JSON.parse(e.dataTransfer.getData("durak-card")) as Card;
+                        reorderHand(card, insertBeforeIdx);
+                      } catch { /* ignore */ }
+                      setInsertBeforeIdx(null);
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                  >
+                    {displayHand.map((card, i) => {
+                      const key = `${card.suit}-${card.rank}-${i}`;
+                      const di = i * room.players.length + Math.max(0, myPos);
+                      const cardVisible = isDealDone || dealStep > di;
+                      const isSelected = !!selected && cardsEqual(selected, card);
+                      const isDragging = !!dragCard && cardsEqual(dragCard, card);
+
+                      const angle  = orientSign * (i - (count - 1) / 2) * fanSpread;
+                      const offset = orientSign * (i - (count - 1) / 2) * fanStep;
+                      const liftY  = isSelected ? -22 : 0;
+
+                      // For insert indicator: with right orientation, left/right flip
+                      const showInsertLeft  = !handAutoSort && insertBeforeIdx === i && dragCard && !isDragging;
+                      const showInsertRight = !handAutoSort && i === count - 1 && insertBeforeIdx === count && dragCard && !isDragging;
+
+                      return (
+                        <div
+                          key={key}
+                          className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""}
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            bottom: 0,
+                            transform: `translateX(calc(-50% + ${offset}px)) rotate(${angle}deg) translateY(${liftY}px)`,
+                            transformOrigin: "bottom center",
+                            transition: "transform 0.15s ease",
+                            zIndex: isSelected ? count + 10 : handOrientation === "right" ? count - 1 - i : i,
+                            opacity: isDragging ? 0.4 : cardVisible ? 1 : 0,
+                            pointerEvents: cardVisible ? "auto" : "none",
+                          }}
+                          onDragOver={(e) => {
+                            if (!dragCard || handAutoSort || !cardVisible) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const mid = rect.left + rect.width / 2;
+                            // for right orientation: flip left/right meaning
+                            const goLeft = handOrientation === "right" ? e.clientX > mid : e.clientX < mid;
+                            setInsertBeforeIdx(goLeft ? i : i + 1);
+                          }}
+                        >
+                          {/* Insert indicator left */}
+                          {showInsertLeft && (
+                            <div style={{ position: "absolute", left: -4, top: "8%", bottom: "8%", width: 3, borderRadius: 4, background: "#3b82f6", zIndex: 30, pointerEvents: "none" }} />
+                          )}
+                          {/* Insert indicator right (last card) */}
+                          {showInsertRight && (
+                            <div style={{ position: "absolute", right: -4, top: "8%", bottom: "8%", width: 3, borderRadius: 4, background: "#3b82f6", zIndex: 30, pointerEvents: "none" }} />
+                          )}
+                          <DurakCard
+                            card={card}
+                            size="md"
+                            selected={isSelected}
+                            onClick={() => onCardClick(card)}
+                            draggable={!finished && cardVisible}
+                            onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
+                            onDragEnd={() => { setDragCard(null); setInsertBeforeIdx(null); }}
+                            className={`transition-transform duration-150 ${!isSelected ? "hover:-translate-y-4" : ""}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

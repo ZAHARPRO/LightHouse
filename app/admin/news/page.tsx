@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import NewsAdminForm from "@/components/NewsAdminForm";
+import AnnouncementMessagesSection from "@/components/AnnouncementMessagesSection";
 import { Trash2, Calendar, MessageSquare } from "lucide-react";
 import { deleteNewsPost } from "@/actions/news";
 
@@ -15,13 +16,18 @@ export default async function AdminNewsPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "ADMIN") redirect("/feed");
 
-  const posts = await prisma.newsPost.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      author: { select: { name: true } },
-      _count: { select: { comments: true, likes: true } },
-    },
-  });
+  const [posts, announcementMessages] = await Promise.all([
+    prisma.newsPost.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { name: true } },
+        _count: { select: { comments: true, likes: true } },
+      },
+    }),
+    prisma.announcementMessage.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return (
     <div>
@@ -40,10 +46,17 @@ export default async function AdminNewsPage() {
         <NewsAdminForm />
       </div>
 
-      {/* Existing posts */}
-      <h2 className="font-display font-bold text-base text-[var(--text-primary)] mb-4">
-        Published ({posts.length})
-      </h2>
+      {/* Pop-up messages section */}
+      <AnnouncementMessagesSection initial={announcementMessages} />
+
+      <div className="mt-10 mb-4">
+        <h2 className="font-display font-bold text-base text-[var(--text-primary)]">
+          Published ({posts.length})
+        </h2>
+        <p className="text-[var(--text-muted)] text-sm">
+          News posts appear as announcement toasts in the notification hub when published.
+        </p>
+      </div>
 
       {posts.length === 0 ? (
         <p className="text-[var(--text-muted)] text-sm">No news posts yet.</p>

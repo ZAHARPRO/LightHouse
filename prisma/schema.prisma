@@ -87,6 +87,7 @@ model User {
   durakElo               Int     @default(400)
   durakCheaterCatches    Int     @default(0)
   durakCheaterBanned     Boolean @default(false)
+  durakQueueMutedUntil   DateTime?
   durakRoomsHosted       DurakRoom[]       @relation("DurakHost")
   durakRoomsPlayed       DurakPlayerSlot[]
 
@@ -1031,6 +1032,9 @@ model DurakRoom {
   movesJson      String @default("[]") @db.Text
   spectatorsJson String @default("[]") @db.Text
 
+  confirmingAt    DateTime? // set when rated room fills up, waiting for all to accept
+  confirmedSeats  String    @default("[]") @db.Text // JSON: seatIdx[] that have confirmed
+
   startedAt  DateTime?
   endedAt    DateTime?
   createdAt  DateTime @default(now())
@@ -1058,4 +1062,13 @@ model DurakPlayerSlot {
 
   @@unique([roomId, seatIdx])
   @@unique([roomId, userId])
+}
+
+model AnnouncementMessage {
+  id        String   @id @default(cuid())
+  text      String
+  emoji     String   @default("📢")
+  color     String   @default("#f97316")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

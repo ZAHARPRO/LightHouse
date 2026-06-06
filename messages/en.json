@@ -994,7 +994,7 @@
   },
   "durak": {
     "cancelRoom": "Cancel room",
-   "returnToGame": "Return to game",
+    "returnToGame": "Return to game",
     "selectCardToAttack": "Select a card to attack",
     "addCardOrPass": "Add a card or pass",
     "throwRule": "Who can throw in",
@@ -1120,6 +1120,9 @@
     "badgeDurakOnlineWin": "King of Cards",
     "badgeDurakOnlineWinDesc": "Won an online Durak match",
     "badgeDurakNotDurak": "Not the Durak",
-    "badgeDurakNotDurakDesc": "Survived a 4+ player Durak game"
+    "badgeDurakNotDurakDesc": "Survived a 4+ player Durak game",
+    "throwingPhaseBanner": "Others can throw — or press Pass to end the round",
+    "defenderTook": "TOOK",
+    "leaveRoom": "Leave"
   }
 }

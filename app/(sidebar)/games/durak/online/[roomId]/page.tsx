@@ -13,6 +13,7 @@ import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
 import type { Card, TableSlot } from "@/lib/durak";
 import { SUIT_SYMBOL, SUIT_IS_RED, cardsEqual, canTransfer } from "@/lib/durak";
 import type { MoveRecord } from "@/lib/durak-engine";
+import { playSound } from "@/lib/gameSounds";
 
 function MoveTimer({ lastMoveAt, timeLimitSec, isMyTurn }: { lastMoveAt: string | null; timeLimitSec: number; isMyTurn: boolean }) {
   const [left, setLeft] = useState(() => {
@@ -288,6 +289,61 @@ export default function DurakRoomPage() {
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [movesLen]);
+
+  // 5-second timer warning sound — plays once per turn when ≤5s remain
+  const warnPlayedRef = useRef(false);
+  useEffect(() => {
+    if (!room?.lastMoveAt || room.timeControl === "none") return;
+    warnPlayedRef.current = false; // reset on new turn
+  }, [room?.lastMoveAt]);
+  useEffect(() => {
+    if (!room?.lastMoveAt || room.timeControl === "none" || room.status !== "PLAYING") return;
+    const limitMs = Number(room.timeControl) * 1000;
+    const id = setInterval(() => {
+      const remaining = limitMs - (Date.now() - new Date(room.lastMoveAt!).getTime());
+      if (remaining <= 5000 && remaining > 0 && !warnPlayedRef.current) {
+        warnPlayedRef.current = true;
+        playSound("dk_time_warning");
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [room?.lastMoveAt, room?.timeControl, room?.status]);
+
+  // Action sounds — play when opponents make moves (own moves are felt immediately)
+  const prevMovesJsonRef = useRef<string>("");
+  useEffect(() => {
+    if (!room?.movesJson || room.movesJson === prevMovesJsonRef.current) return;
+    try {
+      const prevLen = prevMovesJsonRef.current
+        ? (JSON.parse(prevMovesJsonRef.current) as MoveRecord[]).length
+        : 0;
+      const curr = JSON.parse(room.movesJson) as MoveRecord[];
+      const newMoves = curr.slice(prevLen);
+      for (const move of newMoves) {
+        if (move.seatIdx !== room.mySeatIdx) {
+          const soundMap: Partial<Record<string, import("@/lib/gameSounds").SoundKey>> = {
+            attack: "dk_attack", throw: "dk_attack", transfer: "dk_attack",
+            defend: "dk_defend",
+            take: "dk_take",
+            pass: "dk_pass",
+          };
+          const key = soundMap[move.action];
+          if (key) playSound(key);
+        }
+      }
+    } catch {}
+    prevMovesJsonRef.current = room.movesJson;
+  }, [room?.movesJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Win / lose sound when game ends
+  const endSoundPlayedRef = useRef(false);
+  useEffect(() => {
+    if (!room || room.status !== "FINISHED" || endSoundPlayedRef.current) return;
+    if (room.myRole !== "player") return;
+    endSoundPlayedRef.current = true;
+    if (room.winner === myId) playSound("dk_lose");
+    else playSound("dk_win");
+  }, [room?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function post(path: string, body?: object): Promise<boolean> {
     setBusy(true);
@@ -638,6 +694,11 @@ export default function DurakRoomPage() {
     canTransfer(activeCard, room.table, "perevodnoy", nextDefPlayer?.cardCount ?? 99);
 
   const moves: MoveRecord[] = (() => { try { return JSON.parse(room.movesJson ?? "[]"); } catch { return []; } })();
+  const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
+  // Show "took" badge on the player who just took cards (clears on next attack move)
+  const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING") ? lastMove.seatIdx : null;
+  // Throwing phase: all cards on table are defended and phase is "throwing"
+  const isThrowingPhase = room.phase === "throwing" && room.table.every((s) => s.defense !== null);
 
   return (
     <>
@@ -739,6 +800,9 @@ export default function DurakRoomPage() {
                       {isAtk && <span className="text-[0.5rem] font-bold text-orange-400">▲</span>}
                       {isDef && <span className="text-[0.5rem] font-bold text-red-400">🛡</span>}
                       {p.isOut && <span className="text-[0.5rem] font-bold text-emerald-400">✓</span>}
+                      {p.seatIdx === defTookSeat && (
+                        <span className="text-[0.5rem] font-extrabold px-1 rounded bg-red-500/20 text-red-400 leading-none py-px">{t("defenderTook")}</span>
+                      )}
                     </div>
 
                     {/* Cards + count */}
@@ -761,7 +825,13 @@ export default function DurakRoomPage() {
                       ].join(" ")}>
                         {isDealDone ? p.cardCount : "?"}
                       </span>
-                      {room.timeControl !== "none" && (isAtk || isDef) && !finished && (
+                      {room.timeControl !== "none" && !finished && (
+                        (isAtk || isDef ||
+                          (room.phase === "throwing" &&
+                            p.seatIdx !== room.attackerIdx &&
+                            p.seatIdx !== room.defenderIdx &&
+                            !p.isOut && p.cardCount > 0))
+                      ) && (
                         <MoveTimer lastMoveAt={room.lastMoveAt} timeLimitSec={Number(room.timeControl)} isMyTurn={false} />
                       )}
                     </div>
@@ -771,16 +841,19 @@ export default function DurakRoomPage() {
             })}
           </div>
 
+          {/* Throwing phase banner */}
+          {isThrowingPhase && !finished && (
+            <div className="mb-2 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-center">
+              <span className="text-orange-400 text-xs font-display font-bold">⚡ {t("throwingPhaseBanner")}</span>
+            </div>
+          )}
+
           {/* Deck + Table in one row */}
           <div className="flex gap-3 mb-3">
             {/* Left column: deck / trump / discard / pass */}
             <div className="flex flex-col items-center gap-2 shrink-0 w-[80px]">
-              {/* Deck with trump card peeking */}
+              {/* Deck */}
               <div className="relative" ref={onlineDeckRef} style={{ width: 70, height: 100 }}>
-                {room.trumpCard && (
-                  <DurakCard card={room.trumpCard} size="md"
-                    style={{ position: "absolute", left: 16, top: 10, transform: "rotate(90deg)", zIndex: 0 }} />
-                )}
                 {room.deckCount > 0 ? (
                   <>
                     <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0, zIndex: 1 }} />
@@ -813,8 +886,9 @@ export default function DurakRoomPage() {
                 <span className="text-[0.55rem] text-[var(--text-muted)] uppercase tracking-wide">{t("discard")}</span>
               </div>
 
-              {/* Pass button (attacker, table not empty) */}
-              {isAttackerSide && room.table.length > 0 && !finished && (
+              {/* Pass button (attacker/thrower, table not empty, all cards defended) */}
+              {isAttackerSide && room.table.length > 0 && !finished &&
+                (room.phase !== "throwing" || room.table.every((s) => s.defense !== null)) && (
                 <button onClick={doPass} disabled={busy}
                   className="w-full px-2 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-display font-bold hover:text-[var(--text-primary)] transition-colors disabled:opacity-40">
                   {t("pass")}

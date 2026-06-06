@@ -72,6 +72,7 @@ type SlotWithUser = {
   isReady: boolean;
   isOut: boolean;
   eloDelta: number | null;
+  finishPosition: number | null;
   user: { id: string; name: string | null; image: string | null; durakElo: number };
 };
 
@@ -107,7 +108,17 @@ type RoomWithSlots = {
 export const roomInclude = {
   players: {
     orderBy: { seatIdx: "asc" as const },
-    include: {
+    select: {
+      id: true,
+      userId: true,
+      seatIdx: true,
+      handJson: true,
+      timeMs: true,
+      isReady: true,
+      isOut: true,
+      eloDelta: true,
+      finishPosition: true,
+      eloSnapshot: true,
       user: { select: { id: true, name: true, image: true, durakElo: true } },
     },
   },
@@ -217,8 +228,26 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
 }
 
 /**
- * Finalize a finished rated game: the durak loses ELO against each winner
- * individually; each winner gains. Deltas are summed and persisted per slot.
+ * ELO multipliers by finish position (1st winner = index 0).
+ * 1st: 100%, 2nd: 80%, 3rd: 60%, 4th: 40%, 5th: 30%, 6th+: 20%.
+ */
+const POSITION_MULTIPLIERS = [1.0, 0.8, 0.6, 0.4, 0.3, 0.2];
+const BASE_ELO = 50; // base ELO amount for 1st place winner
+
+/**
+ * Finalize a finished rated game using position-based ELO.
+ *
+ * Winners earn BASE_ELO × position_multiplier (1st=50, 2nd=40, 3rd=30…).
+ * The Durak (last player) loses BASE_ELO (50).
+ * That 50-ELO penalty is split evenly among all non-Durak players as a
+ * bonus on top of their position-based gain (floor division, remainder lost).
+ *
+ * Example (4 players):
+ *   1st: +50 (position) + 16 (split of 50÷3) = +66
+ *   2nd: +40 + 16 = +56
+ *   3rd: +30 + 16 = +46
+ *   Durak: −50
+ *
  * Idempotent: skips if any slot already has an eloDelta.
  */
 export async function finalizeRatedDurak(
@@ -234,22 +263,24 @@ export async function finalizeRatedDurak(
 
   const durakSlot = room.players.find((p) => p.seatIdx === durakSeatIdx);
   if (!durakSlot) return;
-  const winners = room.players.filter((p) => p.seatIdx !== durakSeatIdx);
-  if (winners.length === 0) return;
 
-  const durakElo = durakSlot.user.durakElo;
-  let durakTotalLoss = 0;
+  // Sort winners by the order they finished (finishPosition ascending).
+  const winners = room.players
+    .filter((p) => p.seatIdx !== durakSeatIdx && p.finishPosition != null)
+    .sort((a, b) => (a.finishPosition ?? 0) - (b.finishPosition ?? 0));
+
+  // The Durak's 50 ELO penalty is split equally as a bonus to each winner.
+  const durakLoss = BASE_ELO;
+  const splitBonus = winners.length > 0 ? Math.floor(durakLoss / winners.length) : 0;
 
   const updates: Array<Promise<unknown>> = [];
+  const winnerDeltas: { slot: SlotWithUser; delta: number }[] = [];
 
-  // Compute each winner's gain vs the durak.
-  const winnerDeltas = winners.map((w) => {
-    const [delta] = calculateEloDelta(w.user.durakElo, durakElo);
-    durakTotalLoss += delta;
-    return { slot: w, delta };
-  });
-
-  for (const { slot, delta } of winnerDeltas) {
+  for (const [i, slot] of winners.entries()) {
+    const multiplier = POSITION_MULTIPLIERS[i] ?? 0.2;
+    const positionGain = Math.round(BASE_ELO * multiplier);
+    const delta = positionGain + splitBonus;
+    winnerDeltas.push({ slot, delta });
     updates.push(
       prisma.user.update({
         where: { id: slot.userId },
@@ -261,30 +292,26 @@ export async function finalizeRatedDurak(
     );
   }
 
+  // Durak loses BASE_ELO
   updates.push(
     prisma.user.update({
       where: { id: durakSlot.userId },
-      data: { durakElo: Math.max(100, durakElo - durakTotalLoss) },
+      data: { durakElo: Math.max(100, durakSlot.user.durakElo - durakLoss) },
     }),
   );
   updates.push(
-    prisma.durakPlayerSlot.update({
-      where: { id: durakSlot.id },
-      data: { eloDelta: -durakTotalLoss },
-    }),
+    prisma.durakPlayerSlot.update({ where: { id: durakSlot.id }, data: { eloDelta: -durakLoss } }),
   );
 
   await Promise.all(updates);
 
-  // Award ELO rank badges and online-win badge to all participants
+  // Badges
   for (const { slot, delta } of winnerDeltas) {
     const newElo = Math.max(100, slot.user.durakElo + delta);
     await awardBadge(prisma, slot.userId, "DURAK_ONLINE_WIN");
     await awardDurakEloBadges(prisma, slot.userId, newElo);
-    // Extra badge for surviving a 4+ player game
     if (winners.length >= 3) await awardBadge(prisma, slot.userId, "DURAK_NOT_DURAK");
   }
-  // ELO badge check for the durak too (they might still be above a threshold after the loss)
-  const newDurakElo = Math.max(100, durakElo - durakTotalLoss);
+  const newDurakElo = Math.max(100, durakSlot.user.durakElo - durakLoss);
   await awardDurakEloBadges(prisma, durakSlot.userId, newDurakElo);
 }

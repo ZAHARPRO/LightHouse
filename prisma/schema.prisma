@@ -1023,6 +1023,7 @@ model DurakRoom {
   pendingCheatJson String? @db.Text // {type, cheaterIdx, targetIdx, card?, expiresAt}
 
   winner      String?  // userId of the durak (loser)
+  finishCount Int     @default(0)  // how many players have gone out (won) so far
 
   // Bot slots: [{seatIdx, difficulty, handJson, isOut}]
   botsJson       String @default("[]") @db.Text
@@ -1051,8 +1052,9 @@ model DurakPlayerSlot {
   timeMs   Int?      // remaining time in ms
   isReady  Boolean   @default(false)
   isOut    Boolean   @default(false)  // finished (no cards)
-  eloSnapshot Int?
-  eloDelta    Int?
+  eloSnapshot    Int?
+  eloDelta       Int?
+  finishPosition Int?  // 1 = 1st winner, 2 = 2nd… null = still playing or durak
 
   @@unique([roomId, seatIdx])
   @@unique([roomId, userId])

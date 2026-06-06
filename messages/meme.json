@@ -1120,6 +1120,9 @@
     "badgeDurakOnlineWin": "card boss",
     "badgeDurakOnlineWinDesc": "made someone else the durak online",
     "badgeDurakNotDurak": "NOT THE DURAK",
-    "badgeDurakNotDurakDesc": "4+ player game and someone else got cooked"
+    "badgeDurakNotDurakDesc": "4+ player game and someone else got cooked",
+    "throwingPhaseBanner": "Кидай карти або жми Пас, пес",
+    "defenderTook": "ВЗЯВ",
+    "leaveRoom": "Слиняти"
   }
 }

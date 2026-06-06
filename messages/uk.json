@@ -1120,6 +1120,9 @@
     "badgeDurakOnlineWin": "Король Карт",
     "badgeDurakOnlineWinDesc": "Виграв онлайн-матч у Дурака",
     "badgeDurakNotDurak": "Не дурак",
-    "badgeDurakNotDurakDesc": "Вижив у грі на 4+ гравців у Дурака"
+    "badgeDurakNotDurakDesc": "Вижив у грі на 4+ гравців у Дурака",
+    "throwingPhaseBanner": "Інші можуть підкинути — або натисніть Пас, щоб завершити хід",
+    "defenderTook": "ВЗЯВ",
+    "leaveRoom": "Вийти"
   }
 }

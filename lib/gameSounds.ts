@@ -33,7 +33,16 @@ export type SoundKey =
   | "bl_pocket"
   | "bl_scratch"
   | "bl_win"
-  | "bl_defeat";
+  | "bl_defeat"
+  // durak
+  | "dk_deal"
+  | "dk_attack"
+  | "dk_defend"
+  | "dk_take"
+  | "dk_pass"
+  | "dk_win"
+  | "dk_lose"
+  | "dk_time_warning";
 
 export const SOUND_META: Record<SoundKey, string> = {
   // matchmaking / lobby
@@ -69,6 +78,15 @@ export const SOUND_META: Record<SoundKey, string> = {
   bl_scratch:     "Scratch / Cue Ball Pocketed (billiards)",
   bl_win:         "Win (billiards)",
   bl_defeat:      "Defeat (billiards)",
+  // durak
+  dk_deal:          "Card Deal (durak)",
+  dk_attack:        "Attack / Card Placed (durak)",
+  dk_defend:        "Defense / Beat Card (durak)",
+  dk_take:          "Take Cards (durak)",
+  dk_pass:          "Pass (durak)",
+  dk_win:           "Win — not the Durak (durak)",
+  dk_lose:          "Lose — you are the Durak (durak)",
+  dk_time_warning:  "5-Second Timer Warning (durak)",
 };
 
 export const ALL_SOUND_KEYS = Object.keys(SOUND_META) as SoundKey[];

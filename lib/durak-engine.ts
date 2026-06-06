@@ -33,6 +33,7 @@ type SlotRow = {
   handJson: string;
   timeMs: number | null;
   isOut: boolean;
+  finishPosition: number | null;
 };
 
 export type BotSlotData = {
@@ -60,6 +61,7 @@ type RoomRow = {
   phase: string;
   lastMoveAt: Date | null;
   winner: string | null;
+  finishCount: number;
   botsJson: string;
   movesJson: string;
   players: SlotRow[];
@@ -122,6 +124,35 @@ function loadState(room: RoomRow): Mutable {
 /** Number of seats actually used (some may be empty if room not full). */
 function seatCount(room: RoomRow): number {
   return room.maxPlayers;
+}
+
+/**
+ * Returns the seat indices of players who are eligible to throw cards in
+ * the throwing phase — i.e. everyone except the defender, the main attacker
+ * who already passed, and players who are already out.
+ */
+function getEligibleThrowerSeats(room: RoomRow, state: Mutable): number[] {
+  const allSeats = [
+    ...room.players.map((p) => p.seatIdx),
+    ...parseBots(room.botsJson).map((b) => b.seatIdx),
+  ];
+  return allSeats.filter(
+    (s) =>
+      s !== state.defenderIdx &&
+      s !== state.attackerIdx && // main attacker already passed
+      !state.outPlayers.has(s) &&
+      (state.hands[s]?.length ?? 0) > 0,
+  );
+}
+
+/** Returns true if no bout has resolved yet (first defense round of the game). */
+function isFirstBout(movesJson: string): boolean {
+  try {
+    const moves = JSON.parse(movesJson) as Array<{ action: string }>;
+    return !moves.some((m) => m.action === "pass" || m.action === "take");
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -206,14 +237,20 @@ function withEmptySeatsOut(room: RoomRow, state: Mutable): Set<number> {
 /** Persist the mutated state back to the room + slots. */
 async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null, move?: MoveRecord): Promise<void> {
   const ops: Array<Promise<unknown>> = [];
-  // Real player slots
+  // Track finish positions for players who newly went out this turn
+  let finishCount = room.finishCount;
   for (const slot of room.players) {
+    const wasOut = slot.isOut;
+    const isNowOut = state.outPlayers.has(slot.seatIdx);
+    const newlyOut = !wasOut && isNowOut;
+    if (newlyOut) finishCount++;
     ops.push(
       prisma.durakPlayerSlot.update({
         where: { id: slot.id },
         data: {
           handJson: JSON.stringify(state.hands[slot.seatIdx] ?? []),
-          isOut: state.outPlayers.has(slot.seatIdx),
+          isOut: isNowOut,
+          ...(newlyOut && slot.finishPosition == null ? { finishPosition: finishCount } : {}),
         },
       }),
     );
@@ -247,6 +284,7 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
         defenderIdx: state.defenderIdx,
         phase: state.phase,
         lastMoveAt: new Date(),
+        finishCount,
         botsJson: JSON.stringify(updatedBots),
         movesJson: newMovesJson,
         ...(finished ? { status: "FINISHED", winner: winnerUserId, endedAt: new Date(), pendingCheatJson: null } : {}),
@@ -323,6 +361,10 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
     case "attack":
     case "throw": {
       if (!isAttackerSide) return { ok: false, error: "Not attacking" };
+      // In throwing phase the main attacker has already passed — they cannot throw more.
+      if (state.phase === "throwing" && mySeat === state.attackerIdx) {
+        return { ok: false, error: "Attacker already passed" };
+      }
       if (state.outPlayers.has(state.defenderIdx)) return { ok: false, error: "No defender" };
       const card = input.card;
       if (!card || !handHas(card)) return { ok: false, error: "No such card" };
@@ -338,16 +380,18 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
         }
       }
       if (!canAttack(card, state.table)) return { ok: false, error: "Illegal attack" };
-      // Cap total attacks at 6, and never exceed what the defender can still beat:
-      // the number of undefended attacks must not surpass the defender's hand size.
+      // First bout: max 5 cards. Subsequent bouts: max 6 (or defender hand size).
+      const firstBout = isFirstBout(room.movesJson);
+      const boutMax = firstBout ? 5 : 6;
       const defenderHand = state.hands[state.defenderIdx].length;
       const undefended = state.table.filter((s) => !s.defense).length;
-      if (state.table.length >= 6 || undefended >= maxAttackCards(defenderHand)) {
+      if (state.table.length >= boutMax || undefended >= maxAttackCards(defenderHand)) {
         return { ok: false, error: "Table full" };
       }
       removeFromHand(card);
       state.table.push({ attack: card, defense: null });
-      state.phase = "defense";
+      // Stay in "throwing" phase if we're already there; otherwise enter "defense".
+      state.phase = state.phase === "throwing" ? "throwing" : "defense";
       break;
     }
 
@@ -396,7 +440,30 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (!isAttackerSide) return { ok: false, error: "Not attacking" };
       if (state.table.length === 0) return { ok: false, error: "Nothing to pass" };
       if (!isFullyDefended(state.table)) return { ok: false, error: "Defender still defending" };
-      winnerUserId = resolveBout(room, state, false);
+
+      if (state.phase === "throwing") {
+        // Already in throwing phase — any pass immediately resolves the bout.
+        winnerUserId = resolveBout(room, state, false);
+      } else if (mySeat === state.attackerIdx) {
+        // Main attacker pressing pass: check if other players can still throw.
+        const firstBout = isFirstBout(room.movesJson);
+        const boutMax = firstBout ? 5 : 6;
+        const defHand = state.hands[state.defenderIdx]?.length ?? 0;
+        const hasRoom =
+          state.table.length < boutMax &&
+          state.table.length < maxAttackCards(defHand);
+        const eligibleThrowers = getEligibleThrowerSeats(room, state);
+
+        if (hasRoom && eligibleThrowers.length > 0) {
+          // Enter throwing phase: other players get timer to throw additional cards.
+          state.phase = "throwing";
+        } else {
+          winnerUserId = resolveBout(room, state, false);
+        }
+      } else {
+        // Non-main-attacker pressing pass outside throwing phase → resolve.
+        winnerUserId = resolveBout(room, state, false);
+      }
       break;
     }
 
@@ -445,10 +512,43 @@ export async function processBotTurns(roomId: string): Promise<void> {
     if (state.phase === "finished") return;
 
     // Which seat needs to act?
-    // When in defense phase but all cards are already beaten, the ATTACKER
-    // needs to act next (pass or throw more) — not the defender.
-    const allDefended = state.phase === "defense" && state.table.length > 0 && state.table.every(s => s.defense !== null);
-    const actingSeat = (state.phase === "defense" && !allDefended) ? state.defenderIdx : state.attackerIdx;
+    const needsDefense = state.table.some((s) => !s.defense);
+    let actingSeat: number;
+
+    if (state.phase === "throwing") {
+      if (needsDefense) {
+        // A thrower placed a card — defender must beat it.
+        actingSeat = state.defenderIdx;
+      } else {
+        // All defended in throwing phase — find the first eligible bot thrower.
+        const eligible = getEligibleThrowerSeats(room, state);
+        const throwerBot = bots.find((b) => eligible.includes(b.seatIdx));
+        if (!throwerBot) return; // Only humans can throw; timer will resolve.
+        // Bot passes in throwing phase → resolve the bout immediately.
+        const existingLen2 = (() => {
+          try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; }
+        })();
+        const passRecord: MoveRecord = {
+          seq: existingLen2 + 1,
+          action: "pass",
+          seatIdx: throwerBot.seatIdx,
+          name: null,
+          at: Date.now(),
+        };
+        const win2 = resolveBout(room, state, false);
+        await persist(room, state, win2, passRecord);
+        broadcast(roomId, { type: "update" });
+        return; // Bout resolved.
+      }
+    } else {
+      // Normal attack/defense phases.
+      // When in defense phase but all cards are already beaten, the ATTACKER
+      // needs to act next (pass or throw more) — not the defender.
+      const allDefended = state.phase === "defense" && state.table.length > 0 && !needsDefense;
+      actingSeat = (state.phase === "defense" && needsDefense) ? state.defenderIdx : state.attackerIdx;
+      void allDefended; // used for clarity only
+    }
+
     const actingBot = bots.find((b) => b.seatIdx === actingSeat);
     if (!actingBot) return; // human's turn
 
@@ -461,8 +561,12 @@ export async function processBotTurns(roomId: string): Promise<void> {
       .filter((s) => s !== actingSeat)
       .map((s) => state.hands[s]?.length ?? 0);
 
-    // When all cards are defended, tell the bot it's "attack" phase (so it passes or throws)
-    const effectivePhase = allDefended ? "attack" : state.phase as ClientBotState["phase"];
+    // When all cards are defended (or in throwing phase), tell the bot it's "attack" phase
+    // so it decides whether to throw more or pass.
+    const allDefendedNow = state.table.length > 0 && !needsDefense;
+    const effectivePhase = (allDefendedNow || state.phase === "throwing")
+      ? "attack"
+      : state.phase as ClientBotState["phase"];
 
     const botState: ClientBotState = {
       hand: state.hands[actingSeat] ?? [],
@@ -485,9 +589,11 @@ export async function processBotTurns(roomId: string): Promise<void> {
       case "throw": {
         if (!action.card) break;
         if (!canAttack(action.card, state.table)) break;
+        const botFirstBout = isFirstBout(room.movesJson);
+        const botBoutMax = botFirstBout ? 5 : 6;
         const defHand = state.hands[state.defenderIdx]?.length ?? 0;
         const undefended = state.table.filter((s) => !s.defense).length;
-        if (state.table.length >= 6 || undefended >= maxAttackCards(defHand)) break;
+        if (state.table.length >= botBoutMax || undefended >= maxAttackCards(defHand)) break;
         if (state.table.length === 0 && actingSeat !== state.attackerIdx) break; // must be main attacker
         // Throw-in: enforce throwRule
         if (state.table.length > 0 && actingSeat !== state.attackerIdx) {
@@ -570,16 +676,39 @@ export async function resolveTimeouts(room: RoomRow): Promise<boolean> {
   const state = loadState(room);
   let winnerUserId: string | null = null;
 
-  if (state.phase === "defense" && !isFullyDefended(state.table)) {
+  if (state.phase === "throwing") {
+    const needsDefense = state.table.some((s) => !s.defense);
+    if (needsDefense) {
+      // A card was thrown but defender ran out of time → defender takes all.
+      winnerUserId = resolveBout(room, state, true);
+    } else {
+      // Throwing phase expired with all cards defended → resolve successfully.
+      winnerUserId = resolveBout(room, state, false);
+    }
+  } else if (state.phase === "defense" && !isFullyDefended(state.table)) {
     // Defender ran out of time → takes the cards.
     winnerUserId = resolveBout(room, state, true);
   } else if (state.table.length > 0 && isFullyDefended(state.table)) {
-    // Attackers ran out of time after a full defense → bout ends, discard.
-    winnerUserId = resolveBout(room, state, false);
+    // Attacker ran out of time after a full defense.
+    // If it's a human player, they lose (become Durak). Bots just pass automatically.
+    if (!isBotSeat(room, state.attackerIdx)) {
+      const attackerSlot = room.players.find((p) => p.seatIdx === state.attackerIdx);
+      state.phase = "finished";
+      winnerUserId = attackerSlot?.userId ?? null;
+    } else {
+      winnerUserId = resolveBout(room, state, false);
+    }
   } else {
-    // Idle attack phase with nothing on the table — just advance the turn.
-    state.attackerIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
-    state.defenderIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
+    // Attack phase, nothing on table — attacker failed to play.
+    // Human attacker loses; bot attacker just skips turn.
+    if (!isBotSeat(room, state.attackerIdx)) {
+      const attackerSlot = room.players.find((p) => p.seatIdx === state.attackerIdx);
+      state.phase = "finished";
+      winnerUserId = attackerSlot?.userId ?? null;
+    } else {
+      state.attackerIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
+      state.defenderIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
+    }
   }
 
   await persist(room, state, winnerUserId);

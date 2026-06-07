@@ -9,7 +9,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import Image from "next/image";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import Link from "next/link";
 import {
   initialBoard, getLegalMoves, applyMove, countPieces,
@@ -221,8 +221,8 @@ function useCountdown(initMs: number | null, running: boolean) {
 }
 
 // ── PlayerCard ────────────────────────────────────────────────────────────────
-function PlayerCard({ name, image, elo, color, timeMs, active, isMe, eloDelta, pieces }: {
-  name: string | null; image: string | null; elo: number; color: "w"|"b";
+function PlayerCard({ userId, name, image, elo, color, timeMs, active, isMe, eloDelta, pieces }: {
+  userId: string; name: string | null; image: string | null; elo: number; color: "w"|"b";
   timeMs: number | null; active: boolean; isMe: boolean;
   eloDelta?: number | null; pieces: number;
 }) {
@@ -233,9 +233,7 @@ function PlayerCard({ name, image, elo, color, timeMs, active, isMe, eloDelta, p
       "flex items-center gap-3 px-3 py-2 rounded-xl border transition-colors",
       active ? "border-pink-500/50 bg-pink-500/5" : "border-[var(--border-subtle)] bg-[var(--bg-elevated)]",
     ].join(" ")}>
-      {image
-        ? <Image src={image} alt="" width={32} height={32} className="rounded-full shrink-0" />
-        : <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-pink)] font-bold text-xs shrink-0">{name?.[0] ?? "?"}</div>}
+      <PlayerAvatar userId={userId} name={name} image={image} size={32} />
       <div className="flex-1 min-w-0">
         <p className="font-display font-bold text-sm text-[var(--text-primary)] truncate">
           {name ?? "Anonymous"}{isMe && <span className="text-[0.6rem] text-[var(--accent-orange)] ml-1">(you)</span>}
@@ -594,6 +592,7 @@ if (room.status === "WAITING") {
           <div className="flex items-center gap-2 mb-1">
             <div className="flex-1 min-w-0">
               <PlayerCard
+                userId={flipped ? room.hostId : (room.guestId ?? "")}
                 name={flipped ? (room.hostName ?? "?") : (room.guestName ?? "?")}
                 image={flipped ? room.hostImage : room.guestImage}
                 elo={flipped ? room.hostElo : (room.guestElo ?? 0)}
@@ -669,6 +668,7 @@ if (room.status === "WAITING") {
           {/* Bottom player */}
           <div className="mt-1">
             <PlayerCard
+              userId={flipped ? (room.guestId ?? "") : room.hostId}
               name={flipped ? (room.guestName ?? "?") : (room.hostName ?? "?")}
               image={flipped ? room.guestImage : room.hostImage}
               elo={flipped ? (room.guestElo ?? 0) : room.hostElo}

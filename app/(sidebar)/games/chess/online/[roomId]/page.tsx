@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, Flag, CheckCircle2, Clock, ChevronRight, ChevronLeft, LogOut, Trophy, Star, Eye, Copy, Check } from "lucide-react";
-import Image from "next/image";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import { fromFEN, toFEN, getLegalMoves, applyMove, toSAN, type GameState, type Move, isInCheck } from "@/lib/chess";
 import { getRank } from "@/lib/elo";
 import WaitingLobby from "@/components/WaitingLobby";
@@ -362,15 +362,6 @@ function MovePanel({
   );
 }
 
-function Avatar({ name, image, size=32 }: { name:string|null; image:string|null; size?:number }) {
-  if (image) return <Image src={image} alt="" width={size} height={size} className="rounded-full" style={{width:size,height:size}} />;
-  return (
-    <div className="rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold"
-      style={{ width:size, height:size, fontSize:size*0.4 }}>
-      {name?.[0]??"?"}
-    </div>
-  );
-}
 
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function ChessOnlineRoom() {
@@ -778,7 +769,7 @@ if (room.status === "WAITING") {
         <div>
           {/* Opponent info */}
           <div className="flex items-center gap-3 mb-1">
-            <Avatar name={oppName} image={oppImage} size={28}/>
+            <PlayerAvatar userId={room.myRole === "host" ? (room.guestId ?? "") : room.hostId} name={oppName} image={oppImage} size={28} />
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
@@ -824,7 +815,7 @@ if (room.status === "WAITING") {
 
           {/* My info */}
           <div className="flex items-center gap-3 mt-2">
-            <Avatar name={myName} image={myImage} size={28}/>
+            <PlayerAvatar userId={room.myRole === "host" ? room.hostId : (room.guestId ?? "")} name={myName} image={myImage} size={28} />
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-semibold text-[var(--text-primary)] text-sm">{myName ?? (isSpectator ? "White" : "You")}</span>

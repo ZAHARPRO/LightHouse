@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Flag, Bomb, Loader2, Trophy, Skull, LogOut, CheckCircle2, Clock, Wifi, Star, Eye, Copy, Check } from "lucide-react";
-import Image from "next/image";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import { computeNeighbors, floodReveal } from "@/lib/minesweeper";
 import GameReportButton from "@/components/GameReportButton";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
@@ -200,19 +200,6 @@ function MineBoard({ rows, cols, mines, revealed, flagged, isHit, hitIdx, intera
   );
 }
 
-// ── Player avatar ─────────────────────────────────────────────────────────────
-
-function Avatar({ name, image, size = 32 }: { name: string | null; image: string | null; size?: number }) {
-  if (image) return <Image src={image} alt="" width={size} height={size} className="rounded-full" style={{ width: size, height: size }} />;
-  return (
-    <div
-      className="rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
-    >
-      {name?.[0] ?? "?"}
-    </div>
-  );
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -379,10 +366,12 @@ export default function GameRoomPage() {
   );
 
   // For spectators: API maps myRevealed→host, oppRevealed→guest, so names must match
-  const myName   = room.myRole === "host"      ? room.hostName   : room.myRole === "guest" ? room.guestName  : room.hostName;
-  const oppName  = room.myRole === "host"      ? room.guestName  : room.myRole === "guest" ? room.hostName   : room.guestName;
-  const myImage  = room.myRole === "host"      ? room.hostImage  : room.myRole === "guest" ? room.guestImage : room.hostImage;
-  const oppImage = room.myRole === "host"      ? room.guestImage : room.myRole === "guest" ? room.hostImage  : room.guestImage;
+  const myName    = room.myRole === "host"  ? room.hostName   : room.myRole === "guest" ? room.guestName  : room.hostName;
+  const oppName   = room.myRole === "host"  ? room.guestName  : room.myRole === "guest" ? room.hostName   : room.guestName;
+  const myImage   = room.myRole === "host"  ? room.hostImage  : room.myRole === "guest" ? room.guestImage : room.hostImage;
+  const oppImage  = room.myRole === "host"  ? room.guestImage : room.myRole === "guest" ? room.hostImage  : room.guestImage;
+  const myUserId  = room.myRole === "guest" ? (room.guestId ?? "") : room.hostId;
+  const oppUserId = room.myRole === "guest" ? room.hostId : (room.guestId ?? "");
   const iWon     = room.winner === room.myRole;
   const rows     = room.rows ?? 9;
   const cols     = room.cols ?? 9;
@@ -488,7 +477,7 @@ if (room.status === "WAITING") {
         <div className={`grid grid-cols-1 ${fBreak} gap-6 mb-8`}>
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Avatar name={myName} image={myImage} size={26} />
+              <PlayerAvatar userId={myUserId} name={myName} image={myImage} size={26} noBadges />
               <span className="font-display font-bold text-[var(--text-primary)] text-sm">{myName ?? "You"}</span>
               {iWon
                 ? <Trophy size={13} className="text-yellow-400 ml-auto" />
@@ -502,7 +491,7 @@ if (room.status === "WAITING") {
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Avatar name={oppName} image={oppImage} size={26} />
+              <PlayerAvatar userId={oppUserId} name={oppName} image={oppImage} size={26} noBadges />
               <span className="font-display font-bold text-[var(--text-primary)] text-sm">{oppName ?? "Opponent"}</span>
               {iWon
                 ? <Skull size={13} className="text-red-400 ml-auto" />
@@ -591,7 +580,7 @@ if (room.status === "WAITING") {
         {/* My board (or host board for spectators) — interactive, larger cells */}
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <Avatar name={myName} image={myImage} size={26} />
+            <PlayerAvatar userId={myUserId} name={myName} image={myImage} size={26} noBadges />
             <span className="font-display font-bold text-[var(--text-primary)] text-sm">
               {myName ?? (isSpectator ? room.hostName ?? "Host" : "You")}
             </span>
@@ -621,7 +610,7 @@ if (room.status === "WAITING") {
           <div className="flex items-center gap-2 mb-2">
             {room.guestId ? (
               <>
-                <Avatar name={oppName} image={oppImage} size={26} />
+                <PlayerAvatar userId={oppUserId} name={oppName} image={oppImage} size={26} noBadges />
                 <span className="font-display font-bold text-[var(--text-primary)] text-sm">
                   {oppName ?? (isSpectator ? room.guestName ?? "Guest" : "Opponent")}
                 </span>

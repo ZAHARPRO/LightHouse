@@ -442,6 +442,19 @@ export default function DurakRoomPage() {
     return merged;
   }, [room?.myHand, localHandOrder, handAutoSort, room?.trumpSuit]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Seats that have passed during the current throwing round (resets on each throw).
+  // Must be above early returns to satisfy Rules of Hooks.
+  const throwPassedSeats = useMemo(() => {
+    if (!room || room.phase !== "throwing") return new Set<number>();
+    const allMoves: MoveRecord[] = (() => { try { return JSON.parse(room.movesJson ?? "[]"); } catch { return []; } })();
+    let lastThrowIdx = -1;
+    for (let j = allMoves.length - 1; j >= 0; j--) {
+      if (allMoves[j].action === "throw") { lastThrowIdx = j; break; }
+    }
+    const relevant = lastThrowIdx >= 0 ? allMoves.slice(lastThrowIdx + 1) : allMoves;
+    return new Set(relevant.filter(m => m.action === "pass").map(m => m.seatIdx));
+  }, [room?.phase, room?.movesJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function reorderHand(droppedCard: Card, insertBefore: number) {
     if (handAutoSort) return; // auto-sort overrides manual order
     setLocalHandOrder(prev => {
@@ -903,17 +916,6 @@ export default function DurakRoomPage() {
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
   // Show "took" badge only after the bout fully resolved (not while in declaring-take phase)
   const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING" && room.phase !== "taking") ? lastMove.seatIdx : null;
-
-  // Seats that have passed during the current throwing round (resets on each throw).
-  const throwPassedSeats = useMemo(() => {
-    if (room.phase !== "throwing") return new Set<number>();
-    let lastThrowIdx = -1;
-    for (let j = moves.length - 1; j >= 0; j--) {
-      if (moves[j].action === "throw") { lastThrowIdx = j; break; }
-    }
-    const relevant = lastThrowIdx >= 0 ? moves.slice(lastThrowIdx + 1) : moves;
-    return new Set(relevant.filter(m => m.action === "pass").map(m => m.seatIdx));
-  }, [room.phase, room.movesJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Already won (finished before game ends) — can leave without resign penalty
   const iAlreadyWon = isPlayer && !!me?.isOut && room.status === "PLAYING";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Loader2, CheckCircle2, AlertCircle, Play, Pencil, X, Video } from "lucide-react";
+import { Plus, Trash2, Loader2, CheckCircle2, AlertCircle, Play, Pencil, X, Video, Shuffle } from "lucide-react";
 
 type AdVideo = {
   id: string;
@@ -132,6 +132,13 @@ export default function AdminAdsPage() {
       <p className="text-[var(--text-muted)] text-sm mb-8">
         Users watch these videos to earn +1 hint point (30 min cooldown per recharge).
       </p>
+
+      {videos.filter(v => v.active).length >= 2 && (
+        <div className="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/25 text-violet-300 text-sm font-display font-semibold">
+          <Shuffle size={15} className="shrink-0" />
+          Randomizer active — each viewer gets a random active video ({videos.filter(v => v.active).length} in pool)
+        </div>
+      )}
 
       {msg && (
         <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl text-sm font-display font-semibold ${msg.ok ? "bg-green-500/10 border border-green-500/25 text-green-400" : "bg-red-500/10 border border-red-500/25 text-red-400"}`}>

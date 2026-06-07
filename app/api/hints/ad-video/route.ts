@@ -7,12 +7,12 @@ export async function GET() {
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const video = await prisma.adVideo.findFirst({
+  const videos = await prisma.adVideo.findMany({
     where: { active: true },
-    orderBy: { createdAt: "desc" },
     select: { id: true, title: true, url: true, duration: true },
   });
 
-  if (!video) return NextResponse.json({ error: "No video available" }, { status: 404 });
+  if (videos.length === 0) return NextResponse.json({ error: "No video available" }, { status: 404 });
+  const video = videos[Math.floor(Math.random() * videos.length)];
   return NextResponse.json(video);
 }

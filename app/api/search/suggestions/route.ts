@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   if (q.length < 1) return NextResponse.json([]);
 
   try {
-    const [videos, creators, posts] = await Promise.all([
+    const [videos, creators, posts, shopItems] = await Promise.all([
       prisma.video.findMany({
         where: { title: { contains: q, mode: "insensitive" } },
         take: 4,
@@ -33,6 +33,12 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, author: { select: { name: true } } },
       }),
+      prisma.shopItem.findMany({
+        where: { active: true, name: { contains: q, mode: "insensitive" } },
+        take: 3,
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, type: true, icon: true },
+      }),
     ]);
 
     const results = [
@@ -58,6 +64,13 @@ export async function GET(req: NextRequest) {
         label: p.title,
         sub: p.author?.name ?? null,
         href: `/post/${p.id}`,
+      })),
+      ...shopItems.map((s) => ({
+        type: "shop" as const,
+        id: s.id,
+        label: `${s.icon} ${s.name}`,
+        sub: s.type,
+        href: `/shop`,
       })),
     ];
 

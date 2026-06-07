@@ -138,7 +138,6 @@ export async function likeVideo(videoId: string) {
     data: { userId: session.user.id, videoId },
   });
 
-  // Award points
   await prisma.user.update({
     where: { id: session.user.id },
     data: { points: { increment: 2 } },
@@ -173,7 +172,7 @@ export async function addComment(videoId: string, content: string) {
     });
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { points: { increment: 10 } },
+      data: { points: { increment: 10 }, lightGrivna: { increment: 3 } },
     });
   }
 

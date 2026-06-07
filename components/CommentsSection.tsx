@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ThumbsUp, Pin, PinOff, Reply, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { addComment, toggleCommentLike, togglePinComment } from "@/actions/comments";
 import UserAvatar from "@/components/UserAvatar";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import { useTranslations } from "next-intl";
 
 type Author = { id: string; name: string | null; image?: string; tier?: string; };
@@ -242,10 +243,7 @@ function CommentItem({
         {/* Author row */}
         <div className="flex items-center gap-[0.625rem] mb-2">
           <Link href={`/profile/${comment.author.id}`}>
-          <div className={"w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center"}>
-            <UserAvatar name={comment.author.name ?? "?"} image={comment.author.image} tier={comment.author.tier} size="sm" />
-          </div>
-            
+            <PlayerAvatar userId={comment.author.id} name={comment.author.name} image={comment.author.image} size={30} />
           </Link>
           <Link href={`/profile/${comment.author.id}`} className="font-display font-bold text-sm text-[var(--text-primary)]">
             {comment.author.name}

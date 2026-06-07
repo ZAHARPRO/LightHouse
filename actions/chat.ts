@@ -40,7 +40,7 @@ export async function sendChatMessage(content: string) {
   if (msgCount % 10 === 0) {
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { points: { increment: 5 } },
+      data: { points: { increment: 5 }, lightGrivna: { increment: 1 } },
     });
   }
 

@@ -57,7 +57,7 @@ export async function subscribeToPlan(plan: PlanType) {
     });
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { points: { increment: 100 } },
+      data: { points: { increment: 100 }, lightGrivna: { increment: 33 } },
     });
   }
 

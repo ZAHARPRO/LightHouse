@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink, History } from "lucide-react";
+import { TrendingUp, Star, Award, Crown, MessageCircle, ExternalLink, History, Zap, Banknote } from "lucide-react";
 import Link from "next/link";
 import ProfileTabs from "@/components/ProfileTabs";
 import MatchHistoryButton from "@/components/MatchHistory";
@@ -165,6 +165,7 @@ export default async function ProfilePage() {
                 { icon: Star,  value: user.points,         label: t("pointsLabel") },
                 { icon: Award, value: user.rewards.length, label: t("badgesLabel") },
                 { icon: Crown, value: level,               label: t("levelLabel")  },
+                { icon: Banknote ,  value: user.lightGrivna,    label: t("lightGrivnaLabel") }
               ].map(({ icon: Icon, value, label }) => (
                 <div key={label} className="flex items-center gap-2">
                   <Icon size={15} color="var(--accent-orange)" className="shrink-0" />

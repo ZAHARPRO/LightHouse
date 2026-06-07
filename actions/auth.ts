@@ -40,7 +40,7 @@ export async function registerUser(formData: FormData) {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { points: { increment: 50 } },
+    data: { points: { increment: 50 }, lightGrivna: { increment: 16 } },
   });
 
   return { success: true };

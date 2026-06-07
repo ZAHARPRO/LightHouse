@@ -16,8 +16,10 @@ import BlockButton from "@/components/BlockButton";
 import UserAvatar from "@/components/UserAvatar";
 import FavoriteSongCard from "@/components/FavoriteSongCard";
 import MatchHistoryButton from "@/components/MatchHistory";
+import SendScreamerButton from "@/components/SendScreamerButton";
 import { getTranslations } from "next-intl/server";
 import { BADGE_DEFS } from "@/lib/badges";
+import { getMyScreamerCharges } from "@/actions/shop";
 
 const TIER_COLORS: Record<string, string> = {
   FREE: "#888", BASIC: "#818cf8", PRO: "#f97316", ELITE: "#fbbf24",
@@ -129,15 +131,27 @@ export default async function PublicProfilePage({
 
   let isBlockedByMe = false;
   let myTier = "FREE";
+  let myScreamerCharges: { itemId: string; itemName: string; count: number }[] = [];
   if (session?.user?.id && !isMe) {
-    const [block, me] = await Promise.all([
+    const [block, me, chargeMap] = await Promise.all([
       prisma.block.findUnique({
         where: { blockerId_blockedId: { blockerId: session.user.id, blockedId: id } },
       }),
       prisma.user.findUnique({ where: { id: session.user.id }, select: { tier: true } }),
+      getMyScreamerCharges(),
     ]);
     isBlockedByMe = !!block;
     myTier = me?.tier ?? "FREE";
+
+    if (Object.keys(chargeMap).length > 0) {
+      const screamerItems = await prisma.shopItem.findMany({
+        where: { id: { in: Object.keys(chargeMap) }, type: "SCREAMER", active: true },
+        select: { id: true, name: true },
+      });
+      myScreamerCharges = screamerItems.map((i) => ({
+        itemId: i.id, itemName: i.name, count: chargeMap[i.id] ?? 0,
+      }));
+    }
   }
 
   const displayHandle = user.username ? `@${user.username}` : (user.name ?? "Unknown");
@@ -232,6 +246,9 @@ export default async function PublicProfilePage({
                     <MessageButton targetId={id} myTier={myTier} />
                     <BlockButton targetId={id} targetName={user.name ?? "user"} initialBlocked={isBlockedByMe} />
                     {!isViewerStaff && <ReportButton targetId={id} targetName={user.name ?? "user"} />}
+                    {myScreamerCharges.length > 0 && (
+                      <SendScreamerButton recipientId={id} charges={myScreamerCharges} />
+                    )}
                   </>
                 ) : (
                   <Link

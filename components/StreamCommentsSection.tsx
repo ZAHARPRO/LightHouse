@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Pin, Trash2, ThumbsUp } from "lucide-react";
+import PlayerAvatar from "@/components/PlayerAvatar";
 
 type CommentData = {
   id: string;
@@ -108,13 +109,9 @@ export default function StreamCommentsSection({
         )}
         {sorted.map(c => (
           <div key={c.id} className={["flex gap-3", c.isPinned ? "bg-[var(--accent-orange)]/5 border border-[var(--accent-orange)]/20 rounded-xl p-3" : ""].join(" ")}>
-            {c.author.image ? (
-              <Image src={c.author.image} alt="" width={32} height={32} className="rounded-full shrink-0 mt-0.5" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0 mt-0.5">
-                {c.author.name?.[0] ?? "?"}
-              </div>
-            )}
+            <div className="shrink-0 mt-0.5">
+              <PlayerAvatar userId={c.author.id} name={c.author.name} image={c.author.image} size={32} noBadges />
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-semibold text-[0.8rem] text-[var(--text-primary)]">

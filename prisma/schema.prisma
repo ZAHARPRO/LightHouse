@@ -23,6 +23,8 @@ model User {
   ratingShowcase String?
   favoriteSong  String?   @db.Text
   points          Int       @default(0)
+  lightGrivna     Int       @default(0)
+  cartJson        String?
   tier            Tier      @default(FREE)
   role            Role      @default(USER)
   watchStreak     Int       @default(0)
@@ -104,6 +106,12 @@ model User {
   streamChatBans     StreamChatBan[]     @relation("StreamChatBanUser")
   streamChatMutes    StreamChatMute[]    @relation("StreamChatMuteUser")
   streamComments     StreamComment[]
+  shopPurchases      ShopPurchase[]
+  promoUses          PromoCodeUse[]
+  screamersEnabled   Boolean          @default(true)
+  screamerCharges    ScreamerCharge[]
+  screamersReceived  PendingScreamer[] @relation("ScreamerRecipient")
+  screamersSent      PendingScreamer[] @relation("ScreamerSender")
 }
 
 
@@ -1090,4 +1098,100 @@ model AnnouncementMessage {
   color     String   @default("#f97316")
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// ── Light Shop ────────────────────────────────────────────────────────────────
+
+model ShopSettings {
+  id           Int    @id @default(1)
+  currencyName String @default("Light Grivna")
+  currencyIcon String @default("₴")
+}
+
+enum ShopItemType {
+  BADGE
+  VIDEO_FRAME
+  GAME_FRAME
+  EMOJI
+  SCREAMER
+}
+
+model ShopItem {
+  id               String       @id @default(cuid())
+  name             String
+  description      String?
+  type             ShopItemType
+  price            Int
+  icon             String       @default("🎁")
+  color            String       @default("#6366f1")
+  active           Boolean      @default(true)
+  sortOrder        Int          @default(0)
+  stock            Int?
+  screamerVideoUrl String?      @db.Text
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  purchases        ShopPurchase[]
+  screamerCharges  ScreamerCharge[]
+}
+
+model ScreamerCharge {
+  id        String   @id @default(cuid())
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId String
+  item   ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+model PendingScreamer {
+  id          String    @id @default(cuid())
+  videoUrl    String    @db.Text
+  bypassed    Boolean   @default(false)
+  seenAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  senderId    String
+  sender      User @relation("ScreamerSender",    fields: [senderId],    references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User @relation("ScreamerRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model ShopPurchase {
+  id          String   @id @default(cuid())
+  purchasedAt DateTime @default(now())
+
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId String
+  item   ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+}
+
+model PromoCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  amount    Int
+  maxUses   Int?
+  usedCount Int       @default(0)
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  uses PromoCodeUse[]
+}
+
+model PromoCodeUse {
+  id     String    @id @default(cuid())
+  usedAt DateTime  @default(now())
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, promoCodeId])
 }

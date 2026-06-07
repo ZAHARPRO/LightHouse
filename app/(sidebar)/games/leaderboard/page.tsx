@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Search, Flame, X, ArrowLeft, Puzzle } from "lucide-react";
 import { getRank } from "@/lib/elo";
+import PlayerAvatar from "@/components/PlayerAvatar";
 
 type LeaderEntry = {
   id: string;
@@ -203,12 +203,7 @@ export default function LeaderboardPage() {
                   {i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}
                 </span>
 
-                {u.image
-                  ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
-                  : <div className="w-7 h-7 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-300 font-bold text-[0.65rem]">
-                      {u.name?.[0]?.toUpperCase() ?? "?"}
-                    </div>
-                }
+                <PlayerAvatar userId={u.id} name={u.name} image={u.image} size={28} noBadges />
 
                 <p className="font-display font-semibold text-sm text-[var(--text-primary)] truncate pl-2">
                   {u.name ?? "Anonymous"}
@@ -235,12 +230,7 @@ export default function LeaderboardPage() {
                   {i + 1}
                 </span>
 
-                {u.image
-                  ? <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
-                  : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-[0.65rem]">
-                      {u.name?.[0] ?? "?"}
-                    </div>
-                }
+                <PlayerAvatar userId={u.id} name={u.name} image={u.image} size={28} noBadges />
 
                 <div className="min-w-0 pl-2">
                   <p className="font-display font-semibold text-sm text-[var(--text-primary)] truncate leading-tight">{u.name ?? "Anonymous"}</p>

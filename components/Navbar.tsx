@@ -6,7 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Zap, Bell, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2, Settings, ChevronDown, Gamepad2, CreditCard, Mail, Rss, MessageCircle, Radio,
+  Zap, Bell, Search, LogOut, Menu, X, Plus, Video, FileText, Inbox, LayoutDashboard, Play, Users, Music2, Settings, ChevronDown, Gamepad2, CreditCard, Mail, Rss, MessageCircle, Radio, ShoppingBag, ShoppingCart,
 } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import SideDrawer from "./SideDrawer";
@@ -86,8 +86,9 @@ export default function Navbar() {
     video: <Play size={13} className="shrink-0 text-[var(--accent-orange)]" />,
     creator: <Users size={13} className="shrink-0 text-[#6366f1]" />,
     post: <FileText size={13} className="shrink-0 text-[#10b981]" />,
+    shop: <ShoppingBag size={13} className="shrink-0 text-[#fbbf24]" />,
   };
-  const TYPE_LABEL: Record<string, string> = { video: "Video", creator: "Creator", post: "Post" };
+  const TYPE_LABEL: Record<string, string> = { video: "Video", creator: "Creator", post: "Post", shop: "Shop" };
 
   // Side drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -459,6 +460,7 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-0.5">
               {[
                 { href: "/games", label: t("games") },
+                { href: "/shop", label: "Shop" },
                 { href: "/subscriptions", label: t("plans") },
                 { href: "/contact", label: t("contact") },
               ].map(({ href, label }) => (
@@ -671,7 +673,7 @@ export default function Navbar() {
               onClick={() => setProfileOpen(false)}
               className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
             >
-              <UserAvatar name={session.user?.name ?? "?"} image={session.user?.image} size="sm" />
+              <UserAvatar className="border border-pink-300 rounded-full" name={session.user?.name ?? "?"} image={session.user?.image} size="sm" />
               {t("profile")}
             </Link>
             <Link
@@ -679,8 +681,16 @@ export default function Navbar() {
               onClick={() => setProfileOpen(false)}
               className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
             >
-              <Settings size={14} className="text-[var(--text-muted)]" />
+              <Settings size={14} className="text-[pink]" />
               {t("settings")}
+            </Link>
+            <Link
+              href="/shop"
+              onClick={() => setProfileOpen(false)}
+              className="flex items-center gap-[0.625rem] px-4 py-2.5 no-underline text-[var(--text-secondary)] text-sm font-display font-medium transition-[background,color] duration-[120ms] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+            >
+              <ShoppingCart size={14} className="text-[pink]" />
+              Shop &amp; Cart
             </Link>
           </div>
 

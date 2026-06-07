@@ -4,6 +4,7 @@ import { useState } from "react";
 import FeedLeftSidebar from "./FeedLeftSidebar";
 import FeedRightSidebar from "./FeedRightSidebar";
 import ChatPopup from "./ChatPopup";
+import ScreamerPopup from "./ScreamerPopup";
 import { useChatStatus } from "@/lib/useChatStatus";
 
 type Sub = { id: string; name: string; initials: string; color: string; image?: string | null };
@@ -77,6 +78,7 @@ export default function SidebarShell({ subs, communityPosts, isLoggedIn, childre
       {(chatOpen || chatClosing) && (
         <ChatPopup onClose={closeChat} isClosing={chatClosing} />
       )}
+      {isLoggedIn && <ScreamerPopup />}
     </>
   );
 }

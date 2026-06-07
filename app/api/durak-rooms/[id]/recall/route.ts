@@ -16,7 +16,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const [room, user] = await Promise.all([
     prisma.durakRoom.findUnique({
       where: { id },
-      include: { players: { select: { userId: true, seatIdx: true, handJson: true } } },
+      include: { players: { select: { userId: true, seatIdx: true, handJson: true, name: true } } },
     }),
     prisma.user.findUnique({ where: { id: uid }, select: { durakCoins: true } }),
   ]);
@@ -63,6 +63,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     seatIdx: mySlot.seatIdx,
     action: "recall" as MoveRecord["action"],
     card: myLastMove.card as Card,
+    name: mySlot.name ?? null,
+    at: Date.now(),
   };
   moves.push(recallEntry);
 

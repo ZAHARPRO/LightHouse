@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play, Bot, Plus, Trash2, Copy, Settings } from "lucide-react";
+import { Loader2, Eye, Crown, Hand, Check, X, Play, Bot, Plus, Trash2, Copy, Settings } from "lucide-react";
 import DurakCard from "@/components/DurakCard";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
@@ -111,8 +111,7 @@ type RoomData = {
   myHand: Card[];
   myRole: "player" | "spectator";
   mySeatIdx: number | null;
-  pendingCheat: { type: string; cheaterName: string } | null;
-  peekedCard: Card | null;
+  pendingCheat: { cheaterIdx: number; slotIdx: number } | null;
   winner: string | null;
   chat: ChatMsg[];
   spectatorCount: number;
@@ -140,8 +139,6 @@ export default function DurakRoomPage() {
   const [dragCard, setDragCard] = useState<Card | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [botDifficulties, setBotDifficulties] = useState<Record<number, string>>({});
-  const [catchWindow, setCatchWindow] = useState<number>(0); // ms remaining
-  const [showPeek, setShowPeek] = useState<Card | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [previewMove, setPreviewMove] = useState<{ action: string; card?: { suit: string; rank: string }; name: string } | null>(null);
@@ -195,7 +192,6 @@ export default function DurakRoomPage() {
         setRoom(d);
         setConn("ok");
         lastFetch.current = Date.now();
-        if (d.peekedCard) setShowPeek(d.peekedCard);
       } else if (res.status === 404) {
         setErr(t("roomNotFound"));
       }
@@ -222,9 +218,6 @@ export default function DurakRoomPage() {
       try {
         const ev = JSON.parse(e.data) as { type: string; cheaterName?: string };
         if (ev.type === "update") fetchRoom();
-        if (ev.type === "cheat_alert") {
-          setCatchWindow(3000);
-        }
         if (ev.type === "catch") fetchRoom();
       } catch {
         /* ignore */
@@ -328,19 +321,6 @@ export default function DurakRoomPage() {
       router.push("/games/durak/online/rated?returning=1");
     }
   }, [room?.myRole, room?.status, room?.confirmingAt]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Pending-cheat catch window countdown
-  useEffect(() => {
-    if (!room?.pendingCheat && catchWindow === 0) return;
-    if (room?.pendingCheat && catchWindow === 0) setCatchWindow(3000);
-    const i = setInterval(() => {
-      setCatchWindow((w) => {
-        const n = Math.max(0, w - 100);
-        return n;
-      });
-    }, 100);
-    return () => clearInterval(i);
-  }, [room?.pendingCheat, catchWindow]);
 
   // Fetch coin balance once on mount
   useEffect(() => {
@@ -901,7 +881,7 @@ export default function DurakRoomPage() {
     await post("move", { action: "pass" });
   }
 
-  const canCatch = room.pendingCheat && catchWindow > 0 && isPlayer;
+  const canCatch = !!room.pendingCheat && isPlayer && room.pendingCheat.cheaterIdx !== room.mySeatIdx;
 
   const isMainAttacker   = room.mySeatIdx === room.attackerIdx;
   // Next defender = next active player in seat order after current defender (same as engine's nextActive)
@@ -946,34 +926,6 @@ export default function DurakRoomPage() {
         </div>
       </div>
 
-      {/* Cheat alert banner */}
-      {canCatch && (
-        <div className="mb-3 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/40 animate-pulse">
-          <span className="flex items-center gap-2 text-red-300 text-sm font-display font-bold">
-            <ShieldAlert size={16} /> {t("cheatSuspicion")}
-          </span>
-          <button
-            onClick={() => post("catch")}
-            disabled={busy}
-            className="px-4 py-1.5 rounded-lg bg-red-500 text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {t("caught")} ({(catchWindow / 1000).toFixed(1)}s)
-          </button>
-        </div>
-      )}
-
-      {/* Peek reveal modal (cheater only) */}
-      {showPeek && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowPeek(null)}>
-          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
-            <p className="text-[var(--text-secondary)] font-display font-bold text-sm">{t("peekedCard")}</p>
-            <DurakCard card={showPeek} size="lg" />
-            <button onClick={() => setShowPeek(null)} className="mt-1 text-[var(--accent-orange)] text-sm font-bold">
-              {t("close")}
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px] gap-2">
         {/* ── Table area ── */}
@@ -1221,9 +1173,18 @@ export default function DurakRoomPage() {
                       style={{ position: "absolute", top: 0, left: 0 }}
                       className={isDefendTarget && !isSlotDragOver ? "ring-2 ring-emerald-400 rounded-lg cursor-crosshair" : ""}
                     />
-                    {slot.defense && (
-                      <DurakCard card={slot.defense} size="md" style={{ position: "absolute", top: 20, left: 16 }} />
-                    )}
+                    {slot.defense && (() => {
+                      const isCheatSlot = canCatch && room.pendingCheat?.slotIdx === i;
+                      return (
+                        <DurakCard
+                          card={slot.defense}
+                          size="md"
+                          style={{ position: "absolute", top: 20, left: 16 }}
+                          className={isCheatSlot ? "ring-2 ring-red-500 rounded-lg cursor-pointer animate-pulse" : ""}
+                          onClick={isCheatSlot ? () => post("catch") : undefined}
+                        />
+                      );
+                    })()}
                     {/* Recall button — appears on hover for the player's own undefended card */}
                     {isMyAttack && (
                       <button
@@ -1320,17 +1281,6 @@ export default function DurakRoomPage() {
                 </span>
               )}
 
-              {/* Cheat buttons (unfair only) */}
-              {!room.fairPlay && (
-                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-[var(--border-subtle)]">
-                  <button onClick={() => post("cheat", { type: "peek" })} disabled={busy} className={actBtn("ghost")} title={t("peek")}>
-                    👁 {t("peek")}
-                  </button>
-                  <button onClick={() => post("cheat", { type: "extra_draw" })} disabled={busy} className={actBtn("ghost")} title={t("extraDraw")}>
-                    🃏 {t("extraDraw")}
-                  </button>
-                </div>
-              )}
             </div>
             </div>
           )}

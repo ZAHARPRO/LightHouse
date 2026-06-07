@@ -8,10 +8,11 @@ import type { Card, TableSlot } from "@/lib/durak";
 export type ChatMsg = { userId: string; name: string; text: string; at: number };
 
 export type PendingCheat = {
-  type: "peek" | "extra_draw";
+  type: "any_beat";
   cheaterIdx: number;
-  targetIdx: number | null;
-  card: Card | null; // the peeked card (only revealed to the cheater)
+  targetIdx: null;
+  card: Card;      // the defense card used to cheat
+  slotIdx: number; // which table slot was defended via cheat
   expiresAt: number;
 };
 
@@ -53,8 +54,7 @@ export type ClientRoomData = {
   myHand: Card[];
   myRole: "player" | "spectator";
   mySeatIdx: number | null;
-  pendingCheat: { type: string; cheaterName: string } | null;
-  peekedCard: Card | null;
+  pendingCheat: { cheaterIdx: number; slotIdx: number } | null;
   winner: string | null;
   chat: ChatMsg[];
   spectatorCount: number;
@@ -150,17 +150,9 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
   const pending = parseJSON<PendingCheat | null>(room.pendingCheatJson, null);
   const validPending = pending && pending.expiresAt > now ? pending : null;
 
-  let pendingCheat: { type: string; cheaterName: string } | null = null;
-  let peekedCard: Card | null = null;
+  let pendingCheat: { cheaterIdx: number; slotIdx: number } | null = null;
   if (validPending) {
-    const cheaterSlot = slots.find((s) => s.seatIdx === validPending.cheaterIdx);
-    const cheaterName = cheaterSlot?.user.name ?? "?";
-    if (mySlot && mySlot.seatIdx === validPending.cheaterIdx) {
-      // The cheater sees their peeked card but not the public alert banner.
-      peekedCard = validPending.card;
-    } else {
-      pendingCheat = { type: validPending.type, cheaterName };
-    }
+    pendingCheat = { cheaterIdx: validPending.cheaterIdx, slotIdx: validPending.slotIdx };
   }
 
   const players: ClientPlayerData[] = slots.map((s) => ({
@@ -222,7 +214,6 @@ export function sanitizeRoom(room: RoomWithSlots, userId: string | null): Client
     myRole: mySlot ? "player" : "spectator",
     mySeatIdx: mySlot ? mySlot.seatIdx : null,
     pendingCheat,
-    peekedCard,
     winner: room.winner,
     chat: parseJSON<ChatMsg[]>(room.chatJson, []),
     spectatorCount,

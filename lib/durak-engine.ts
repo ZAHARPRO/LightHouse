@@ -52,6 +52,8 @@ type RoomRow = {
   timeControl: string;
   throwRule: string;
   rated: boolean;
+  fairPlay: boolean;
+  pendingCheatJson: string | null;
   deckJson: string;
   tableJson: string;
   discardCount: number;
@@ -244,7 +246,7 @@ function withEmptySeatsOut(room: RoomRow, state: Mutable): Set<number> {
 }
 
 /** Persist the mutated state back to the room + slots. */
-async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null, move?: MoveRecord): Promise<void> {
+async function persist(room: RoomRow, state: Mutable, winnerUserId: string | null, move?: MoveRecord, newPendingCheatJson?: string | null): Promise<void> {
   const ops: Array<Promise<unknown>> = [];
   // Track finish positions for players who newly went out this turn
   let finishCount = room.finishCount;
@@ -297,7 +299,8 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
         finishCount,
         botsJson: JSON.stringify(updatedBots),
         movesJson: newMovesJson,
-        ...(finished ? { status: "FINISHED", winner: winnerUserId, endedAt: new Date(), pendingCheatJson: null } : {}),
+        pendingCheatJson: finished ? null : (newPendingCheatJson ?? null),
+        ...(finished ? { status: "FINISHED", winner: winnerUserId, endedAt: new Date() } : {}),
       },
     }),
   );
@@ -430,11 +433,21 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (slotIdx == null || !state.table[slotIdx] || state.table[slotIdx].defense) {
         return { ok: false, error: "Bad slot" };
       }
-      if (!canDefend(state.table[slotIdx].attack, card, trumpSuit)) {
-        return { ok: false, error: "Cannot beat" };
-      }
+      const legalBeat = canDefend(state.table[slotIdx].attack, card, trumpSuit);
+      if (!legalBeat && room.fairPlay) return { ok: false, error: "Cannot beat" };
       removeFromHand(card);
       state.table[slotIdx].defense = card;
+      if (!legalBeat) {
+        // Unfair room cheat: allow the defense but open a 4-second catch window.
+        const cheatPending = JSON.stringify({
+          type: "any_beat", cheaterIdx: mySeat, targetIdx: null,
+          card, slotIdx, expiresAt: Date.now() + 4000,
+        });
+        const seq = (() => { try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length + 1; } catch { return 1; } })();
+        const moveRec: MoveRecord = { seq, action: "defend", seatIdx: mySeat, name: null, card, slotIdx, at: Date.now() };
+        await persist(room, state, null, moveRec, cheatPending);
+        return { ok: true };
+      }
       break;
     }
 

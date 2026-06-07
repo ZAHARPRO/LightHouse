@@ -15,10 +15,10 @@ const DIMS: Record<Size, { w: number; h: number }> = {
 
 // corner: rank + small suit in top-left / bottom-right
 const CORNER_FONT: Record<Size, { rank: string; suit: string }> = {
-  xs: { rank: "0.65rem", suit: "0.65rem" },
-  sm: { rank: "0.9rem",  suit: "0.82rem" },
-  md: { rank: "1.1rem",  suit: "1.0rem"  },
-  lg: { rank: "1.3rem",  suit: "1.2rem"  },
+  xs: { rank: "0.65rem", suit: "0.50rem" },
+  sm: { rank: "0.9rem",  suit: "0.75rem"  },
+  md: { rank: "1.1rem",  suit: "1.00rem" },
+  lg: { rank: "1.3rem",  suit: "1.25rem"  },
 };
 
 // Pip positions [left%, top%] — pips with top > 54% are rendered rotated 180°
@@ -26,8 +26,8 @@ const PIPS: Record<string, [number, number][]> = {
   "6":  [[25,16],[75,16],[25,50],[75,50],[25,84],[75,84]],
   "7":  [[25,13],[75,13],[50,35],[25,65],[75,65],[25,87],[75,87]],
   "8":  [[25,10],[75,10],[25,35],[75,35],[25,65],[75,65],[25,90],[75,90]],
-  "9":  [[20,12],[50,12],[80,12],[20,50],[50,50],[80,50],[20,88],[50,88],[80,88]],
-  "10": [[25,7],[75,7],[50,22],[25,42],[75,42],[25,58],[75,58],[50,78],[25,93],[75,93]],
+  "9":  [[20,12],[50,12],[80,12],[20,50],[50,50],[80,50],[20,88],[50,88], [80,88]],
+  "10": [[25,7],[50,7],[75,7],[50,35],[25,33],[75,33],[25,70],[75,70],[50,78],[25,93], [75,93]],
 };
 
 interface DurakCardProps {
@@ -113,7 +113,7 @@ export default function DurakCard({
   const centerContent = () => {
     if (!showDetail) {
       // xs / sm: just a large suit symbol
-      const bigFont = size === "sm" ? 32 : 22;
+      const bigFont = size === "sm" ? 42 : 28;
       return (
         <div className="absolute inset-0 flex items-center justify-center" style={{ color }}>
           <span style={{ fontSize: bigFont, lineHeight: 1 }}>{sym}</span>
@@ -128,7 +128,7 @@ export default function DurakCard({
           className="absolute flex items-center justify-center"
           style={{ inset: isLg ? "38px 14px 44px" : "28px 12px 36px", color }}
         >
-          <span style={{ fontSize: isLg ? 74 : 52, lineHeight: 1, opacity: 0.92 }}>{sym}</span>
+          <span style={{ fontSize: isLg ? 102 : 80, lineHeight: 1, opacity: 0.92 }}>{sym}</span>
         </div>
       );
     }
@@ -137,8 +137,8 @@ export default function DurakCard({
       // J / Q / K — decorative box with rank letter + suit
       const accentBg   = red ? "rgba(220,38,38,0.07)" : "rgba(15,15,40,0.05)";
       const accentBrd  = red ? "rgba(220,38,38,0.22)" : "rgba(15,15,40,0.18)";
-      const rankSize   = isLg ? 44 : 32;
-      const suitSize   = isLg ? 25 : 18;
+      const rankSize   = isLg ? 50 : 36;
+      const suitSize   = isLg ? 60 : 30;
       return (
         <div
           className="absolute"
@@ -158,7 +158,7 @@ export default function DurakCard({
 
     // Number cards 6-10 — pip pattern
     const pipList = PIPS[rank] ?? [];
-    const pipFont = isLg ? 17 : 13;
+    const pipFont = isLg ? 60 : 30;
     return (
       <div
         className="absolute"

@@ -71,14 +71,14 @@ export default function ScreamerPopup() {
       {ytId ? (
         <div className="relative w-full h-full pointer-events-none">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&loop=1&playlist=${ytId}&mute=0`}
+            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&mute=0`}
             allow="autoplay; fullscreen"
             className="absolute inset-0 w-full h-full border-none"
             style={{ pointerEvents: "none" }}
           />
           {/* Cover any residual YouTube UI elements */}
           <div className="absolute inset-x-0 bottom-0 h-16 bg-black" />
-          <div className="absolute inset-x-0 top-0 h-12 bg-black" />
+          <div className="absolute inset-x-0 top-0 h-20 bg-black" />
         </div>
       ) : (
         <video

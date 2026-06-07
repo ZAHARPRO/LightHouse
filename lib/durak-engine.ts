@@ -467,8 +467,31 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (state.phase !== "taking" && !isFullyDefended(state.table)) return { ok: false, error: "Defender still defending" };
 
       if (state.phase === "throwing") {
-        // Already in throwing phase — any pass immediately resolves the bout.
-        winnerUserId = resolveBout(room, state, false);
+        // Multi-player: wait until ALL eligible non-attacker throwers have passed.
+        const eligibleNonAttacker = getEligibleThrowerSeats(room, state)
+          .filter(s => s !== state.attackerIdx);
+
+        if (eligibleNonAttacker.length === 0) {
+          // Only the main attacker could throw (already passed) → resolve.
+          winnerUserId = resolveBout(room, state, false);
+        } else {
+          const existingMoves = parse<MoveRecord[]>(room.movesJson, []);
+          // Find last "throw" action to know when the current throw-round started.
+          let lastThrowIdx = -1;
+          for (let j = existingMoves.length - 1; j >= 0; j--) {
+            if (existingMoves[j].action === "throw") { lastThrowIdx = j; break; }
+          }
+          const relevant = lastThrowIdx >= 0 ? existingMoves.slice(lastThrowIdx + 1) : existingMoves;
+          // Include current player's pass (not yet written to DB).
+          const passedSeats = new Set([
+            ...relevant.filter(m => m.action === "pass").map(m => m.seatIdx),
+            mySeat,
+          ]);
+          if (eligibleNonAttacker.every(s => passedSeats.has(s))) {
+            winnerUserId = resolveBout(room, state, false);
+          }
+          // else: stay in throwing phase — the move record below saves this pass.
+        }
       } else if (state.phase === "taking") {
         // Defender already declared take — attacker pass ends the throw window.
         winnerUserId = resolveBout(room, state, true);

@@ -408,6 +408,13 @@ export default function DurakRoomPage() {
     else playSound("dk_win");
   }, [room?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Global dragend safety net — clears stuck drag state when drop lands outside any valid target
+  useEffect(() => {
+    const clear = () => { setDragCard(null); setSelected(null); setInsertBeforeIdx(null); };
+    document.addEventListener("dragend", clear);
+    return () => document.removeEventListener("dragend", clear);
+  }, []);
+
   // Sync local hand order when server hand changes (keep user reorder, add new cards, remove played)
   const myHandKey = room?.myHand ? [...room.myHand].map(c => `${c.suit}${c.rank}`).sort().join(",") : "";
   useEffect(() => {
@@ -896,7 +903,20 @@ export default function DurakRoomPage() {
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
   // Show "took" badge only after the bout fully resolved (not while in declaring-take phase)
   const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING" && room.phase !== "taking") ? lastMove.seatIdx : null;
-  // Not exposing isThrowingPhase in UI — doing so would leak which players have throwable cards
+
+  // Seats that have passed during the current throwing round (resets on each throw).
+  const throwPassedSeats = useMemo(() => {
+    if (room.phase !== "throwing") return new Set<number>();
+    let lastThrowIdx = -1;
+    for (let j = moves.length - 1; j >= 0; j--) {
+      if (moves[j].action === "throw") { lastThrowIdx = j; break; }
+    }
+    const relevant = lastThrowIdx >= 0 ? moves.slice(lastThrowIdx + 1) : moves;
+    return new Set(relevant.filter(m => m.action === "pass").map(m => m.seatIdx));
+  }, [room.phase, room.movesJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Already won (finished before game ends) — can leave without resign penalty
+  const iAlreadyWon = isPlayer && !!me?.isOut && room.status === "PLAYING";
 
   return (
     <>
@@ -970,6 +990,9 @@ export default function DurakRoomPage() {
                       {isAtk && <span className="text-[0.5rem] font-bold text-orange-400">▲</span>}
                       {isDef && <span className="text-[0.5rem] font-bold text-red-400">🛡</span>}
                       {p.isOut && <span className="text-[0.5rem] font-bold text-emerald-400">✓</span>}
+                      {room.phase === "throwing" && throwPassedSeats.has(p.seatIdx) && !p.isOut && (
+                        <span className="text-[0.5rem] font-extrabold px-1 rounded bg-slate-500/30 text-slate-300 leading-none py-px">PASS</span>
+                      )}
                       {room.phase === "taking" && isDef && (
                         <span className="text-[0.55rem] font-extrabold px-1 rounded bg-red-500/30 text-red-300 leading-none py-px animate-pulse">{t("defenderTaking")}</span>
                       )}
@@ -1298,6 +1321,9 @@ export default function DurakRoomPage() {
                 {isMainAttacker && <span className="text-[0.65rem] text-orange-400 font-bold">[{t("youAttack")}]</span>}
                 {isDefender && room.phase !== "taking" && <span className="text-[0.65rem] text-red-400 font-bold">[{t("youDefend")}]</span>}
                 {isDefender && room.phase === "taking" && <span className="text-[0.65rem] text-red-300 font-bold animate-pulse">[{t("youTaking")}]</span>}
+                {room.phase === "throwing" && throwPassedSeats.has(room.mySeatIdx ?? -1) && isAttackerSide && (
+                  <span className="text-[0.65rem] font-extrabold px-1 rounded bg-slate-500/30 text-slate-300 leading-none py-px">PASS</span>
+                )}
                 {room.timeControl !== "none" && !finished && (
                   (room.phase === "attack" && isMainAttacker) ||
                   (room.phase === "defense" && isDefender) ||
@@ -1453,7 +1479,15 @@ export default function DurakRoomPage() {
 
         {/* ── Sidebar ── */}
         <div className="flex flex-col gap-2">
-                        {isPlayer && !finished && (
+                        {isPlayer && !finished && iAlreadyWon && (
+                <a
+                  href={`/games/durak/online`}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs font-display font-semibold transition-colors"
+                >
+                  ✓ Leave
+                </a>
+              )}
+              {isPlayer && !finished && !iAlreadyWon && (
                 <button
                   onClick={() => { if (confirm("Concede the game?")) post("move", { action: "resign" }); }}
                   disabled={busy}

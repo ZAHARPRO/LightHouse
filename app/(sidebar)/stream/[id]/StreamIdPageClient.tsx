@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Monitor, Radio, Users, Clock } from "lucide-react";
 import StreamBroadcaster from "@/components/StreamBroadcaster";
 import StreamViewer from "@/components/StreamViewer";
 import StreamChatPanel from "@/components/StreamChatPanel";
+import StreamChatReplay from "@/components/StreamChatReplay";
+import StreamCommentsSection from "@/components/StreamCommentsSection";
 import StreamReactionButtons from "@/components/StreamReactionButtons";
 import StreamSupportButton from "@/components/StreamSupportButton";
 import SubscribeButton from "@/components/SubscribeButton";
@@ -32,6 +33,15 @@ type ChatMsg = {
   at: number;
 };
 
+type CommentData = {
+  id: string;
+  content: string;
+  createdAt: string;
+  isPinned: boolean;
+  likeCount: number;
+  author: { id: string; name: string | null; image: string | null };
+};
+
 interface Props {
   isStreamOwner: boolean;
   streamId: string;
@@ -44,6 +54,7 @@ interface Props {
   initialDislikes: number;
   initialUserReaction: "LIKE" | "DISLIKE" | null;
   initialFollowing: boolean;
+  initialComments: CommentData[];
 }
 
 function elapsed(iso: string) {
@@ -58,8 +69,8 @@ export default function StreamIdPageClient({
   isStreamOwner, streamId, userId, userName, isLoggedIn,
   initialStream, initialMessages,
   initialLikes, initialDislikes, initialUserReaction, initialFollowing,
+  initialComments,
 }: Props) {
-  const router = useRouter();
   const [isEnded,      setIsEnded]      = useState(!initialStream.isActive);
   const [viewerCount,  setViewerCount]  = useState(initialStream.viewerCount);
 
@@ -190,17 +201,23 @@ export default function StreamIdPageClient({
               initialMessages={initialMessages}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[14px] p-8 text-[var(--text-muted)] min-h-[160px] sm:min-h-[200px]">
-              <Monitor size={28} strokeWidth={1.2} />
-              <p className="text-sm font-display text-center">Stream has ended</p>
-              <button onClick={() => router.push("/feed")} className="btn-primary text-sm py-1.5 px-4">
-                Back to Feed
-              </button>
-            </div>
+            <StreamChatReplay messages={initialMessages} />
           )}
         </div>
 
       </div>
+
+      {/* Comments — shown only for ended streams */}
+      {isEnded && (
+        <div className="mt-6 max-w-3xl">
+          <StreamCommentsSection
+            streamId={streamId}
+            streamAuthorId={initialStream.adminId}
+            currentUserId={userId}
+            initialComments={initialComments}
+          />
+        </div>
+      )}
     </div>
   );
 }

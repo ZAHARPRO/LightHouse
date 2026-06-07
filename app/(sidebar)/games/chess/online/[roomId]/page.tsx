@@ -412,6 +412,7 @@ export default function ChessOnlineRoom() {
   const [copied, setCopied] = useState(false);
   const prevRoomRef   = useRef<RoomData|null>(null);
   const timeWarnedRef = useRef(false);
+  const autoJoinedRef = useRef(false);
 
   const fetchRoom = useCallback(async () => {
     const ctrl = new AbortController();
@@ -430,6 +431,14 @@ export default function ChessOnlineRoom() {
     const f = connFailsRef.current;
     setConnStatus(f === 0 ? "ok" : f <= 5 ? "slow" : "lost");
   }, [roomId]);
+
+  // Auto-join when arriving via invite link
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "WAITING" || room.guestId) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`/api/chess-rooms/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.myRole, room?.status, room?.guestId]); // eslint-disable-line
 
   useEffect(() => {
     fetchRoom();

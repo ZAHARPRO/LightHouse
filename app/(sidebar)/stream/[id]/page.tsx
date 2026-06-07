@@ -10,7 +10,7 @@ export default async function StreamIdPage({ params }: { params: Promise<{ id: s
 
   const userId = session.user.id;
 
-  const [stream, msgs, reactions, userReaction, following] = await Promise.all([
+  const [stream, msgs, reactions, userReaction, following, comments] = await Promise.all([
     prisma.stream.findUnique({
       where: { id },
       select: {
@@ -23,7 +23,7 @@ export default async function StreamIdPage({ params }: { params: Promise<{ id: s
     prisma.streamChatMessage.findMany({
       where: { streamId: id },
       orderBy: { createdAt: "asc" },
-      take: 50,
+      take: 500,
       select: { id: true, text: true, userName: true, userId: true, isSupport: true, createdAt: true },
     }).catch(() => []),
 
@@ -41,6 +41,15 @@ export default async function StreamIdPage({ params }: { params: Promise<{ id: s
     prisma.subscription.findUnique({
       where: { subscriberId_creatorId: { subscriberId: userId, creatorId: id } },
     }).then(() => false).catch(() => false), // placeholder — resolved below
+
+    prisma.streamComment.findMany({
+      where: { streamId: id },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "asc" }],
+      select: {
+        id: true, content: true, createdAt: true, isPinned: true, likeCount: true,
+        author: { select: { id: true, name: true, image: true } },
+      },
+    }).catch(() => []),
   ]);
 
   if (!stream) notFound();
@@ -80,6 +89,7 @@ export default async function StreamIdPage({ params }: { params: Promise<{ id: s
       initialDislikes={dislikes}
       initialUserReaction={(userReaction?.type ?? null) as "LIKE" | "DISLIKE" | null}
       initialFollowing={!!followingSub}
+      initialComments={comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
     />
   );
 }

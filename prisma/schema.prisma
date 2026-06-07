@@ -32,6 +32,8 @@ model User {
   banReason       String?
   bannedAt        DateTime?
   hintPoints      Int       @default(5)
+  durakCoins      Int       @default(3)
+  lastDurakAdAt   DateTime?
   puzzleRating    Int       @default(1000)
   lastAdWatchedAt          DateTime?
   lastMonthlyPointsClaim   DateTime?
@@ -100,6 +102,7 @@ model User {
   streamChatMods     StreamChatMod[]     @relation("StreamChatModUser")
   streamChatBans     StreamChatBan[]     @relation("StreamChatBanUser")
   streamChatMutes    StreamChatMute[]    @relation("StreamChatMuteUser")
+  streamComments     StreamComment[]
 }
 
 
@@ -121,6 +124,7 @@ model Stream {
   chatMods     StreamChatMod[]
   chatBans     StreamChatBan[]
   chatMutes    StreamChatMute[]
+  comments     StreamComment[]
 }
 
 model StreamChatMessage {
@@ -182,6 +186,19 @@ model StreamChatMute {
   stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
   user      User     @relation("StreamChatMuteUser", fields: [userId], references: [id], onDelete: Cascade)
   @@unique([streamId, userId])
+}
+
+model StreamComment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  isPinned  Boolean  @default(false)
+  likeCount Int      @default(0)
+
+  streamId String
+  stream   Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model WatchHistory {
@@ -1013,6 +1030,7 @@ model DurakRoom {
   deckJson        String  @default("[]") @db.Text  // remaining deck cards
   tableJson       String  @default("[]") @db.Text  // cards on table: [{attack, defense}]
   discardCount    Int     @default(0)
+  discardJson     String  @default("[]") @db.Text
   trumpCard       String? // JSON Card (the revealed bottom card)
   trumpSuit       String? // "S"|"H"|"D"|"C"
   attackerIdx     Int     @default(0)

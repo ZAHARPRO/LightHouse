@@ -254,6 +254,14 @@ export default function GameRoomPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchRoom]);
 
+  const autoJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "WAITING" || room.guestId) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`/api/ms-rooms/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.myRole, room?.status, room?.guestId]); // eslint-disable-line
+
   // Preload sounds once
   useEffect(() => { preloadSounds(); }, []);
 

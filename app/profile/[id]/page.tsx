@@ -630,25 +630,23 @@ export default async function PublicProfilePage({
             })}
           </div>
         )}
-      </div>
 
-      {/* ── Past streams ── */}
+              {/* ── Past streams ── */}
       {pastStreams.length > 0 && (
         <div style={{ marginTop: "2rem" }}>
-          <h2 style={{
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem",
-            color: "var(--text-primary)", marginBottom: "1rem",
-            display: "flex", alignItems: "center", gap: "0.5rem",
-          }}>
-            <Radio size={16} color="#f97316" />
-            Past Streams
-          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+            <h2 style={{
+              fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem",
+              color: "var(--text-primary)",
+              display: "flex", alignItems: "center", gap: "0.5rem",
+            }}>
+              <Radio size={16} color="#f97316" />
+              Past Streams
+            </h2>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>({pastStreams.length})</span>
+          </div>
 
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: "1rem",
-          }}>
+          <div className="videos-grid">
             {pastStreams.map((stream) => (
               <Link key={stream.id} href={`/stream/${stream.id}`} style={{ textDecoration: "none" }}>
                 <div style={{
@@ -723,6 +721,9 @@ export default async function PublicProfilePage({
           </div>
         </div>
       )}
+      </div>
+
+
     </>
   );
 }

@@ -25,10 +25,20 @@ export default async function StreamPage() {
 
   if (existing) redirect(`/stream/${existing.id}`);
 
+  const recommendations = await prisma.video.findMany({
+    take: 8,
+    orderBy: { views: "desc" },
+    select: {
+      id: true, title: true, duration: true, views: true, isPremium: true,
+      author: { select: { id: true, name: true } },
+    },
+  }).catch(() => []);
+
   return (
     <StreamPageClient
       userId={session.user.id}
       userName={(session.user as { name?: string }).name ?? "Anonymous"}
+      recommendations={recommendations}
     />
   );
 }

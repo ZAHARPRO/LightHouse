@@ -55,6 +55,7 @@ type RoomRow = {
   deckJson: string;
   tableJson: string;
   discardCount: number;
+  discardJson: string;
   trumpSuit: string | null;
   attackerIdx: number;
   defenderIdx: number;
@@ -80,9 +81,10 @@ type Mutable = {
   deck: Card[];
   table: TableSlot[];
   discardCount: number;
+  discardPile: Card[];
   attackerIdx: number;
   defenderIdx: number;
-  phase: "attack" | "defense" | "throwing" | "finished";
+  phase: "attack" | "defense" | "throwing" | "taking" | "finished";
   outPlayers: Set<number>;
 };
 
@@ -114,6 +116,7 @@ function loadState(room: RoomRow): Mutable {
     deck: parse<Card[]>(room.deckJson, []),
     table: parse<TableSlot[]>(room.tableJson, []),
     discardCount: room.discardCount,
+    discardPile: parse<Card[]>(room.discardJson, []),
     attackerIdx: room.attackerIdx,
     defenderIdx: room.defenderIdx,
     phase: room.phase as Mutable["phase"],
@@ -175,7 +178,12 @@ function resolveBout(room: RoomRow, state: Mutable, defenderTook: boolean): stri
   } else {
     // Successful defense: everything goes to the discard pile.
     for (const slot of state.table) {
-      state.discardCount += slot.defense ? 2 : 1;
+      state.discardPile.push(slot.attack);
+      state.discardCount++;
+      if (slot.defense) {
+        state.discardPile.push(slot.defense);
+        state.discardCount++;
+      }
     }
   }
   state.table = [];
@@ -281,6 +289,7 @@ async function persist(room: RoomRow, state: Mutable, winnerUserId: string | nul
         deckJson: JSON.stringify(state.deck),
         tableJson: JSON.stringify(state.table),
         discardCount: state.discardCount,
+        discardJson: JSON.stringify(state.discardPile),
         attackerIdx: state.attackerIdx,
         defenderIdx: state.defenderIdx,
         phase: state.phase,
@@ -391,8 +400,8 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       }
       removeFromHand(card);
       state.table.push({ attack: card, defense: null });
-      // Stay in "throwing" phase if we're already there; otherwise enter "defense".
-      state.phase = state.phase === "throwing" ? "throwing" : "defense";
+      // Stay in "throwing"/"taking" phase if already there; otherwise enter "defense".
+      state.phase = state.phase === "throwing" ? "throwing" : state.phase === "taking" ? "taking" : "defense";
       break;
     }
 
@@ -432,19 +441,24 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
     case "take": {
       if (mySeat !== state.defenderIdx) return { ok: false, error: "Not defender" };
       if (state.table.length === 0) return { ok: false, error: "Nothing to take" };
-      winnerUserId = resolveBout(room, state, true);
+      if (state.phase === "taking") return { ok: false, error: "Already declared" };
+      // Declare intent to take — attackers get a throw window before cards go to hand.
+      state.phase = "taking";
       break;
     }
 
     case "pass": {
-      // An attacker signals "done". Resolve only when the table is fully beaten.
+      // An attacker signals "done". In "taking" phase resolves as take; otherwise requires full defense.
       if (!isAttackerSide) return { ok: false, error: "Not attacking" };
       if (state.table.length === 0) return { ok: false, error: "Nothing to pass" };
-      if (!isFullyDefended(state.table)) return { ok: false, error: "Defender still defending" };
+      if (state.phase !== "taking" && !isFullyDefended(state.table)) return { ok: false, error: "Defender still defending" };
 
       if (state.phase === "throwing") {
         // Already in throwing phase — any pass immediately resolves the bout.
         winnerUserId = resolveBout(room, state, false);
+      } else if (state.phase === "taking") {
+        // Defender already declared take — attacker pass ends the throw window.
+        winnerUserId = resolveBout(room, state, true);
       } else if (mySeat === state.attackerIdx) {
         // Main attacker pressing pass: check if other players can still throw.
         const firstBout = isFirstBout(room.movesJson);
@@ -516,7 +530,19 @@ export async function processBotTurns(roomId: string): Promise<void> {
     const needsDefense = state.table.some((s) => !s.defense);
     let actingSeat: number;
 
-    if (state.phase === "throwing") {
+    if (state.phase === "taking") {
+      // Defender declared intent to take — attacker bots can throw more or pass.
+      const eligible = getEligibleThrowerSeats(room, state);
+      const mainBot = bots.find((b) => b.seatIdx === state.attackerIdx);
+      const eligibleBot = mainBot ?? bots.find((b) => eligible.includes(b.seatIdx));
+      if (!eligibleBot) return; // human's turn; timer will resolve
+      const existingLenT = (() => { try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; } })();
+      const passRecordT: MoveRecord = { seq: existingLenT + 1, action: "pass", seatIdx: eligibleBot.seatIdx, name: null, at: Date.now() };
+      const winT = resolveBout(room, state, true);
+      await persist(room, state, winT, passRecordT);
+      broadcast(roomId, { type: "update" });
+      return;
+    } else if (state.phase === "throwing") {
       if (needsDefense) {
         // A thrower placed a card — defender must beat it.
         actingSeat = state.defenderIdx;
@@ -553,6 +579,8 @@ export async function processBotTurns(roomId: string): Promise<void> {
 
     const trumpSuit = (room.trumpSuit ?? "S") as Suit;
     const variant = room.variant as Variant;
+    // Snapshot phase — TypeScript narrows it away from "taking"/"throwing" above, but mutations below may set it.
+    const botPhase = state.phase as Mutable["phase"];
 
     // Build ClientBotState for the bot
     const allSeats = [...room.players.map((p) => p.seatIdx), ...bots.map((b) => b.seatIdx)];
@@ -606,8 +634,7 @@ export async function processBotTurns(roomId: string): Promise<void> {
         if (idx < 0) break;
         state.hands[actingSeat].splice(idx, 1);
         state.table.push({ attack: action.card, defense: null });
-        // Stay in "throwing" phase if we're already there (same as applyMove).
-        state.phase = state.phase === "throwing" ? "throwing" : "defense";
+        state.phase = botPhase === "throwing" ? "throwing" : botPhase === "taking" ? "taking" : "defense";
         break;
       }
       case "defend": {
@@ -639,11 +666,12 @@ export async function processBotTurns(roomId: string): Promise<void> {
       }
       case "pass": {
         if (state.table.length === 0) { state.phase = "attack"; break; }
-        if (!isFullyDefended(state.table)) { state.phase = "attack"; break; }
+        if (botPhase !== "taking" && !isFullyDefended(state.table)) { state.phase = "attack"; break; }
 
-        if (state.phase === "throwing") {
-          // Already in throwing phase — bot pass resolves the bout.
+        if (botPhase === "throwing") {
           winnerUserId = resolveBout(room, state, false);
+        } else if (botPhase === "taking") {
+          winnerUserId = resolveBout(room, state, true);
         } else if (actingSeat === state.attackerIdx) {
           // Main attacker passing — enter throwing phase if eligible throwers exist.
           const botFirstBout2 = isFirstBout(room.movesJson);
@@ -696,13 +724,14 @@ export async function resolveTimeouts(room: RoomRow): Promise<boolean> {
   const state = loadState(room);
   let winnerUserId: string | null = null;
 
-  if (state.phase === "throwing") {
+  if (state.phase === "taking") {
+    // Throw window expired after defender declared take → resolve as take.
+    winnerUserId = resolveBout(room, state, true);
+  } else if (state.phase === "throwing") {
     const needsDefense = state.table.some((s) => !s.defense);
     if (needsDefense) {
-      // A card was thrown but defender ran out of time → defender takes all.
       winnerUserId = resolveBout(room, state, true);
     } else {
-      // Throwing phase expired with all cards defended → resolve successfully.
       winnerUserId = resolveBout(room, state, false);
     }
   } else if (state.phase === "defense" && !isFullyDefended(state.table)) {

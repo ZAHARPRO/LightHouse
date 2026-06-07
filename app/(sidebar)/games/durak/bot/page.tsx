@@ -43,6 +43,7 @@ interface BotGameState {
   hands: Card[][];
   tableSlots: TableSlot[];
   discardCount: number;
+  discardPile: Card[];
   phase: "attack" | "defense" | "throwing" | "finished";
   attackerIdx: number;
   defenderIdx: number;
@@ -73,6 +74,7 @@ function initGame(
     hands,
     tableSlots: [],
     discardCount: 0,
+    discardPile: [],
     phase: "attack",
     attackerIdx,
     defenderIdx,
@@ -96,6 +98,7 @@ function resolveBout(
 ): BotGameState {
   const newHands = state.hands.map((h) => [...h]);
   let discardCount = state.discardCount;
+  const discardPile = [...state.discardPile];
 
   if (defenderTook) {
     const picked: Card[] = [];
@@ -106,7 +109,9 @@ function resolveBout(
     newHands[state.defenderIdx].push(...picked);
   } else {
     for (const slot of state.tableSlots) {
-      discardCount += slot.defense ? 2 : 1;
+      discardPile.push(slot.attack);
+      discardCount++;
+      if (slot.defense) { discardPile.push(slot.defense); discardCount++; }
     }
   }
 
@@ -133,6 +138,7 @@ function resolveBout(
       deck,
       hands,
       discardCount,
+      discardPile,
       tableSlots: [],
       outPlayers: newOut,
       phase: "finished",
@@ -154,6 +160,7 @@ function resolveBout(
     deck,
     hands,
     discardCount,
+    discardPile,
     tableSlots: [],
     outPlayers: newOut,
     phase: "attack",
@@ -1087,7 +1094,7 @@ function DurakBotGame() {
               {/* Action buttons */}
               {game.phase !== "finished" && !game.animating && (
                 <div className="flex flex-col gap-2 mt-2 w-full items-center">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap justify-center">
                     {canPlayerPass && (
                       <button
                         onClick={handlePass}
@@ -1105,6 +1112,7 @@ function DurakBotGame() {
                       </button>
                     )}
                   </div>
+
                 </div>
               )}
             </div>

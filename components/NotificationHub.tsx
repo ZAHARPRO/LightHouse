@@ -39,6 +39,8 @@ const GAME_META: Record<MatchGame, { icon: string; label: string; color: string 
   checkers:    { icon: "🔴", label: "Checkers",    color: "#8b5cf6" },
   billiards:   { icon: "🎱", label: "Billiards",   color: "#10b981" },
   battleship:  { icon: "🚢", label: "Battleship",  color: "#0ea5e9" },
+  minesweeper: { icon: "💣", label: "Minesweeper", color: "#ec4899" },
+  durak:       { icon: "🃏", label: "Durak",       color: "#ef4444" },
 };
 
 const OUTCOME_META: Record<"win" | "loss" | "draw", { label: string; color: string }> = {

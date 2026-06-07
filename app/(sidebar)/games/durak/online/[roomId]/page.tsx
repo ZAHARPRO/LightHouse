@@ -10,6 +10,7 @@ import { Loader2, Eye, Crown, ShieldAlert, Hand, Check, X, Play, Bot, Plus, Tras
 import DurakCard from "@/components/DurakCard";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
 import ConnectionBadge, { type ConnStatus } from "@/components/ConnectionBadge";
+import DurakAdPanel, { type AdMode } from "@/components/DurakAdPanel";
 import type { Card, TableSlot } from "@/lib/durak";
 import { SUIT_SYMBOL, SUIT_IS_RED, cardsEqual, canTransfer } from "@/lib/durak";
 import type { MoveRecord } from "@/lib/durak-engine";
@@ -55,7 +56,7 @@ function MoveTimer({ lastMoveAt, timeLimitSec, isMyTurn }: { lastMoveAt: string 
 function FlyingCard({ from, to }: { from: { x: number; y: number }; to: { x: number; y: number } }) {
   const [arrived, setArrived] = useState(false);
   useEffect(() => { const f = requestAnimationFrame(() => setArrived(true)); return () => cancelAnimationFrame(f); }, []);
-  const W = 52, H = 74;
+  const W = 76, H = 109;
   return (
     <div style={{
       position: "fixed",
@@ -160,6 +161,13 @@ export default function DurakRoomPage() {
   const [localHandOrder, setLocalHandOrder] = useState<Card[]>([]);
   const [insertBeforeIdx, setInsertBeforeIdx] = useState<number | null>(null);
 
+  // Gold coins + ad panel state
+  const [myCoins, setMyCoins] = useState<number | null>(null);
+  const [adPanel, setAdPanel] = useState<{ mode: AdMode } | null>(null);
+  const [discardPile, setDiscardPile] = useState<import("@/lib/durak").Card[] | null>(null);
+  const [discardTimer, setDiscardTimer] = useState(0);
+  const discardTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const logRef = useRef<HTMLDivElement>(null);
   const roomUrl = typeof window !== "undefined" ? `${window.location.origin}/games/durak/online/${roomId}` : "";
   function handleCopy() {
@@ -177,6 +185,7 @@ export default function DurakRoomPage() {
 
   const esRef = useRef<EventSource | null>(null);
   const lastFetch = useRef(0);
+  const autoJoinedRef = useRef(false);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -194,6 +203,15 @@ export default function DurakRoomPage() {
       setConn("lost");
     }
   }, [roomId, t]);
+
+  // Auto-join when arriving via invite link
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "WAITING") return;
+    if (room.players.length >= room.maxPlayers) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`${API}/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.myRole, room?.status, room?.players?.length]); // eslint-disable-line
 
   // SSE + fallback poll
   useEffect(() => {
@@ -234,6 +252,7 @@ export default function DurakRoomPage() {
   const onlineTableRef   = useRef<HTMLDivElement>(null);
   const onlineOppRef     = useRef<HTMLDivElement>(null);
   const onlineFlyIdRef   = useRef(0);
+  const dealFiredRef     = useRef(false); // guard against StrictMode double-invoke
   const [onlineFlyCards, setOnlineFlyCards] = useState<{ id: number; from: {x:number;y:number}; to: {x:number;y:number} }[]>([]);
   const prevTableLenRef  = useRef(0);
   const isDealDone       = dealStep >= 999 || (room ? dealStep >= room.players.length * 6 : true);
@@ -244,6 +263,8 @@ export default function DurakRoomPage() {
     const prev = prevStatusRef.current;
     prevStatusRef.current = room.status;
     if (prev === "WAITING" && room.status === "PLAYING") {
+      if (dealFiredRef.current) return; // guard against StrictMode double-invoke
+      dealFiredRef.current = true;
       const sortedPlayers = [...room.players].sort((a, b) => a.seatIdx - b.seatIdx);
       const total = sortedPlayers.length * 6;
       setDealStep(0);
@@ -252,11 +273,9 @@ export default function DurakRoomPage() {
       const id = setInterval(() => {
         step++;
         setDealStep(step);
-        // Launch flying card from deck position
         if (onlineDeckRef.current) {
           const deckRect = onlineDeckRef.current.getBoundingClientRect();
           const from = { x: deckRect.left + deckRect.width / 2, y: deckRect.top + deckRect.height / 2 };
-          // Target: if it's the current user's card, aim at their hand; otherwise generic upward
           const targetIsMe = (step - 1) % sortedPlayers.length === sortedPlayers.findIndex(p => p.userId === myId);
           const toEl = targetIsMe ? onlineMyHandRef.current : null;
           const toRect = toEl?.getBoundingClientRect();
@@ -322,6 +341,31 @@ export default function DurakRoomPage() {
     }, 100);
     return () => clearInterval(i);
   }, [room?.pendingCheat, catchWindow]);
+
+  // Fetch coin balance once on mount
+  useEffect(() => {
+    fetch("/api/durak-coins")
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { durakCoins: number } | null) => { if (d) setMyCoins(d.durakCoins); })
+      .catch(() => {});
+  }, []); // eslint-disable-line
+
+  // Discard-reveal countdown timer
+  useEffect(() => {
+    if (!discardPile) return;
+    setDiscardTimer(10);
+    discardTimerRef.current = setInterval(() => {
+      setDiscardTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(discardTimerRef.current!);
+          setDiscardPile(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (discardTimerRef.current) clearInterval(discardTimerRef.current); };
+  }, [discardPile]); // eslint-disable-line
 
   // Auto-scroll log to bottom when new moves arrive
   const movesLen = room ? (() => { try { return (JSON.parse(room.movesJson ?? "[]") as unknown[]).length; } catch { return 0; } })() : 0;
@@ -830,12 +874,6 @@ export default function DurakRoomPage() {
   const durakPlayer = room.winner ? room.players.find((p) => p.userId === room.winner) : null;
   const iAmDurak = room.winner === myId;
 
-  function onCardClick(card: Card) {
-    if (!isPlayer || finished) return;
-    if (selected && cardsEqual(selected, card)) setSelected(null);
-    else setSelected(card);
-  }
-
   async function doAttack(card?: Card) {
     const c = card ?? selected;
     if (!c) return;
@@ -865,7 +903,7 @@ export default function DurakRoomPage() {
 
   const canCatch = room.pendingCheat && catchWindow > 0 && isPlayer;
 
-  const isMainAttacker = room.mySeatIdx === room.attackerIdx;
+  const isMainAttacker   = room.mySeatIdx === room.attackerIdx;
   // Next defender = next active player in seat order after current defender (same as engine's nextActive)
   const activeSorted = room.players.filter(p => !p.isOut).sort((a, b) => a.seatIdx - b.seatIdx);
   const defPosInActive = activeSorted.findIndex(p => p.seatIdx === room.defenderIdx);
@@ -876,8 +914,8 @@ export default function DurakRoomPage() {
 
   const moves: MoveRecord[] = (() => { try { return JSON.parse(room.movesJson ?? "[]"); } catch { return []; } })();
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
-  // Show "took" badge on the player who just took cards (clears on next attack move)
-  const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING") ? lastMove.seatIdx : null;
+  // Show "took" badge only after the bout fully resolved (not while in declaring-take phase)
+  const defTookSeat = (lastMove?.action === "take" && room.status === "PLAYING" && room.phase !== "taking") ? lastMove.seatIdx : null;
   // Not exposing isThrowingPhase in UI — doing so would leak which players have throwable cards
 
   return (
@@ -891,8 +929,8 @@ export default function DurakRoomPage() {
     `}</style>
     {/* Flying cards during deal animation */}
     {onlineFlyCards.map(fc => <FlyingCard key={fc.id} from={fc.from} to={fc.to} />)}
-    <main className="max-w-4xl mx-auto px-2 pt-2 pb-4">
-      <div className="flex items-center justify-between mb-2">
+    <main className="max-w-6xl mx-auto px-2 pt-1 pb-2">
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-3">
           {isHost
             ? <button onClick={handleCancelRoom} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-sm">{t("cancelRoom")}</button>
@@ -941,7 +979,7 @@ export default function DurakRoomPage() {
         {/* ── Table area ── */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-2 flex flex-col">
           {/* Opponents — single scrollable row */}
-          <div ref={onlineOppRef} className="flex items-center justify-center gap-2 mb-3 overflow-x-auto pb-1 [scrollbar-width:none]">
+          <div ref={onlineOppRef} className="flex items-center justify-center gap-1 mb-1 overflow-x-auto pb-1 [scrollbar-width:none]">
             {others.map((p) => {
               const isAtk = p.seatIdx === room.attackerIdx;
               const isDef = p.seatIdx === room.defenderIdx;
@@ -951,7 +989,7 @@ export default function DurakRoomPage() {
                 <div
                   key={p.userId}
                   className={[
-                    "flex items-center gap-1.5 px-2 py-1 rounded-lg border shrink-0 transition-all",
+                    "flex items-center gap-1 px-1 py-0.5 rounded-md border shrink-0 transition-all",
                     p.isOut   ? "opacity-40 bg-[var(--bg-secondary)] border-[var(--border-subtle)]"
                     : isAtk   ? "bg-orange-500/10 border-orange-500/30"
                     : isDef   ? "bg-red-500/10 border-red-500/30"
@@ -960,13 +998,13 @@ export default function DurakRoomPage() {
                 >
                   {/* Avatar */}
                   {p.isBot ? (
-                    <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
-                      <Bot size={10} className="text-purple-400" />
+                    <div className="w-4 h-4 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
+                      <Bot size={9} className="text-purple-400" />
                     </div>
                   ) : p.image ? (
-                    <Image src={p.image} alt="" width={20} height={20} className="rounded-full shrink-0" />
+                    <Image src={p.image} alt="" width={16} height={16} className="rounded-full shrink-0" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-[0.5rem] shrink-0">
+                    <div className="w-4 h-4 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-[0.5rem] shrink-0">
                       {p.name?.[0] ?? "?"}
                     </div>
                   )}
@@ -980,6 +1018,9 @@ export default function DurakRoomPage() {
                       {isAtk && <span className="text-[0.5rem] font-bold text-orange-400">▲</span>}
                       {isDef && <span className="text-[0.5rem] font-bold text-red-400">🛡</span>}
                       {p.isOut && <span className="text-[0.5rem] font-bold text-emerald-400">✓</span>}
+                      {room.phase === "taking" && isDef && (
+                        <span className="text-[0.55rem] font-extrabold px-1 rounded bg-red-500/30 text-red-300 leading-none py-px animate-pulse">{t("defenderTaking")}</span>
+                      )}
                       {p.seatIdx === defTookSeat && (
                         <span className="text-[0.5rem] font-extrabold px-1 rounded bg-red-500/20 text-red-400 leading-none py-px">{t("defenderTook")}</span>
                       )}
@@ -987,30 +1028,34 @@ export default function DurakRoomPage() {
 
                     {/* Cards + count */}
                     <div className="flex items-center gap-1">
-                      <div className="flex -space-x-3">
+                      <div className="flex -space-x-2">
                         {Array.from({ length: Math.min(p.cardCount, 5) }).map((_, i) => {
                           const di = i * room.players.length + Math.max(0, pos);
                           const cardVisible = isDealDone || dealStep > di;
                           return (
                             <div key={i} className={cardVisible && dealStep <= di + 1 ? "durak-card-in" : ""} style={{ opacity: cardVisible ? 1 : 0 }}>
-                              <DurakCard faceDown size="xs" />
+                              <DurakCard faceDown size="xs" style={{ width: 26, height: 37 }} />
                             </div>
                           );
                         })}
-                        {p.cardCount > 5 && <span className="text-[0.5rem] text-[var(--text-muted)] ml-0.5 self-center">+{p.cardCount - 5}</span>}
+                        {p.cardCount > 5 && <span className="text-[0.6rem] font-bold text-[var(--text-muted)] ml-0.5 self-center">+{p.cardCount - 5}</span>}
                       </div>
                       <span className={[
-                        "text-[0.6rem] font-mono font-bold tabular-nums",
-                        !isDealDone ? "opacity-0" : p.cardCount === 0 ? "text-green-400" : p.cardCount <= 3 ? "text-yellow-400" : "text-[var(--text-muted)]"
+                        "text-sm font-mono font-extrabold tabular-nums leading-none",
+                        !isDealDone ? "opacity-0"
+                        : p.cardCount === 0   ? "text-emerald-400"
+                        : p.cardCount <= 2    ? "text-red-400"
+                        : p.cardCount <= 4    ? "text-yellow-400"
+                        : p.cardCount <= 6    ? "text-sky-400"
+                        :                       "text-[var(--text-secondary)]"
                       ].join(" ")}>
                         {isDealDone ? p.cardCount : "?"}
                       </span>
                       {room.timeControl !== "none" && !finished && (
-                        (isAtk || isDef ||
-                          (room.phase === "throwing" &&
-                            p.seatIdx !== room.attackerIdx &&
-                            p.seatIdx !== room.defenderIdx &&
-                            !p.isOut)) // no cardCount check — avoids leaking hand info
+                        (room.phase === "attack" && isAtk) ||
+                        (room.phase === "defense" && isDef) ||
+                        ((room.phase === "throwing" || room.phase === "taking") &&
+                          p.seatIdx !== room.defenderIdx && !p.isOut)
                       ) && (
                         <MoveTimer lastMoveAt={room.lastMoveAt} timeLimitSec={Number(room.timeControl)} isMyTurn={false} />
                       )}
@@ -1022,28 +1067,28 @@ export default function DurakRoomPage() {
           </div>
 
           {/* Deck + Table in one row */}
-          <div className="flex gap-3 mb-3">
+          <div className="flex gap-3 mb-2">
             {/* Left column: deck / trump / discard / pass */}
-            <div className="flex flex-col items-center gap-2 shrink-0 w-[80px]">
+            <div className="flex flex-col items-center gap-2 shrink-0 w-[112px]">
               {/* Deck */}
-              <div className="relative" ref={onlineDeckRef} style={{ width: 70, height: 100 }}>
+              <div className="relative" ref={onlineDeckRef} style={{ width: 100, height: 143, overflow: "visible" }}>
                 {room.deckCount > 0 ? (
                   <>
-                    {/* Trump card peeking sideways from under the deck — disappears when deck empties */}
+                    {/* Trump card peeking sideways — always on top of anything else, clearly visible */}
                     {room.trumpCard && (
                       <DurakCard
                         card={room.trumpCard}
                         size="sm"
                         style={{
                           position: "absolute",
-                          left: -28,
-                          top: 14,
+                          left: -34,
+                          top: 17,
                           transform: "rotate(90deg)",
-                          zIndex: 0,
+                          zIndex: 3,
                         }}
                       />
                     )}
-                    <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0, zIndex: 1 }} />
+                    <DurakCard faceDown size="md" style={{ position: "absolute", left: 0, top: 0, zIndex: 2 }} />
                     <div className={[
                       "absolute -top-2 -right-2 min-w-[22px] h-[22px] rounded-full flex items-center justify-center text-[0.65rem] font-extrabold border-2 border-[var(--bg-elevated)] z-10",
                       room.deckCount < 6  ? "bg-red-500 text-white"
@@ -1054,13 +1099,13 @@ export default function DurakRoomPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="w-[70px] h-[100px] rounded-lg border border-dashed border-[var(--border-subtle)] flex items-center justify-center opacity-30 text-2xl">🂠</div>
+                  <div className="w-[100px] h-[143px] rounded-lg border border-dashed border-[var(--border-subtle)] flex items-center justify-center opacity-30 text-2xl">🂠</div>
                 )}
               </div>
 
               {/* Trump suit */}
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-2xl leading-none"
+                <span className="text-5xl leading-none"
                   style={{ color: trumpSuit && SUIT_IS_RED[trumpSuit] ? "#dc2626" : "var(--text-primary)" }}>
                   {trumpSuit ? SUIT_SYMBOL[trumpSuit] : "?"}
                 </span>
@@ -1072,6 +1117,36 @@ export default function DurakRoomPage() {
                 <span className="text-xs font-mono font-bold text-[var(--text-muted)]">{room.discardCount}</span>
                 <span className="text-[0.55rem] text-[var(--text-muted)] uppercase tracking-wide">{t("discard")}</span>
               </div>
+
+              {/* View discard button */}
+              {isPlayer && myCoins !== null && !room.rated && (
+                <button
+                  onClick={async () => {
+                    if (myCoins < 1) { setAdPanel({ mode: "coins" }); return; }
+                    const [spendRes, discardRes] = await Promise.all([
+                      fetch("/api/durak-coins/spend", { method: "POST" }),
+                      fetch(`${API}/${roomId}/discard`),
+                    ]);
+                    if (spendRes.ok) {
+                      const d = await spendRes.json() as { durakCoins: number };
+                      setMyCoins(d.durakCoins);
+                    }
+                    if (discardRes.ok) {
+                      const d = await discardRes.json() as { cards: import("@/lib/durak").Card[] };
+                      if (d.cards) { setDiscardPile(d.cards); setDiscardTimer(10); }
+                    }
+                  }}
+                  title={myCoins > 0 ? `${t("viewDiscard")} (-1🪙)` : t("watchAdForCoins")}
+                  className={[
+                    "w-full px-2 py-1.5 rounded-lg border text-xs font-display font-bold transition-colors",
+                    myCoins > 0
+                      ? "bg-pink-500/10 border-pink-500/30 text-pink-400 hover:bg-pink-500/20"
+                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-muted)] opacity-50 cursor-not-allowed",
+                  ].join(" ")}
+                >
+                 {t("viewDiscard")}
+                </button>
+              )}
 
               {/* Pass button (attacker/thrower, table not empty, all cards defended) */}
               {isAttackerSide && room.table.length > 0 && !finished &&
@@ -1086,7 +1161,7 @@ export default function DurakRoomPage() {
             {/* Table slots — drop zone for attack */}
             <div
               ref={onlineTableRef}
-              className="flex-1 min-h-[160px] flex flex-wrap items-center justify-center gap-4 py-4 rounded-xl bg-[var(--bg-secondary)]/40 border border-[var(--border-subtle)] transition-colors"
+              className="flex-1 min-h-[120px] flex flex-wrap items-center justify-center gap-4 py-2 rounded-xl bg-[var(--bg-secondary)]/40 border border-[var(--border-subtle)] transition-colors"
               style={{ borderColor: dragCard && isAttackerSide && room.table.length === 0 ? "var(--accent-orange)" : undefined }}
             onDragOver={(e) => {
               if (dragCard && isAttackerSide && !finished) e.preventDefault();
@@ -1107,15 +1182,20 @@ export default function DurakRoomPage() {
               room.table.map((slot, i) => {
                 const isSlotDragOver = dragOverSlot === i;
                 const isDefendTarget = isDefender && !slot.defense && (selected || dragCard) && !finished;
+                const isMyAttack = !slot.defense && myCoins !== null && !room.rated && !finished && !busy &&
+                  moves.slice().reverse().some(
+                    m => m.seatIdx === room.mySeatIdx && (m.action === "attack" || m.action === "throw") && m.card
+                      && m.card.suit === slot.attack.suit && m.card.rank === slot.attack.rank
+                  );
+                const canRecall = isMyAttack && myCoins > 0;
                 return (
                   <div
                     key={i}
                     className={[
-                      "relative rounded-xl transition-all",
+                      "group relative rounded-xl transition-all",
                       isSlotDragOver ? "ring-2 ring-emerald-400 bg-emerald-500/10" : "",
                     ].join(" ")}
-                    style={{ width: 70, height: 116 }}
-                    onClick={() => isDefendTarget && selected && doDefend(i)}
+                    style={{ width: 100, height: 163 }}
                     onDragOver={(e) => {
                       if (dragCard && isDefendTarget) {
                         e.preventDefault();
@@ -1139,10 +1219,38 @@ export default function DurakRoomPage() {
                       card={slot.attack}
                       size="md"
                       style={{ position: "absolute", top: 0, left: 0 }}
-                      className={isDefendTarget && !isSlotDragOver ? "ring-2 ring-emerald-400 rounded-lg cursor-pointer" : ""}
+                      className={isDefendTarget && !isSlotDragOver ? "ring-2 ring-emerald-400 rounded-lg cursor-crosshair" : ""}
                     />
                     {slot.defense && (
-                      <DurakCard card={slot.defense} size="md" style={{ position: "absolute", top: 16, left: 12 }} />
+                      <DurakCard card={slot.defense} size="md" style={{ position: "absolute", top: 20, left: 16 }} />
+                    )}
+                    {/* Recall button — appears on hover for the player's own undefended card */}
+                    {isMyAttack && (
+                      <button
+                        onClick={async () => {
+                          if (!canRecall) { setAdPanel({ mode: "coins" }); return; }
+                          setBusy(true);
+                          const res = await fetch(`${API}/${roomId}/recall`, { method: "POST" });
+                          setBusy(false);
+                          if (res.ok) {
+                            const d = await fetch("/api/durak-coins").then(r => r.json()) as { durakCoins: number };
+                            setMyCoins(d.durakCoins);
+                            fetchRoom();
+                          } else {
+                            const d = await res.json() as { error?: string };
+                            if (d.error === "no_coins") setAdPanel({ mode: "coins" });
+                          }
+                        }}
+                        title={canRecall ? `${t("recall")} (-1🪙)` : t("watchAdForCoins")}
+                        className={[
+                          "absolute top-1 right-1 z-10 w-6 h-6 rounded-md border text-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all",
+                          canRecall
+                            ? "bg-[var(--bg-elevated)]/90 border-amber-500/40 text-amber-400 hover:bg-amber-500/20"
+                            : "bg-[var(--bg-elevated)]/90 border-[var(--border-subtle)] text-[var(--text-muted)] cursor-not-allowed",
+                        ].join(" ")}
+                      >
+                        ↩
+                      </button>
                     )}
                   </div>
                 );
@@ -1163,7 +1271,7 @@ export default function DurakRoomPage() {
                   setDragCard(null);
                 }}
                 className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-400/70 text-blue-400 hover:bg-blue-500/10 hover:border-blue-400 transition-colors disabled:opacity-40"
-                style={{ width: 70, height: 116, flexShrink: 0 }}
+                style={{ width: 100, height: 163, flexShrink: 0 }}
               >
                 <span className="text-xl leading-none">⇒</span>
                 <span className="text-[0.6rem] font-bold">{t("transfer")}</span>
@@ -1200,13 +1308,17 @@ export default function DurakRoomPage() {
             <div className="flex flex-col gap-2 items-center">
 
             <div className="flex flex-wrap items-center gap-2 justify-center">
-              {isDefender && (
+              {isDefender && room.phase !== "taking" && (
                 <button onClick={doTake} disabled={busy} className={actBtn("red")}>
                   <Hand size={14} className="inline mr-1" />
                   😮 {t("take")}
                 </button>
               )}
-
+              {isDefender && room.phase === "taking" && (
+                <span className="px-4 py-2 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-display font-extrabold text-sm animate-pulse">
+                  😮 {t("defenderTaking")} — {t("waitingForOthers")}
+                </span>
+              )}
 
               {/* Cheat buttons (unfair only) */}
               {!room.fairPlay && (
@@ -1227,15 +1339,20 @@ export default function DurakRoomPage() {
 
           {/* My hand */}
           {isPlayer && (
-            <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
+            <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
               {/* Hand header row */}
               <div className="flex items-center justify-center gap-2 mb-1">
                 <span className="text-[0.7rem] text-[var(--text-muted)]">
                   {t("yourHand")} ({isDealDone ? room.myHand.length : "?"})
                 </span>
-                {room.mySeatIdx === room.attackerIdx && <span className="text-[0.65rem] text-orange-400 font-bold">[{t("youAttack")}]</span>}
-                {isDefender && <span className="text-[0.65rem] text-red-400 font-bold">[{t("youDefend")}]</span>}
-                {room.timeControl !== "none" && (isAttackerSide || isDefender) && !finished && (
+                {isMainAttacker && <span className="text-[0.65rem] text-orange-400 font-bold">[{t("youAttack")}]</span>}
+                {isDefender && room.phase !== "taking" && <span className="text-[0.65rem] text-red-400 font-bold">[{t("youDefend")}]</span>}
+                {isDefender && room.phase === "taking" && <span className="text-[0.65rem] text-red-300 font-bold animate-pulse">[{t("youTaking")}]</span>}
+                {room.timeControl !== "none" && !finished && (
+                  (room.phase === "attack" && isMainAttacker) ||
+                  (room.phase === "defense" && isDefender) ||
+                  ((room.phase === "throwing" || room.phase === "taking") && isAttackerSide)
+                ) && (
                   <MoveTimer lastMoveAt={room.lastMoveAt} timeLimitSec={Number(room.timeControl)} isMyTurn />
                 )}
                 {/* Settings gear */}
@@ -1300,7 +1417,7 @@ export default function DurakRoomPage() {
                 return (
                   <div
                     ref={onlineMyHandRef}
-                    style={{ position: "relative", height: 140, width: "100%", marginTop: 8 }}
+                    style={{ position: "relative", height: 155, width: "100%", marginTop: 4, overflow: "visible" }}
                     onDragLeave={(e) => {
                       if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertBeforeIdx(null);
                     }}
@@ -1325,7 +1442,7 @@ export default function DurakRoomPage() {
 
                       const angle  = orientSign * (i - (count - 1) / 2) * fanSpread;
                       const offset = orientSign * (i - (count - 1) / 2) * fanStep;
-                      const liftY  = isSelected ? -22 : 0;
+                      const liftY  = isSelected ? -18 : 0;
 
                       // For insert indicator: with right orientation, left/right flip
                       const showInsertLeft  = !handAutoSort && insertBeforeIdx === i && dragCard && !isDragging;
@@ -1369,11 +1486,10 @@ export default function DurakRoomPage() {
                             card={card}
                             size="md"
                             selected={isSelected}
-                            onClick={() => onCardClick(card)}
                             draggable={!finished && cardVisible}
                             onDragStart={(e) => { e.dataTransfer.setData("durak-card", JSON.stringify(card)); setDragCard(card); setSelected(card); }}
-                            onDragEnd={() => { setDragCard(null); setInsertBeforeIdx(null); }}
-                            className={`transition-transform duration-150 ${!isSelected ? "hover:-translate-y-4" : ""}`}
+                            onDragEnd={() => { setDragCard(null); setInsertBeforeIdx(null); setSelected(null); }}
+                            className="transition-transform duration-150 hover:-translate-y-3"
                           />
                         </div>
                       );
@@ -1396,6 +1512,22 @@ export default function DurakRoomPage() {
                 >
                   🏳 Resign
                 </button>
+              )}
+
+              {/* Gold coins: badge + earn */}
+              {myCoins !== null && isPlayer && !room.rated && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-display font-bold text-amber-400">🪙 {myCoins}</span>
+                  {myCoins < 5 && (
+                    <button
+                      onClick={() => setAdPanel({ mode: "coins" })}
+                      title={t("earnCoins")}
+                      className="px-2 py-1 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-[0.6rem] font-display font-semibold hover:text-amber-400 transition-colors"
+                    >
+                      + {t("earnCoins")}
+                    </button>
+                  )}
+                </div>
               )}
 
 
@@ -1492,6 +1624,43 @@ export default function DurakRoomPage() {
         <GameChat msgs={room.chat} myUserId={myId} roomId={roomId} apiBase={API} />
       </div>
     </main>
+
+    {/* Ad panel overlay — fixed to the right side over the log area */}
+    {adPanel && (
+      <DurakAdPanel
+        mode={adPanel.mode}
+        roomId={roomId}
+        side="right"
+        onClose={() => setAdPanel(null)}
+        onCoinsEarned={(n) => { setMyCoins(n); setAdPanel(null); }}
+        onDiscardRevealed={(cards) => { setDiscardPile(cards); setAdPanel(null); }}
+      />
+    )}
+
+    {/* Discard pile reveal overlay */}
+    {discardPile && (
+      <div className="fixed right-2 top-1/2 -translate-y-1/2 z-40 w-72 bg-[var(--bg-elevated)] border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-subtle)] bg-purple-500/5">
+          <span className="font-display font-bold text-xs text-[var(--text-primary)]">
+            🃏 {t("discardPileTitle")} <span className="text-purple-400">({discardTimer}s)</span>
+          </span>
+          <button onClick={() => setDiscardPile(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="p-3 max-h-64 overflow-y-auto">
+          {discardPile.length === 0 ? (
+            <p className="text-[var(--text-muted)] text-xs text-center py-2">{t("discardEmpty")}</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {[...discardPile].reverse().map((card, i) => (
+                <DurakCard key={i} card={card} size="xs" />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
     </>
   );
 }

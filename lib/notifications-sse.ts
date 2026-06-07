@@ -1,4 +1,4 @@
-export type MatchGame = "chess" | "checkers" | "billiards" | "battleship";
+export type MatchGame = "chess" | "checkers" | "billiards" | "battleship" | "minesweeper" | "durak";
 
 export type NotifEvent =
   | { type: "badge"; id: string; rewardType: string; pointsValue: number; description: string; earnedAt: string }

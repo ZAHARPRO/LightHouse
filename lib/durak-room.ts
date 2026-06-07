@@ -92,6 +92,7 @@ type RoomWithSlots = {
   deckJson: string;
   tableJson: string;
   discardCount: number;
+  discardJson: string;
   trumpCard: string | null;
   trumpSuit: string | null;
   attackerIdx: number;
@@ -271,9 +272,11 @@ export async function finalizeRatedDurak(
   if (!durakSlot) return;
 
   // Sort winners by the order they finished (finishPosition ascending).
+  // Players who never formally went out (e.g. opponent resigned) get finishPosition null —
+  // treat them as last-place winners so they still receive ELO.
   const winners = room.players
-    .filter((p) => p.seatIdx !== durakSeatIdx && p.finishPosition != null)
-    .sort((a, b) => (a.finishPosition ?? 0) - (b.finishPosition ?? 0));
+    .filter((p) => p.seatIdx !== durakSeatIdx)
+    .sort((a, b) => (a.finishPosition ?? 999) - (b.finishPosition ?? 999));
 
   // The Durak's 50 ELO penalty is split equally as a bonus to each winner.
   const durakLoss = BASE_ELO;

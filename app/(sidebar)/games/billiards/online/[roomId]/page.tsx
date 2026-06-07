@@ -467,6 +467,14 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
 
   useEffect(() => { preloadSounds(); fetchRoom(); }, [fetchRoom]);
 
+  const autoJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "WAITING" || room.guestId) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`/api/billiards-rooms/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.myRole, room?.status, room?.guestId]); // eslint-disable-line
+
   // SSE for real-time updates, replacing 400ms polling
   useEffect(() => {
     const es = new EventSource(`/api/billiards-rooms/${roomId}/sse`);

@@ -287,6 +287,7 @@ export default function CheckersRoomPage() {
 
   const connFailsRef     = useRef(0);
   const prevRoomRef      = useRef<RoomData | null>(null);
+  const autoJoinedRef    = useRef(false);
   const lastMovesJsonRef = useRef("");
   const historyListRef   = useRef<HTMLDivElement>(null);
 
@@ -368,6 +369,14 @@ export default function CheckersRoomPage() {
     const f = connFailsRef.current;
     setConnStatus(f === 0 ? "ok" : f <= 4 ? "slow" : "lost");
   }, [roomId]);
+
+  // Auto-join when arriving via invite link
+  useEffect(() => {
+    if (!room || room.myRole !== "spectator" || room.status !== "WAITING" || room.guestId) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`/api/checkers-rooms/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.myRole, room?.status, room?.guestId]); // eslint-disable-line
 
   useEffect(() => {
     fetchRoom();

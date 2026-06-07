@@ -312,6 +312,15 @@ export default function BattleshipOnlineRoom() {
     return () => clearInterval(poll);
   }, [fetchRoom]);
 
+  const autoJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!room || room.status !== "WAITING" || room.guestId) return;
+    if (session?.user?.id === room.hostId) return;
+    if (autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    fetch(`/api/battleship-rooms/${roomId}/join`, { method: "POST" }).then(() => fetchRoom()).catch(() => {});
+  }, [room?.status, room?.guestId, session?.user?.id]); // eslint-disable-line
+
   // Player ping
   useEffect(() => {
     if (!room || !session?.user?.id) return;

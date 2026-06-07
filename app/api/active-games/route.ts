@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { ChessRoomStatus, CheckersRoomStatus, MSRoomStatus, BilliardsRoomStatus } from "@prisma/client";
+import { ChessRoomStatus, CheckersRoomStatus, MSRoomStatus, BilliardsRoomStatus, } from "@prisma/client";
 
 // How long (ms) until the server forfeits a disconnected player per game/mode.
 // Matches the constants in each game's ping route.

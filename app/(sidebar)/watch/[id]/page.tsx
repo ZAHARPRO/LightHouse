@@ -8,6 +8,7 @@ import {
   ArrowLeft, Eye, Clock, Play, Lock,
   Calendar, Users,
   User,
+  Radio,
 } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
 import LikeButtons from "@/components/LikeButtons";
@@ -189,7 +190,14 @@ export default async function WatchPage({
     _count: { likes: number };
   };
 
+  type LiveStream = {
+    id: string; title: string;
+    admin: { id: string; name: string | null; image: string | null };
+    viewerCount: number;
+  };
+
   let suggested: SuggestedVideo[] = [];
+  let liveStreams: LiveStream[] = [];
   try {
     suggested = await prisma.video.findMany({
       where: { id: { not: id } },
@@ -201,6 +209,25 @@ export default async function WatchPage({
       },
     }) as SuggestedVideo[];
   } catch { /* show empty */ }
+
+  if (session?.user?.id) {
+    try {
+      const subs = await prisma.subscription.findMany({
+        where: { subscriberId: session.user.id },
+        select: { creatorId: true },
+      });
+      if (subs.length > 0) {
+        liveStreams = await prisma.stream.findMany({
+          where: { isActive: true, adminId: { in: subs.map((s) => s.creatorId) } },
+          orderBy: { viewerCount: "desc" },
+          select: {
+            id: true, title: true, viewerCount: true,
+            admin: { select: { id: true, name: true, image: true } },
+          },
+        }) as LiveStream[];
+      }
+    } catch { /* skip */ }
+  }
 
   const authorColor = TIER_COLORS[video.author.tier] ?? "#888";
   const [bg, accent] = THUMB_COLORS[Math.abs(id.charCodeAt(0) - 97) % THUMB_COLORS.length];
@@ -383,6 +410,33 @@ export default async function WatchPage({
         </p>
 
         <div className="flex flex-col gap-3">
+          {liveStreams.map((ls) => (
+            <Link
+              key={ls.id}
+              href={`/stream/${ls.id}`}
+              className="suggested-link flex gap-3 no-underline rounded-[10px] p-2 border border-red-500/20 bg-red-500/5 transition-[background,border-color] duration-150 hover:border-red-500/40"
+            >
+              <div className="w-[120px] h-[68px] rounded-[7px] shrink-0 relative flex items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#1a0a0a,#ef444433)]">
+                <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-[4px] flex items-center justify-center">
+                  <Radio size={12} color="white" />
+                </div>
+                <span className="absolute top-1 left-1 flex items-center gap-1 bg-red-600 rounded-[3px] py-[0.1rem] px-1.5">
+                  <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                  <span className="text-[0.5rem] font-bold text-white font-display tracking-[0.06em] uppercase">Live</span>
+                </span>
+                <span className="absolute bottom-1 right-1 flex items-center gap-0.5 bg-black/70 rounded-[3px] px-1.5 py-[0.1rem] text-[0.55rem] text-[#ddd]">
+                  <Users size={8} /> {ls.viewerCount}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-semibold text-[0.8125rem] text-[var(--text-primary)] leading-tight line-clamp-2 mb-1">
+                  {ls.title}
+                </p>
+                <p className="text-[0.75rem] text-[var(--text-muted)]">{ls.admin.name}</p>
+                <p className="text-[0.6875rem] text-red-400 font-semibold mt-0.5">Streaming now</p>
+              </div>
+            </Link>
+          ))}
           {suggested.map((v, i) => {
             const [sbg, sacc] = THUMB_COLORS[i % THUMB_COLORS.length];
             const sLocked = v.isPremium && !session;

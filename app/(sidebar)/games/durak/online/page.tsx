@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Users, Plus, Loader2, Clock, Eye, Spade } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import DurakAdPanel from "@/components/DurakAdPanel";
 
 type RoomItem = {
   id: string;
@@ -50,6 +51,8 @@ export default function DurakLobby() {
   const [fairPlay, setFairPlay]     = useState(true);
   const [creating, setCreating]     = useState(false);
   const [joiningId, setJoiningId]   = useState<string | null>(null);
+  const [myCoins, setMyCoins]       = useState<number | null>(null);
+  const [showAdPanel, setShowAdPanel] = useState(false);
 
   async function fetchRooms() {
     const res = await fetch("/api/durak-rooms");
@@ -65,6 +68,14 @@ export default function DurakLobby() {
     const id = setInterval(fetchRooms, 3000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch("/api/durak-coins")
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { durakCoins: number } | null) => { if (d) setMyCoins(d.durakCoins); })
+      .catch(() => {});
+  }, [session?.user?.id]); // eslint-disable-line
 
   async function createRoom() {
     setCreating(true);
@@ -97,6 +108,7 @@ export default function DurakLobby() {
   }
 
   return (
+    <>
     <main className="max-w-2xl mx-auto px-4 py-12">
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-2">
@@ -197,14 +209,24 @@ export default function DurakLobby() {
           </div>
         )}
 
-        <button
-          onClick={createRoom}
-          disabled={creating}
-          className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          {t("createRoom")}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={createRoom}
+            disabled={creating}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[var(--accent-orange)] text-white font-display font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            {t("createRoom")}
+          </button>
+          {myCoins !== null && session?.user?.id && (
+            <button
+              onClick={() => setShowAdPanel(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] border border-amber-500/30 text-amber-400 text-xs font-display font-semibold hover:bg-amber-500/10 transition-colors"
+            >
+              🪙 {myCoins} · {t("earnCoins")}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Waiting rooms ── */}
@@ -302,5 +324,15 @@ export default function DurakLobby() {
         </>
       )}
     </main>
+
+    {showAdPanel && (
+      <DurakAdPanel
+        mode="coins"
+        side="right"
+        onClose={() => setShowAdPanel(false)}
+        onCoinsEarned={(n) => { setMyCoins(n); setShowAdPanel(false); }}
+      />
+    )}
+  </>
   );
 }

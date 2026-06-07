@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, Flag, CheckCircle2, ChevronLeft, ChevronRight, Trophy, Check, Copy } from "lucide-react";
-import Image from "next/image";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import Link from "next/link";
 import { getRank } from "@/lib/elo";
 import GameChat, { type ChatMsg } from "@/components/GameChat";
@@ -843,6 +843,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
   // Spectators: host always on top, guest on bottom.
   // Players:    opponent on top, self on bottom (preserving existing feel).
   const topIsHost  = isSpectator || isGuest; // host on top for spectator/guest view
+  const topId      = topIsHost ? room.hostId : (room.guestId ?? "");
   const topName    = topIsHost ? room.hostName    : room.guestName;
   const topImage   = topIsHost ? room.hostImage   : room.guestImage;
   const topGroup   = topIsHost ? room.hostGroup   : room.guestGroup;
@@ -854,6 +855,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
   const topIsActiveTurn = room.currentTurn === topRole;
 
   const btmIsGuest = isSpectator || isGuest; // guest on bottom for spectator/guest view
+  const btmId      = btmIsGuest ? (room.guestId ?? "") : room.hostId;
   const btmName    = btmIsGuest ? room.guestName  : room.hostName;
   const btmImage   = btmIsGuest ? room.guestImage : room.hostImage;
   const btmGroup   = btmIsGuest ? room.guestGroup : room.hostGroup;
@@ -892,9 +894,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
               </p>
             </div>
             <div className="flex items-center gap-3 w-full bg-[var(--bg-secondary)] rounded-xl px-4 py-3">
-              {room.hostImage
-                ? <Image src={room.hostImage} alt="" width={40} height={40} className="rounded-full shrink-0" />
-                : <div className="w-10 h-10 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center text-[var(--accent-orange)] font-bold shrink-0">{room.hostName?.[0] ?? "?"}</div>}
+              <PlayerAvatar userId={room.hostId} name={room.hostName ?? null} image={room.hostImage ?? null} size={40} noBadges />
               <div className="flex-1 min-w-0">
                 <p className="font-display font-semibold text-[var(--text-primary)] text-sm truncate">{room.hostName ?? "Host"}</p>
                 <p className="text-xs text-[var(--text-muted)]">{room.hostElo ? `ELO ${room.hostElo}` : "Host"}</p>
@@ -933,8 +933,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
           )}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-secondary)]">
-              {room.hostImage ? <Image src={room.hostImage} alt="" width={36} height={36} className="rounded-full" />
-                : <div className="w-9 h-9 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold">{room.hostName?.[0] ?? "?"}</div>}
+              <PlayerAvatar userId={room.hostId} name={room.hostName ?? null} image={room.hostImage ?? null} size={36} noBadges />
               <div className="flex-1">
                 <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.hostName ?? "Host"}</p>
                 <p className="text-xs text-[var(--text-muted)]">Host {room.hostElo ? `· ELO ${room.hostElo}` : ""}</p>
@@ -943,8 +942,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
             </div>
             <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-secondary)]">
               {room.guestId ? (<>
-                {room.guestImage ? <Image src={room.guestImage} alt="" width={36} height={36} className="rounded-full" />
-                  : <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold">{room.guestName?.[0] ?? "?"}</div>}
+                <PlayerAvatar userId={room.guestId ?? ""} name={room.guestName ?? null} image={room.guestImage ?? null} size={36} noBadges />
                 <div className="flex-1">
                   <p className="font-display font-semibold text-[var(--text-primary)] text-sm">{room.guestName ?? "Guest"}</p>
                   <p className="text-xs text-[var(--text-muted)]">Guest {room.guestElo ? `· ELO ${room.guestElo}` : ""}</p>
@@ -1073,9 +1071,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
           {/* Top player row */}
           <div className="flex items-center justify-between w-full px-1">
             <div className="flex items-center gap-2 min-w-0">
-              {topImage
-                ? <Image src={topImage} alt="" width={28} height={28} className="rounded-full shrink-0" />
-                : <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0">{topName?.[0] ?? "?"}</div>}
+              <PlayerAvatar userId={topId} name={topName ?? null} image={topImage ?? null} size={28} noBadges />
               <span className="text-sm font-display font-semibold text-[var(--text-secondary)] truncate">{topName ?? "Opponent"}</span>
               {topRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${topRank.color}22`, color: topRank.color }}>{topRank.label}</span>}
               {topGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{topGroup} ({topRemaining.length})</span>}
@@ -1127,9 +1123,7 @@ const animShotRef = useRef<{ angle: number; cx: number; cy: number; power: numbe
           {/* Bottom player row */}
           <div className="flex items-center justify-between w-full px-1">
             <div className="flex items-center gap-2 min-w-0">
-              {btmImage
-                ? <Image src={btmImage} alt="" width={28} height={28} className="rounded-full shrink-0" />
-                : <div className="w-7 h-7 rounded-full bg-pink-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs shrink-0">{btmName?.[0] ?? "?"}</div>}
+              <PlayerAvatar userId={btmId} name={btmName ?? null} image={btmImage ?? null} size={28} noBadges />
               <span className="text-sm font-display font-semibold text-[var(--text-primary)] truncate">{btmName ?? (isPlayer ? "You" : "Guest")}</span>
               {btmRank && <span className="text-[0.6rem] font-bold px-1 rounded-full shrink-0" style={{ background: `${btmRank.color}22`, color: btmRank.color }}>{btmRank.label}</span>}
               {btmGroup && <span className="text-xs text-[var(--text-muted)] shrink-0">{btmGroup} ({btmRemaining.length})</span>}

@@ -243,7 +243,7 @@ function CommentItem({
         {/* Author row */}
         <div className="flex items-center gap-[0.625rem] mb-2">
           <Link href={`/profile/${comment.author.id}`}>
-            <PlayerAvatar userId={comment.author.id} name={comment.author.name} image={comment.author.image} size={30} />
+            <PlayerAvatar userId={comment.author.id} name={comment.author.name ?? null} image={comment.author.image ?? null} size={30} />
           </Link>
           <Link href={`/profile/${comment.author.id}`} className="font-display font-bold text-sm text-[var(--text-primary)]">
             {comment.author.name}

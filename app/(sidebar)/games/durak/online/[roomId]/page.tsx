@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
+import PlayerAvatar from "@/components/PlayerAvatar";
 import Link from "next/link";
 import { Loader2, Eye, Crown, Hand, Check, X, Play, Bot, Plus, Trash2, Copy, Settings } from "lucide-react";
 import DurakCard from "@/components/DurakCard";
@@ -584,13 +584,7 @@ export default function DurakRoomPage() {
                 const accepted = confirmedList.includes(p.seatIdx);
                 return (
                   <div key={p.seatIdx} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-                    {p.image ? (
-                      <Image src={p.image} alt="" width={28} height={28} className="rounded-full shrink-0" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs shrink-0">
-                        {p.name?.[0] ?? "?"}
-                      </div>
-                    )}
+                    <PlayerAvatar userId={p.userId} name={p.name ?? null} image={p.image ?? null} size={28} noBadges />
                     <span className="font-display font-semibold text-[var(--text-primary)] text-sm flex-1 truncate">{p.name ?? "?"}</span>
                     {accepted ? (
                       <Check size={16} className="text-emerald-400 shrink-0" />
@@ -751,13 +745,7 @@ export default function DurakRoomPage() {
               >
                 {p ? (
                   <>
-                    {p.image ? (
-                      <Image src={p.image} alt="" width={32} height={32} className="rounded-full" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-[var(--accent-orange)] font-bold text-xs">
-                        {p.name?.[0] ?? "?"}
-                      </div>
-                    )}
+                    <PlayerAvatar userId={p.userId} name={p.name ?? null} image={p.image ?? null} size={32} noBadges />
                     <span className="font-display font-semibold text-[var(--text-primary)] text-sm flex-1">
                       {p.name ?? "?"} {p.userId === room.hostId && <Crown size={12} className="inline text-yellow-400" />}
                     </span>
@@ -975,12 +963,8 @@ export default function DurakRoomPage() {
                     <div className="w-4 h-4 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
                       <Bot size={9} className="text-purple-400" />
                     </div>
-                  ) : p.image ? (
-                    <Image src={p.image} alt="" width={16} height={16} className="rounded-full shrink-0" />
                   ) : (
-                    <div className="w-4 h-4 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-[0.5rem] shrink-0">
-                      {p.name?.[0] ?? "?"}
-                    </div>
+                    <PlayerAvatar userId={p.userId} name={p.name ?? null} image={p.image ?? null} size={16} noBadges />
                   )}
 
                   <div className="flex flex-col gap-0 min-w-0">

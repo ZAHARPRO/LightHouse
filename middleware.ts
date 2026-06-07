@@ -8,6 +8,7 @@ const PROTECTED = [
   "/games/billiards/online",
   "/games/battleship/online",
   "/games/minesweeper/online",
+  "/games/durak/online",
 ];
 
 export default function middleware(req: NextRequest) {

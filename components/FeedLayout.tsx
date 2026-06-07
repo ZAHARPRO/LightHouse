@@ -6,6 +6,7 @@ import { Play, Lock, MessageSquare, ArrowUp, Radio } from "lucide-react";
 import ChatPopup from "./ChatPopup";
 import UserAvatar from "./UserAvatar";
 import { useTranslations } from "next-intl";
+import { useChatStatus } from "@/lib/useChatStatus";
 
 const THUMB_COLORS = [
   ["#0d0d1a", "#f97316"],
@@ -350,6 +351,7 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
   const tCommon = useTranslations("common");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatClosing, setChatClosing] = useState(false);
+  const { onlineCount, hasUnread } = useChatStatus(chatOpen);
   const [activeCategory, setActiveCategory] = useState("All");
   const [showScrollTop, setShowScrollTop] = useState(false);
   const subsStripRef = useRef<HTMLDivElement>(null);
@@ -385,15 +387,21 @@ export default function FeedLayout({ videos, userTier, subs, communityPosts, isL
             {/* Chat button */}
             <button
               onClick={() => setChatOpen((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-[0.4rem] rounded-lg border cursor-pointer font-display font-semibold text-xs transition-colors duration-150"
+              className="relative flex items-center gap-1.5 px-3 py-[0.4rem] rounded-lg border cursor-pointer font-display font-semibold text-xs transition-colors duration-150"
               style={{
                 background: chatOpen ? "rgba(249,115,22,0.08)" : "var(--bg-card)",
-                borderColor: chatOpen ? "rgba(249,115,22,0.35)" : "var(--border-subtle)",
+                borderColor: chatOpen ? "rgba(249,115,22,0.35)" : hasUnread ? "rgba(236,72,153,0.4)" : "var(--border-subtle)",
                 color: chatOpen ? "var(--accent-orange)" : "var(--text-secondary)",
               }}
             >
               <MessageSquare size={13} />
               <span className="hidden sm:inline">{tf("chat")}</span>
+              {onlineCount > 0 && !chatOpen && (
+                <span className="flex items-center gap-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${hasUnread ? "bg-pink-500 animate-pulse" : "bg-emerald-500"}`} />
+                  <span className={`text-[0.6rem] font-bold ${hasUnread ? "text-pink-400" : "text-emerald-400"}`}>{onlineCount}</span>
+                </span>
+              )}
             </button>
             {!isLoggedIn && (
               <Link href="/auth/register" className="btn-primary no-underline text-[0.8125rem] py-[0.375rem] px-4 shadow-md">

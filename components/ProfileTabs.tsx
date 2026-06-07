@@ -7,6 +7,7 @@ import type { ActiveGame } from "@/app/api/active-games/route";
 import VideoManager from "./VideoManager";
 import PostManager from "./PostManager";
 import BadgeShowcaseEditor from "./BadgeShowcaseEditor";
+import RatingShowcaseEditor from "./RatingShowcaseEditor";
 import { BADGE_DEFS } from "@/lib/badges";
 import { useTranslations } from "next-intl";
 
@@ -51,13 +52,15 @@ function fmt(n: number) {
 }
 
 export default function ProfileTabs({
-  videos, posts, rewards, stats, badgeShowcase,
+  videos, posts, rewards, stats, badgeShowcase, ratingShowcase, gameElos,
 }: {
   videos: Video[];
   posts: Post[];
   rewards: Reward[];
   stats: Stats;
   badgeShowcase: string[];
+  ratingShowcase: string[];
+  gameElos: Record<string, number>;
 }) {
   const t = useTranslations("profileTabs");
 
@@ -74,7 +77,8 @@ export default function ProfileTabs({
     const p = new URLSearchParams(window.location.search).get("tab");
     return (TABS.some(t => t.id === p) ? p : "videos") as TabId;
   });
-  const [showcaseOpen, setShowcaseOpen] = useState(false);
+  const [showcaseOpen, setShowcaseOpen]       = useState(false);
+  const [ratingShowcaseOpen, setRatingShowcaseOpen] = useState(false);
   const [activeGames, setActiveGames] = useState<ActiveGame[] | null>(null);
   const [activeGamesLoading, setActiveGamesLoading] = useState(false);
 
@@ -178,6 +182,18 @@ export default function ProfileTabs({
                 <Settings2 size={13} />
                 {t("showcase")}
               </button>
+              <button
+                onClick={() => setRatingShowcaseOpen((v) => !v)}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[0.78rem] font-display font-semibold cursor-pointer transition-colors duration-150",
+                  ratingShowcaseOpen
+                    ? "border-violet-500 text-violet-400 bg-violet-500/[0.07]"
+                    : "border-[var(--border-subtle)] text-[var(--text-secondary)] bg-[var(--bg-elevated)] hover:border-violet-500/40 hover:text-violet-400",
+                ].join(" ")}
+              >
+                <Star size={13} />
+                Ratings
+              </button>
               <Link
                 href="/badges"
                 className="flex items-center gap-1 no-underline text-[0.8rem] font-display font-semibold text-[var(--accent-orange)] hover:underline"
@@ -192,6 +208,14 @@ export default function ProfileTabs({
             <BadgeShowcaseEditor
               rewards={rewards}
               initialSlots={badgeShowcase}
+            />
+          )}
+
+          {/* Rating Showcase editor (collapsible) */}
+          {ratingShowcaseOpen && (
+            <RatingShowcaseEditor
+              gameElos={gameElos}
+              initialSlots={ratingShowcase}
             />
           )}
 

@@ -14,9 +14,11 @@ interface Props {
   chatOpen: boolean;
   onChatToggle: () => void;
   onExpandedChange?: (expanded: boolean) => void;
+  onlineCount?: number;
+  hasUnread?: boolean;
 }
 
-export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpandedChange }: Props) {
+export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpandedChange, onlineCount = 0, hasUnread = false }: Props) {
   const t = useTranslations("feed");
   const tc = useTranslations("common");
   const [expanded, setExpanded] = useState(false);
@@ -57,16 +59,34 @@ export default function FeedLeftSidebar({ subs, chatOpen, onChatToggle, onExpand
           transition: "border-color 0.2s, background 0.2s, padding 0.3s ease, gap 0.3s ease",
         }}
       >
-        <div
-          className="rounded-full flex items-center justify-center shrink-0 border-2 border-pink-500/30"
-          style={{
-            width: expanded ? 52 : 34,
-            height: expanded ? 52 : 34,
-            background: chatOpen ? "rgba(249,115,22,0.2)" : "rgba(249,115,22,0.12)",
-            transition: "width 0.3s ease, height 0.3s ease, background 0.2s",
-          }}
-        >
-          <MessageSquare size={expanded ? 22 : 15} className="text-[var(--accent-orange)]" />
+        <div className="relative">
+          <div
+            className="rounded-full flex items-center justify-center shrink-0 border-2 border-pink-500/30"
+            style={{
+              width: expanded ? 52 : 34,
+              height: expanded ? 52 : 34,
+              background: chatOpen ? "rgba(249,115,22,0.2)" : "rgba(249,115,22,0.12)",
+              transition: "width 0.3s ease, height 0.3s ease, background 0.2s",
+            }}
+          >
+            <MessageSquare size={expanded ? 22 : 15} className="text-[var(--accent-orange)]" />
+          </div>
+          {/* Online / unread indicator */}
+          {onlineCount > 0 && !chatOpen && (
+            <div className="absolute -bottom-0.5 -right-0.5 flex items-center gap-0.5 pointer-events-none">
+              <span
+                className={[
+                  "w-2 h-2 rounded-full border border-[var(--bg-primary)] shrink-0",
+                  hasUnread ? "bg-pink-500 animate-pulse" : "bg-emerald-500",
+                ].join(" ")}
+              />
+              {expanded && (
+                <span className={`text-[0.55rem] font-bold leading-none ${hasUnread ? "text-pink-400" : "text-emerald-400"}`}>
+                  {onlineCount}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <span
           className="font-display font-bold text-xs tracking-[0.05em] uppercase overflow-hidden whitespace-nowrap"

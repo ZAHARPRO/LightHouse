@@ -260,6 +260,7 @@
     "noVideos": "Відео ще немає.",
     "favoriteSong": "Улюблена пісня",
     "featured": "Вибране",
+    "featuredRatings": "Вибрані рейтинги",
     "noBadge": "Немає значка",
     "statsVideos": "Відео",
     "statsSubscribers": "Підписники",
@@ -805,7 +806,7 @@
   "profileTabs": {
     "videos": "Відео",
     "community": "Спільнота",
-    "badges": "Значки",
+    "badges": "Вітрина",
     "stats": "Статистика",
     "videoBtn": "Відео",
     "postBtn": "Пост",

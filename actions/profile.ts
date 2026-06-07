@@ -76,3 +76,14 @@ export async function updateBadgeShowcase(rewardIds: string[]) {
   });
   return { ok: true };
 }
+
+export async function updateRatingShowcase(gameKeys: string[]) {
+  "use server";
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { ratingShowcase: JSON.stringify(gameKeys.slice(0, 2)) },
+  });
+  return { ok: true };
+}

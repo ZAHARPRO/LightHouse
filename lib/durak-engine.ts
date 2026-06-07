@@ -132,9 +132,10 @@ function seatCount(room: RoomRow): number {
 }
 
 /**
- * Returns the seat indices of players who are eligible to throw cards in
- * the throwing phase — i.e. everyone except the defender, the main attacker
- * who already passed, and players who are already out.
+ * Returns the seat indices of all players eligible to throw cards —
+ * everyone except the defender and players who are already out.
+ * The main attacker IS included: after someone throws, their pass resets
+ * and they must pass again before the bout can end.
  */
 function getEligibleThrowerSeats(room: RoomRow, state: Mutable): number[] {
   const allSeats = [
@@ -144,10 +145,7 @@ function getEligibleThrowerSeats(room: RoomRow, state: Mutable): number[] {
   return allSeats.filter(
     (s) =>
       s !== state.defenderIdx &&
-      s !== state.attackerIdx && // main attacker already passed
       !state.outPlayers.has(s),
-    // No hand-size check — throwing phase starts for all eligible seats regardless
-    // of whether they have throwable cards, to avoid leaking hand info to opponents.
   );
 }
 
@@ -220,16 +218,20 @@ function resolveBout(room: RoomRow, state: Mutable, defenderTook: boolean): stri
     return durak != null ? room.players.find((p) => p.seatIdx === durak)?.userId ?? null : null;
   }
 
+  // Use effective "out" set that includes unoccupied seats so nextActive
+  // never lands on an empty slot (state.outPlayers only tracks zero-card players).
+  const effectiveOut = withEmptySeatsOut(room, state);
+
   // Next attacker: if the defender took the cards, the player after them attacks;
   // otherwise (successful defense) the defender becomes the new attacker.
   const newAttacker = defenderTook
-    ? nextActive(state.defenderIdx, playerCount, state.outPlayers)
-    : state.outPlayers.has(state.defenderIdx)
-      ? nextActive(state.defenderIdx, playerCount, state.outPlayers)
+    ? nextActive(state.defenderIdx, playerCount, effectiveOut)
+    : effectiveOut.has(state.defenderIdx)
+      ? nextActive(state.defenderIdx, playerCount, effectiveOut)
       : state.defenderIdx;
 
   state.attackerIdx = newAttacker;
-  state.defenderIdx = nextActive(newAttacker, playerCount, state.outPlayers);
+  state.defenderIdx = nextActive(newAttacker, playerCount, effectiveOut);
   state.phase = "attack";
   return null;
 }
@@ -374,10 +376,6 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
     case "attack":
     case "throw": {
       if (!isAttackerSide) return { ok: false, error: "Not attacking" };
-      // In throwing phase the main attacker has already passed — they cannot throw more.
-      if (state.phase === "throwing" && mySeat === state.attackerIdx) {
-        return { ok: false, error: "Attacker already passed" };
-      }
       if (state.outPlayers.has(state.defenderIdx)) return { ok: false, error: "No defender" };
       const card = input.card;
       if (!card || !handHas(card)) return { ok: false, error: "No such card" };
@@ -412,8 +410,8 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (mySeat !== state.defenderIdx) return { ok: false, error: "Not defender" };
       const card = input.card;
       if (!card || !handHas(card)) return { ok: false, error: "No such card" };
-      const nextDef = nextActive(state.defenderIdx, seatCount(room), state.outPlayers);
-      if (!canTransfer(card, state.table, variant, state.hands[nextDef].length)) {
+      const nextDef = nextActive(state.defenderIdx, seatCount(room), withEmptySeatsOut(room, state));
+      if (!canTransfer(card, state.table, variant, state.hands[nextDef]?.length ?? 0)) {
         return { ok: false, error: "Cannot transfer" };
       }
       removeFromHand(card);
@@ -467,53 +465,87 @@ export async function applyMove(roomId: string, userId: string, input: MoveInput
       if (state.phase !== "taking" && !isFullyDefended(state.table)) return { ok: false, error: "Defender still defending" };
 
       if (state.phase === "throwing") {
-        // Multi-player: wait until ALL eligible non-attacker throwers have passed.
-        const eligibleNonAttacker = getEligibleThrowerSeats(room, state)
-          .filter(s => s !== state.attackerIdx);
+        // All non-defender non-out players (including main attacker) must pass after
+        // the last throw. Any new throw resets all passes — the anchor moves forward.
+        const eligible = getEligibleThrowerSeats(room, state);
+        const existingMoves = parse<MoveRecord[]>(room.movesJson, []);
 
-        if (eligibleNonAttacker.length === 0) {
-          // Only the main attacker could throw (already passed) → resolve.
-          winnerUserId = resolveBout(room, state, false);
-        } else {
-          const existingMoves = parse<MoveRecord[]>(room.movesJson, []);
-          // Find last "throw" action to know when the current throw-round started.
-          let lastThrowIdx = -1;
-          for (let j = existingMoves.length - 1; j >= 0; j--) {
-            if (existingMoves[j].action === "throw") { lastThrowIdx = j; break; }
+        // Find the anchor: last throw (resets all passes) or, if no throw yet, the
+        // main attacker's pass that transitioned into throwing phase.
+        let anchorIdx = -1;
+        let anchorIsAttackerPass = false;
+        for (let j = existingMoves.length - 1; j >= 0; j--) {
+          const m = existingMoves[j];
+          if (m.action === "throw") {
+            anchorIdx = j; anchorIsAttackerPass = false; break;
           }
-          const relevant = lastThrowIdx >= 0 ? existingMoves.slice(lastThrowIdx + 1) : existingMoves;
-          // Include current player's pass (not yet written to DB).
-          const passedSeats = new Set([
-            ...relevant.filter(m => m.action === "pass").map(m => m.seatIdx),
-            mySeat,
-          ]);
-          if (eligibleNonAttacker.every(s => passedSeats.has(s))) {
-            winnerUserId = resolveBout(room, state, false);
+          if (m.action === "pass" && m.seatIdx === state.attackerIdx) {
+            anchorIdx = j; anchorIsAttackerPass = true; break;
           }
-          // else: stay in throwing phase — the move record below saves this pass.
         }
+        const relevant = anchorIdx >= 0 ? existingMoves.slice(anchorIdx + 1) : [];
+
+        // Reject duplicate pass from this player in the current throw-round.
+        const alreadyPassed = relevant.some(m => m.action === "pass" && m.seatIdx === mySeat);
+        if (alreadyPassed) return { ok: false, error: "Already passed" };
+
+        // Build the set of who has passed since the anchor.
+        const passedSeats = new Set([
+          ...relevant.filter(m => m.action === "pass").map(m => m.seatIdx),
+          mySeat,
+        ]);
+        // The attacker's initiating pass (the anchor) counts as their pass for this round.
+        if (anchorIsAttackerPass) passedSeats.add(state.attackerIdx);
+
+        if (eligible.every(s => passedSeats.has(s))) {
+          winnerUserId = resolveBout(room, state, false);
+        }
+        // else: stay in throwing phase — the move record below saves this pass.
       } else if (state.phase === "taking") {
-        // Defender already declared take — attacker pass ends the throw window.
-        winnerUserId = resolveBout(room, state, true);
+        // Defender declared take — wait until ALL eligible (non-defender) players have
+        // passed after the last throw. Any throw resets passes (anchor = last throw or "take").
+        const eligibleT = getEligibleThrowerSeats(room, state);
+        const existingMovesT = parse<MoveRecord[]>(room.movesJson, []);
+
+        let anchorIdxT = -1;
+        for (let j = existingMovesT.length - 1; j >= 0; j--) {
+          const m = existingMovesT[j];
+          if (m.action === "throw" || m.action === "take") { anchorIdxT = j; break; }
+        }
+        const relevantT = anchorIdxT >= 0 ? existingMovesT.slice(anchorIdxT + 1) : [];
+
+        const alreadyPassedT = relevantT.some(m => m.action === "pass" && m.seatIdx === mySeat);
+        if (alreadyPassedT) return { ok: false, error: "Already passed" };
+
+        const passedSeatsT = new Set([
+          ...relevantT.filter(m => m.action === "pass").map(m => m.seatIdx),
+          mySeat,
+        ]);
+
+        if (eligibleT.every(s => passedSeatsT.has(s))) {
+          winnerUserId = resolveBout(room, state, true);
+        }
+        // else: stay in taking phase — the move record below saves this pass.
       } else if (mySeat === state.attackerIdx) {
-        // Main attacker pressing pass: check if other players can still throw.
+        // Main attacker pressing pass in defense phase: check if co-attackers can throw.
         const firstBout = isFirstBout(room.movesJson);
         const boutMax = firstBout ? 5 : 6;
         const defHand = state.hands[state.defenderIdx]?.length ?? 0;
         const hasRoom =
           state.table.length < boutMax &&
           state.table.length < maxAttackCards(defHand);
-        const eligibleThrowers = getEligibleThrowerSeats(room, state);
+        // Only count OTHER eligible players — not the attacker themselves.
+        const eligibleOthers = getEligibleThrowerSeats(room, state).filter(s => s !== state.attackerIdx);
 
-        if (hasRoom && eligibleThrowers.length > 0) {
-          // Enter throwing phase: other players get timer to throw additional cards.
+        if (hasRoom && eligibleOthers.length > 0) {
+          // Enter throwing phase: co-attackers (and the main attacker) may throw more.
           state.phase = "throwing";
         } else {
           winnerUserId = resolveBout(room, state, false);
         }
       } else {
-        // Non-main-attacker pressing pass outside throwing phase → resolve.
-        winnerUserId = resolveBout(room, state, false);
+        // Non-main-attacker pressing pass before throwing phase begins — not their turn.
+        return { ok: false, error: "Not your turn to pass" };
       }
       break;
     }
@@ -564,44 +596,97 @@ export async function processBotTurns(roomId: string): Promise<void> {
 
     // Which seat needs to act?
     const needsDefense = state.table.some((s) => !s.defense);
-    let actingSeat: number;
+    let actingSeat: number = -1;
 
     if (state.phase === "taking") {
-      // Defender declared intent to take — attacker bots can throw more or pass.
-      const eligible = getEligibleThrowerSeats(room, state);
-      const mainBot = bots.find((b) => b.seatIdx === state.attackerIdx);
-      const eligibleBot = mainBot ?? bots.find((b) => eligible.includes(b.seatIdx));
-      if (!eligibleBot) return; // human's turn; timer will resolve
-      const existingLenT = (() => { try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; } })();
-      const passRecordT: MoveRecord = { seq: existingLenT + 1, action: "pass", seatIdx: eligibleBot.seatIdx, name: null, at: Date.now() };
-      const winT = resolveBout(room, state, true);
+      // Defender declared take — find an eligible bot that hasn't passed yet.
+      const eligibleT2 = getEligibleThrowerSeats(room, state);
+      const existingMovesT2 = parse<MoveRecord[]>(room.movesJson, []);
+
+      let anchorIdxT2 = -1;
+      for (let j = existingMovesT2.length - 1; j >= 0; j--) {
+        const m = existingMovesT2[j];
+        if (m.action === "throw" || m.action === "take") { anchorIdxT2 = j; break; }
+      }
+      const relevantT2 = anchorIdxT2 >= 0 ? existingMovesT2.slice(anchorIdxT2 + 1) : [];
+
+      const eligibleBot = bots.find(
+        (b) =>
+          eligibleT2.includes(b.seatIdx) &&
+          !relevantT2.some(m => m.action === "pass" && m.seatIdx === b.seatIdx),
+      );
+      if (!eligibleBot) return; // All bots have passed; wait for humans.
+
+      const passedSeatsT2 = new Set([
+        ...relevantT2.filter(m => m.action === "pass").map(m => m.seatIdx),
+        eligibleBot.seatIdx,
+      ]);
+      const passRecordT: MoveRecord = {
+        seq: existingMovesT2.length + 1,
+        action: "pass",
+        seatIdx: eligibleBot.seatIdx,
+        name: null,
+        at: Date.now(),
+      };
+      let winT: string | null = null;
+      if (eligibleT2.every(s => passedSeatsT2.has(s))) {
+        winT = resolveBout(room, state, true);
+      }
       await persist(room, state, winT, passRecordT);
       broadcast(roomId, { type: "update" });
-      return;
+      if ((state.phase as string) === "finished") return;
+      await new Promise<void>((r) => setTimeout(r, BOT_TURN_DELAY_MS));
+      continue; // Re-read room so the next eligible bot can pass.
     } else if (state.phase === "throwing") {
       if (needsDefense) {
         // A thrower placed a card — defender must beat it.
         actingSeat = state.defenderIdx;
       } else {
-        // All defended in throwing phase — find the first eligible bot thrower.
+        // All cards defended. Find an eligible bot that hasn't passed yet this round.
         const eligible = getEligibleThrowerSeats(room, state);
-        const throwerBot = bots.find((b) => eligible.includes(b.seatIdx));
-        if (!throwerBot) return; // Only humans can throw; timer will resolve.
-        // Bot passes in throwing phase → resolve the bout immediately.
-        const existingLen2 = (() => {
-          try { return (JSON.parse(room.movesJson ?? "[]") as MoveRecord[]).length; } catch { return 0; }
-        })();
+        const existingMovesArr = parse<MoveRecord[]>(room.movesJson, []);
+
+        // Same anchor logic as in applyMove: last throw, or attacker's initiating pass.
+        let anchorIdx2 = -1;
+        let anchorIsAttPass2 = false;
+        for (let j = existingMovesArr.length - 1; j >= 0; j--) {
+          const m = existingMovesArr[j];
+          if (m.action === "throw") { anchorIdx2 = j; anchorIsAttPass2 = false; break; }
+          if (m.action === "pass" && m.seatIdx === state.attackerIdx) { anchorIdx2 = j; anchorIsAttPass2 = true; break; }
+        }
+        const relevantMoves = anchorIdx2 >= 0 ? existingMovesArr.slice(anchorIdx2 + 1) : [];
+
+        // Find a bot that is eligible and hasn't passed in this window yet.
+        const throwerBot = bots.find(
+          (b) =>
+            eligible.includes(b.seatIdx) &&
+            !relevantMoves.some(m => m.action === "pass" && m.seatIdx === b.seatIdx) &&
+            !(anchorIsAttPass2 && b.seatIdx === state.attackerIdx),
+        );
+        if (!throwerBot) return; // All bots have passed; waiting for humans.
+
+        const passedSeats2 = new Set([
+          ...relevantMoves.filter(m => m.action === "pass").map(m => m.seatIdx),
+          throwerBot.seatIdx,
+        ]);
+        if (anchorIsAttPass2) passedSeats2.add(state.attackerIdx);
+
         const passRecord: MoveRecord = {
-          seq: existingLen2 + 1,
+          seq: existingMovesArr.length + 1,
           action: "pass",
           seatIdx: throwerBot.seatIdx,
           name: null,
           at: Date.now(),
         };
-        const win2 = resolveBout(room, state, false);
+        let win2: string | null = null;
+        if (eligible.every(s => passedSeats2.has(s))) {
+          win2 = resolveBout(room, state, false);
+        }
         await persist(room, state, win2, passRecord);
         broadcast(roomId, { type: "update" });
-        return; // Bout resolved.
+        if ((state.phase as string) === "finished") return;
+        await new Promise<void>((r) => setTimeout(r, BOT_TURN_DELAY_MS));
+        continue; // Re-read room so the next eligible bot can pass.
       }
     } else {
       // Normal attack/defense phases.
@@ -685,7 +770,7 @@ export async function processBotTurns(roomId: string): Promise<void> {
       }
       case "transfer": {
         if (!action.card) break;
-        const nextDef = nextActive(state.defenderIdx, room.maxPlayers, state.outPlayers);
+        const nextDef = nextActive(state.defenderIdx, room.maxPlayers, withEmptySeatsOut(room, state));
         if (!canTransfer(action.card, state.table, variant, state.hands[nextDef]?.length ?? 0)) break;
         const idx = (state.hands[actingSeat] ?? []).findIndex((c) => cardsEqual(c, action.card!));
         if (idx < 0) break;
@@ -705,19 +790,21 @@ export async function processBotTurns(roomId: string): Promise<void> {
         if (botPhase !== "taking" && !isFullyDefended(state.table)) { state.phase = "attack"; break; }
 
         if (botPhase === "throwing") {
+          // This branch is now handled above (the dedicated throwing-phase handler).
+          // Reaching here means actingSeat is a defender-side actor — just resolve.
           winnerUserId = resolveBout(room, state, false);
         } else if (botPhase === "taking") {
           winnerUserId = resolveBout(room, state, true);
         } else if (actingSeat === state.attackerIdx) {
-          // Main attacker passing — enter throwing phase if eligible throwers exist.
+          // Main attacker passing — enter throwing phase if co-attackers can throw.
           const botFirstBout2 = isFirstBout(room.movesJson);
           const botBoutMax2 = botFirstBout2 ? 5 : 6;
           const defHand2 = state.hands[state.defenderIdx]?.length ?? 0;
           const hasRoom2 =
             state.table.length < botBoutMax2 &&
             state.table.length < maxAttackCards(defHand2);
-          const eligible2 = getEligibleThrowerSeats(room, state);
-          if (hasRoom2 && eligible2.length > 0) {
+          const eligibleOthers2 = getEligibleThrowerSeats(room, state).filter(s => s !== state.attackerIdx);
+          if (hasRoom2 && eligibleOthers2.length > 0) {
             state.phase = "throwing";
           } else {
             winnerUserId = resolveBout(room, state, false);
@@ -801,8 +888,9 @@ export async function resolveTimeouts(room: RoomRow): Promise<boolean> {
           state.outPlayers.add(slot.seatIdx);
       }
     } else {
-      state.attackerIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
-      state.defenderIdx = nextActive(state.attackerIdx, seatCount(room), state.outPlayers);
+      const effOut = withEmptySeatsOut(room, state);
+      state.attackerIdx = nextActive(state.attackerIdx, seatCount(room), effOut);
+      state.defenderIdx = nextActive(state.attackerIdx, seatCount(room), effOut);
     }
   }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import FeedLeftSidebar from "./FeedLeftSidebar";
 import FeedRightSidebar from "./FeedRightSidebar";
 import ChatPopup from "./ChatPopup";
+import { useChatStatus } from "@/lib/useChatStatus";
 
 type Sub = { id: string; name: string; initials: string; color: string; image?: string | null };
 type CommunityPost = {
@@ -23,6 +24,7 @@ export default function SidebarShell({ subs, communityPosts, isLoggedIn, childre
   const [chatClosing, setChatClosing]   = useState(false);
   const [leftExpanded, setLeftExpanded] = useState(false);
   const [showRight, setShowRight]       = useState(false);
+  const { onlineCount, hasUnread }      = useChatStatus(chatOpen);
 
   const leftW = leftExpanded ? 130 : 52;
 
@@ -53,6 +55,8 @@ export default function SidebarShell({ subs, communityPosts, isLoggedIn, childre
             chatOpen={chatOpen}
             onChatToggle={() => setChatOpen((v) => !v)}
             onExpandedChange={setLeftExpanded}
+            onlineCount={onlineCount}
+            hasUnread={hasUnread}
           />
         </div>
 

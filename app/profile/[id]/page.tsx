@@ -154,6 +154,24 @@ export default async function PublicProfilePage({
     .map((sid) => user.rewards.find((r) => r.id === sid))
     .filter(Boolean) as typeof user.rewards;
 
+  const RATING_GAMES_META: Record<string, { icon: string; label: string; color: string; eloKey: keyof typeof user }> = {
+    chess:       { icon: "♟",  label: "Chess",       color: "#6366f1", eloKey: "chessElo"       },
+    minesweeper: { icon: "💣", label: "Minesweeper",  color: "#ef4444", eloKey: "minesweeperElo"  },
+    checkers:    { icon: "🔴", label: "Checkers",     color: "#f97316", eloKey: "checkersElo"    },
+    battleship:  { icon: "🚢", label: "Battleship",   color: "#3b82f6", eloKey: "battleshipElo"  },
+    billiards:   { icon: "🎱", label: "Billiards",    color: "#10b981", eloKey: "billiardsElo"   },
+    durak:       { icon: "🃏", label: "Durak",        color: "#a855f7", eloKey: "durakElo"       },
+  };
+  const ratingShowcaseKeys: string[] = (() => { try { return JSON.parse(user.ratingShowcase ?? "[]"); } catch { return []; } })();
+  const showcaseRatings = ratingShowcaseKeys
+    .filter((k) => k in RATING_GAMES_META)
+    .map((k) => {
+      const meta = RATING_GAMES_META[k];
+      const elo  = (user[meta.eloKey] as number | null) ?? 400;
+      const rank = getRank(elo);
+      return { key: k, ...meta, elo, rank };
+    });
+
   return (
     <>
       <div className="profile-page">
@@ -284,32 +302,21 @@ export default async function PublicProfilePage({
                   } catch { return null; }
                 })()}
 
-                {/* ELO ranks */}
-                {(() => {
-                  const chessRank = getRank((user as { chessElo?: number })?.chessElo ?? 0);
-                  const msRank    = getRank((user as { minesweeperElo?: number })?.minesweeperElo ?? 0);
-                  if (!chessRank && !msRank) return null;
-                  const chessElo = (user as { chessElo?: number })?.chessElo;
-                  const msElo    = (user as { minesweeperElo?: number })?.minesweeperElo;
-                  return (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {chessRank && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-bold"
-                          style={{ background: `${chessRank.color}18`, color: chessRank.color, border: `1px solid ${chessRank.color}30` }}>
-                          ♟ Chess — {chessRank.label}
-                          <span className="font-normal opacity-70 ml-0.5">({chessElo} ELO)</span>
-                        </div>
-                      )}
-                      {msRank && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-bold"
-                          style={{ background: `${msRank.color}18`, color: msRank.color, border: `1px solid ${msRank.color}30` }}>
-                          💣 Minesweeper — {msRank.label}
-                          <span className="font-normal opacity-70 ml-0.5">({msElo} ELO)</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* ELO ranks — user-selected showcase */}
+                {showcaseRatings.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {showcaseRatings.map(({ key, icon, label, color, elo, rank }) => (
+                      <div
+                        key={key}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-bold"
+                        style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+                      >
+                        {icon} {label}{rank ? ` — ${rank.label}` : ""}
+                        <span className="font-normal opacity-70 ml-0.5">({elo} ELO)</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="profile-level-bar">
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.375rem" }}>
@@ -544,6 +551,8 @@ export default async function PublicProfilePage({
             </div>
           </div>
         </div>
+
+      
 
         {/* Videos */}
         <div className="flex items-center gap-2 mb-5">

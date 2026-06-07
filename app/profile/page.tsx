@@ -185,6 +185,15 @@ export default async function ProfilePage() {
         posts={user.posts}
         rewards={user.rewards}
         badgeShowcase={(() => { try { return JSON.parse(user.badgeShowcase ?? "[]"); } catch { return []; } })()}
+        ratingShowcase={(() => { try { return JSON.parse(user.ratingShowcase ?? "[]"); } catch { return []; } })()}
+        gameElos={{
+          chess:       user.chessElo       ?? 400,
+          minesweeper: user.minesweeperElo  ?? 400,
+          checkers:    user.checkersElo     ?? 400,
+          battleship:  user.battleshipElo   ?? 400,
+          billiards:   user.billiardsElo    ?? 400,
+          durak:       user.durakElo        ?? 400,
+        }}
         stats={{
           totalViews,
           totalLikes,

@@ -19,7 +19,8 @@ model User {
   password      String?
   bio           String?
   banner        String?
-  badgeShowcase String?
+  badgeShowcase  String?
+  ratingShowcase String?
   favoriteSong  String?   @db.Text
   points          Int       @default(0)
   tier            Tier      @default(FREE)

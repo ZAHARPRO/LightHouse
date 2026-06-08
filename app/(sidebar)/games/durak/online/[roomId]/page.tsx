@@ -1143,11 +1143,12 @@ export default function DurakRoomPage() {
               room.table.map((slot, i) => {
                 const isSlotDragOver = dragOverSlot === i;
                 const isDefendTarget = isDefender && !slot.defense && (selected || dragCard) && !finished;
-                const isMyAttack = !slot.defense && myCoins !== null && !room.rated && !finished && !busy &&
-                  moves.slice().reverse().some(
-                    m => m.seatIdx === room.mySeatIdx && (m.action === "attack" || m.action === "throw") && m.card
-                      && m.card.suit === slot.attack.suit && m.card.rank === slot.attack.rank
-                  );
+                const lastPlacement = moves.slice().reverse().find(
+                  m => (m.action === "attack" || m.action === "throw") && m.card
+                    && m.card.suit === slot.attack.suit && m.card.rank === slot.attack.rank
+                );
+                const isMyAttack = !slot.defense && myCoins !== null && !room.rated && !finished && !busy
+                  && lastPlacement?.seatIdx === room.mySeatIdx;
                 const canRecall = isMyAttack && myCoins > 0;
                 return (
                   <div

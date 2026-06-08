@@ -33,26 +33,31 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   let moves: MoveRecord[] = [];
   try { moves = JSON.parse(room.movesJson ?? "[]") as MoveRecord[]; } catch { /* empty */ }
 
-  const myLastMove = [...moves]
-    .reverse()
-    .find((m) => m.seatIdx === mySlot.seatIdx && (m.action === "attack" || m.action === "throw") && m.card);
-
-  if (!myLastMove?.card) return NextResponse.json({ error: "no_recallable_card" }, { status: 400 });
-
-  // Check that card is still on the table undefended
+  // Find a slot on the table where: (1) undefended, (2) most recent placement of that card was by me.
+  // We check "most recent placement" to avoid stealing recall rights for a card that a previous
+  // bout introduced and the defender re-used in the current bout.
   let table: TableSlot[] = [];
   try { table = JSON.parse(room.tableJson ?? "[]") as TableSlot[]; } catch { /* empty */ }
 
-  const slotIdx = table.findIndex(
-    (s) => cardsEqual(s.attack, myLastMove.card as Card) && s.defense === null,
-  );
-  if (slotIdx === -1) return NextResponse.json({ error: "card_already_defended" }, { status: 400 });
+  const reversedMoves = [...moves].reverse();
+  let slotIdx = -1;
+  for (let i = 0; i < table.length; i++) {
+    const slot = table[i];
+    if (slot.defense !== null) continue;
+    const lastPlacement = reversedMoves.find(
+      (m) => (m.action === "attack" || m.action === "throw") && m.card && cardsEqual(m.card as Card, slot.attack),
+    );
+    if (lastPlacement?.seatIdx === mySlot.seatIdx) { slotIdx = i; break; }
+  }
+  if (slotIdx === -1) return NextResponse.json({ error: "no_recallable_card" }, { status: 400 });
+
+  const recallCard = table[slotIdx].attack;
 
   // Remove the slot and restore card to player's hand
   const newTable = table.filter((_, i) => i !== slotIdx);
   let hand: Card[] = [];
   try { hand = JSON.parse(mySlot.handJson ?? "[]") as Card[]; } catch { /* empty */ }
-  hand.push(myLastMove.card as Card);
+  hand.push(recallCard);
 
   // If table is now empty, phase must return to "attack"
   const newPhase = newTable.length === 0 ? "attack" : room.phase;
@@ -62,7 +67,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     seq: (moves[moves.length - 1]?.seq ?? 0) + 1,
     seatIdx: mySlot.seatIdx,
     action: "recall" as MoveRecord["action"],
-    card: myLastMove.card as Card,
+    card: recallCard,
     name: null,
     at: Date.now(),
   };
